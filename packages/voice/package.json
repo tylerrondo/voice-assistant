@@ -22,7 +22,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@interaction/contract": "1.0.0"
+    "@interaction/contract": "^1.0.0"
   },
   "devDependencies": {
     "typescript": "^5.8.0"

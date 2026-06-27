@@ -10,6 +10,4 @@ export interface SpeechOptions {
 
     readonly language?: string
 
-    readonly interrupt?: boolean
-
 }
