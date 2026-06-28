@@ -3,9 +3,15 @@
  *
  * Minimal UI: Start, Stop, list of available scenarios, event log.
  * No domain-specific components -- pure demo/test harness.
+ *
+ * As of PR-9a: no longer overrides console.log. Instead, registers
+ * its own LogSink on the shared LogDispatcher to render entries into
+ * the page, alongside whatever other sinks (e.g. ConsoleLogSink) are
+ * already registered in Bootstrap.
  */
 
 import type { DemoApp } from "./Bootstrap"
+import type { LogEntry, LogSink } from "../../../packages/execution-log/dist/index"
 
 export function mountApp(root: HTMLElement, app: DemoApp): void {
 
@@ -30,11 +36,13 @@ export function mountApp(root: HTMLElement, app: DemoApp): void {
         logEl.scrollTop = logEl.scrollHeight
     }
 
-    const originalLog = console.log
-    console.log = (...args: unknown[]) => {
-        appendLog(args.join(" "))
-        originalLog(...args)
+    const domSink: LogSink = {
+        write(entry: LogEntry): void {
+            appendLog(`[${entry.kind}] ${JSON.stringify(entry.payload)}`)
+        }
     }
+
+    app.dispatcher.register(domSink)
 
     startBtn.addEventListener("click", async () => {
         await app.channel.start()

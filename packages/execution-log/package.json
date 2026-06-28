@@ -1,0 +1,27 @@
+{
+  "name": "@voice/execution-log",
+  "version": "1.0.0",
+  "description": "Execution Log infrastructure - shared logging used by Demo, Verification Harness and future tooling",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "rimraf dist",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.0"
+  }
+}

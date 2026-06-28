@@ -12,7 +12,8 @@
     "@interaction/contract": "^1.0.0",
     "@voice/contracts": "^1.0.0",
     "@voice/emulator": "^1.0.0",
-    "@voice/scenario-engine": "^1.0.0"
+    "@voice/scenario-engine": "^1.0.0",
+    "@voice/execution-log": "^1.0.0"
   },
   "devDependencies": {
     "typescript": "^5.8.0",
