@@ -2,10 +2,6 @@
  * Voice Emulator
  *
  * Holds pre-defined responses to incoming actions.
- *
- * Example mapping:
- *   "voice.recognized" -> "voice.response"
- *   (no text analysis -- purely action.type -> event.type lookup)
  */
 
 import type { InteractionAction, InteractionEvent } from "../../interaction-contract/dist/index"
@@ -31,9 +27,6 @@ export class EmulatorScenario {
             return handler(action)
         }
 
-        // Generic fallback: the emulator implements InteractionContract
-        // as a whole, not just the voice channel, so this event type
-        // intentionally avoids the "voice." prefix.
         return {
             type: "interaction.unhandled-action",
             payload: { receivedType: action.type }
