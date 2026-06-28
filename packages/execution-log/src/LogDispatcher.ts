@@ -1,8 +1,12 @@
 /**
  * Execution Log
  *
- * Receives entries from ExecutionLog and forwards them to all
- * registered LogSink instances (console, memory, file, HTML, etc).
+ * Receives entries from ExecutionLog and forwards them to every
+ * registered LogSink. A single log can simultaneously be sent to
+ * Console, memory, a file, HTML, or future analysis tools.
+ *
+ * Implements LogSink itself, so an ExecutionLog can write to a
+ * LogDispatcher exactly as it would to any single sink.
  */
 
 import type { LogEntry } from "./LogEntry"
@@ -10,23 +14,24 @@ import type { LogSink } from "./LogSink"
 
 export class LogDispatcher implements LogSink {
 
-    private readonly sinks: LogSink[] = []
+    private readonly sinks = new Set<LogSink>()
 
-    addSink(sink: LogSink): void {
-        this.sinks.push(sink)
-    }
+    register(sink: LogSink): () => void {
 
-    removeSink(sink: LogSink): void {
-        const index = this.sinks.indexOf(sink)
-        if (index !== -1) {
-            this.sinks.splice(index, 1)
+        this.sinks.add(sink)
+
+        return () => {
+            this.sinks.delete(sink)
         }
+
     }
 
     write(entry: LogEntry): void {
+
         for (const sink of this.sinks) {
             sink.write(entry)
         }
+
     }
 
 }

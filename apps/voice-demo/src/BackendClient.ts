@@ -18,13 +18,13 @@ export class BackendClient {
 
     private session: BackendSession | null = null
 
-    async connect(baseUrl: string, username: string, password: string): Promise<BackendSession> {
+    async connect(baseUrl: string, login: string, password: string): Promise<BackendSession> {
 
         try {
             const res = await fetch(`${baseUrl}/api/v1/auth/`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ username, password })
+                body: JSON.stringify({ login, password, type: "e-mail" })
             })
 
             if (!res.ok) {
@@ -45,28 +45,29 @@ export class BackendClient {
 
     async sendReport(baseUrl: string, report: unknown, eId: string): Promise<boolean> {
 
-        if (!this.session || this.session.status !== "connected") return false
+        if (!this.session || this.session.status !== "connected") {
+            return false
+        }
 
         const json = JSON.stringify(report)
-        const base64 = btoa(unescape(encodeURIComponent(json)))
+        const file = btoa(unescape(encodeURIComponent(json)))
 
         try {
             const res = await fetch(`${baseUrl}/api/v1/mail/`, {
                 method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "Authorization": `Bearer ${this.session.token}`
-                },
+                headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
+                    token: this.session.token,
+                    u_hash: this.session.u_hash,
                     subject: "Validation Report",
                     body: "See attached JSON report.",
-                    report_base64: base64,
-                    u_hash: this.session.u_hash,
+                    file,
                     e_id: eId
                 })
             })
             return res.ok
         } catch {
+            this.session = { ...this.session, status: "mail-unavailable" }
             return false
         }
 

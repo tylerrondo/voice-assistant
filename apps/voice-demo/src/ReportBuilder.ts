@@ -7,6 +7,7 @@
 import type { SessionMeta } from "./SessionPanel"
 import type { VerificationReport } from "../../../packages/verification/dist/index"
 import type { LogEntry } from "../../../packages/execution-log/dist/index"
+import { getEnvironmentInfo } from "./EnvironmentProvider"
 
 export interface ValidationReport {
     tester: string
@@ -32,14 +33,15 @@ export function buildReport(
 ): ValidationReport {
 
     const finishedAt = new Date().toISOString()
+    const { browser, operatingSystem } = getEnvironmentInfo()
 
     return {
         tester: meta.tester,
         language: meta.language,
         build: meta.build,
         commit: meta.commit,
-        browser: navigator.userAgent,
-        operatingSystem: navigator.platform,
+        browser,
+        operatingSystem,
         scenarioSet: meta.scenarioSet,
         environment: meta.environment,
         startedAt,

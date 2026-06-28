@@ -38,8 +38,8 @@ export function bootstrap(language = "ru-RU"): BenchApp {
     const dispatcher = new LogDispatcher()
     const consoleSink = new ConsoleLogSink()
     const memorySink = new MemoryLogSink()
-    dispatcher.addSink(consoleSink)
-    dispatcher.addSink(memorySink)
+    dispatcher.register(consoleSink)
+    dispatcher.register(memorySink)
 
     const executionLog = new ExecutionLog(dispatcher)
     const logger = new DemoLogger(executionLog)
