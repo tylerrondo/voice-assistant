@@ -10,6 +10,7 @@
  *  - Taxi
  *  - FSM
  *  - React
+ *  - real time (delegated entirely to DelayProvider)
  *
  * If no scenario matches the action, a generic fallback event is
  * produced (mirrors the previous EmulatorScenario default).
@@ -18,21 +19,20 @@
 import type { InteractionAction } from "../../interaction-contract/dist/index"
 import type { Scenario, ScenarioEvent } from "./Scenario"
 import type { ScenarioRegistry } from "./ScenarioRegistry"
-
-function delay(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms))
-}
+import type { DelayProvider } from "./DelayProvider"
+import { RealTimeDelayProvider } from "./DelayProvider"
 
 export class ScenarioEngine {
 
-    constructor(private readonly registry: ScenarioRegistry) {}
+    private readonly delayProvider: DelayProvider
 
-    /**
-     * Runs the scenario matching the action's type and yields
-     * each emitted event in order, honoring "delay" steps between
-     * them. If no scenario is registered for this action type,
-     * yields a single generic fallback event.
-     */
+    constructor(
+        private readonly registry: ScenarioRegistry,
+        delayProvider: DelayProvider = new RealTimeDelayProvider()
+    ) {
+        this.delayProvider = delayProvider
+    }
+
     async *run(action: InteractionAction): AsyncGenerator<ScenarioEvent> {
 
         const scenario: Scenario | undefined =
@@ -47,22 +47,16 @@ export class ScenarioEngine {
         }
 
         for (const step of scenario.steps) {
-
             switch (step.kind) {
-
                 case "emit":
                     yield step.event
                     break
-
                 case "delay":
-                    await delay(step.ms)
+                    await this.delayProvider.wait(step.ms)
                     break
-
                 case "end":
                     return
-
             }
-
         }
 
     }
