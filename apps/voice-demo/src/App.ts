@@ -72,8 +72,8 @@ export function mountApp(root: HTMLElement, app: BenchApp): void {
         lastMeta = meta
         const session = await app.backend.connect(
             "https://your-backend.example.com",
-            "test-user",
-            "test-password"
+            "meta.login,
+            meta.password
         )
         connLabel.textContent = session.status
     })
