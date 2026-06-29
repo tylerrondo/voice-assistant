@@ -1,46 +1,49 @@
 # Handover Guide
 
-> Версия: 1.0
-> Статус: Stable
-
 ## Назначение
-
-Этот документ — точка входа для нового разработчика или AI-ассистента,
-получившего только ZIP-архив этого репозитория без устных пояснений.
+Этот документ предназначен для нового разработчика или AI-ассистента,
+который впервые получает этот репозиторий.
 
 ## С чего начать
 
-Прочитайте документы в этом порядке:
+### 1. Прочитать сначала
+- README.md — общее описание проекта
+- docs/ARCHITECTURE.md — архитектура платформы
+- docs/PLATFORM_VISION.md — зачем существует платформа
+- docs/PLATFORM_RULES.md — что можно и нельзя менять
 
-1. `docs/PLATFORM_VISION.md` — зачем существует платформа.
-2. `docs/ARCHITECTURE.md` — как она устроена.
-3. `docs/REPOSITORY_MAP.md` — где что находится.
-4. `docs/PLATFORM_RULES.md` — что можно и нельзя менять.
-5. `docs/ROADMAP.md` — текущее состояние и следующий этап (миграция карты).
-6. `docs/MIGRATING_NEW_CHANNEL.md` — инструкция для следующего шага.
-7. `docs/DEVELOPMENT_WORKFLOW.md` — как именно вести разработку.
-8. `docs/history/README.md` — история всех PR (PR-1 ... PR-9c) с
-   объяснением, почему были приняты те или иные архитектурные решения.
+### 2. Понять структуру
+- docs/REPOSITORY_MAP.md — где что находится
+- docs/ROADMAP.md — текущее состояние и следующие задачи
 
-## Сборка проекта
+### 3. Изучить историю
+- docs/history/README.md — история всех PR
+- docs/rfc/ — оригинальные постановки задач
 
-См. корневой `README.md`, раздел "Сборка всех пакетов".
+### 4. Понять как мигрировать новый канал
+- docs/MIGRATING_NEW_CHANNEL.md — пошаговая инструкция
 
-## Запуск Demo
+## Текущая задача
+Следующий этап — миграция существующего Map-модуля на Platform Core.
+Подробнее: docs/ROADMAP.md (Phase 5)
 
-См. корневой `README.md`, раздел "Запуск Demo".
+## Структура пакетов
+- packages/interaction-contract/ — ядро платформы
+- packages/voice/ — голосовой канал
+- packages/emulator/ — автономное тестирование
+- packages/scenario-engine/ — декларативные сценарии
+- packages/execution-log/ — журнал выполнения
+- packages/verification/ — проверка сценариев
+- apps/voice-demo/ — Validation Bench
 
-## Если что-то не понятно
+## Как запустить
+1. npm install
+2. cd apps/voice-demo
+3. npm run dev
+4. Открыть браузер
 
-Если после изучения документов выше остаются вопросы по архитектуре
-или запуску — это сигнал, что репозиторий недостаточно
-документирован, и соответствующий документ должен быть дополнен,
-а не восполнен устным объяснением.
+## Validation Bench (Vercel)
+https://voice-assistant-two-olive.vercel.app
 
-## Главное правило
-
-Platform Core (`interaction-contract`, `scenario-engine`,
-`execution-log`, `verification`) не должен изменяться для нужд
-одного канала. Если кажется, что платформу нужно "немного
-переделать под задачу" — сначала прочитайте `docs/PLATFORM_RULES.md`,
-правило Rule 1 (Platform First) и Rule 13 (Platform Evolution).
+## GitHub
+https://github.com/tylerrondo/voice-assistant
