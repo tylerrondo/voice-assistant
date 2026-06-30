@@ -12,11 +12,11 @@ export class DemoLogger {
     constructor(private readonly log: ExecutionLog) {}
 
     logAction(action: InteractionAction): void {
-        this.log.append("Action", { type: action.type, payload: action.payload })
+        this.log.append("Action", { type: action.type })
     }
 
     logEvent(event: InteractionEvent): void {
-        this.log.append("Event", { type: event.type, payload: event.payload })
+        this.log.append("Event", { type: event.type })
     }
 
     logSpeak(text: string): void {
