@@ -9,88 +9,91 @@
  *  1. POST /auth (form-urlencoded: login, password, type) -> auth_hash
  *  2. POST /token (form-urlencoded: auth_hash) -> token, u_hash
  *
- * Uses URLSearchParams as fetch body instead of an explicit
- * Content-Type header. The browser sets
- * "application/x-www-form-urlencoded;charset=UTF-8" automatically,
- * which some backends (and CORS preflight configs) accept more
- * reliably than a manually-set header.
+ * Mail flow:
+ *  1. GET /api/v1/data/?json_like={"site_emails":true} -> site_emails object
+ *  2. POST /api/v1/mail/{id}/send/ where id is a key from site_emails
  */
-
 export type ConnectionStatus = "connected" | "auth-failed" | "mail-unavailable"
-
 export interface BackendSession {
     token: string
     u_hash: string
     status: ConnectionStatus
 }
-
 export class BackendClient {
-
     private session: BackendSession | null = null
 
     async connect(baseUrl: string, login: string, password: string): Promise<BackendSession> {
-
         try {
             const authParams = new URLSearchParams()
             authParams.set("login", login)
             authParams.set("password", password)
             authParams.set("type", "e-mail")
-
             const authRes = await fetch(`${baseUrl}/api/v1/auth`, {
                 method: "POST",
                 body: authParams
             })
-
             if (!authRes.ok) {
                 this.session = { token: "", u_hash: "", status: "auth-failed" }
                 return this.session
             }
-
             const authData = await authRes.json() as { auth_hash?: string }
-
             if (!authData.auth_hash) {
                 this.session = { token: "", u_hash: "", status: "auth-failed" }
                 return this.session
             }
-
             const tokenParams = new URLSearchParams()
             tokenParams.set("auth_hash", authData.auth_hash)
-
             const tokenRes = await fetch(`${baseUrl}/api/v1/token`, {
                 method: "POST",
                 body: tokenParams
             })
-
             if (!tokenRes.ok) {
                 this.session = { token: "", u_hash: "", status: "auth-failed" }
                 return this.session
             }
-
             const tokenData = await tokenRes.json() as { data: { token: string; u_hash: string } }
-
             this.session = {
                 token: tokenData.data.token,
                 u_hash: tokenData.data.u_hash,
                 status: "connected"
             }
             return this.session
-
         } catch {
             this.session = { token: "", u_hash: "", status: "auth-failed" }
             return this.session
         }
-
     }
 
-    async sendReport(baseUrl: string, report: unknown, recipientEmail: string): Promise<boolean> {
+    /**
+     * Fetches the site_emails object and returns the first available
+     * email id (key in site_emails), which is what /api/v1/mail/{id}/send/
+     * expects as the path parameter.
+     */
+    async getEmailId(baseUrl: string): Promise<string | null> {
+        try {
+            const query = encodeURIComponent(JSON.stringify({ site_emails: true }))
+            const res = await fetch(`${baseUrl}/api/v1/data/?json_like=${query}`)
+            if (!res.ok) {
+                return null
+            }
+            const data = await res.json() as { data?: { site_emails?: Record<string, unknown> } }
+            const siteEmails = data.data?.site_emails
+            if (!siteEmails) {
+                return null
+            }
+            const keys = Object.keys(siteEmails)
+            return keys.length > 0 ? keys[0] : null
+        } catch {
+            return null
+        }
+    }
 
+    async sendReport(baseUrl: string, report: unknown, emailId: string): Promise<boolean> {
         if (!this.session || this.session.status !== "connected") {
             return false
         }
-
         const json = JSON.stringify(report)
         const file = btoa(unescape(encodeURIComponent(json)))
-
         try {
             const params = new URLSearchParams()
             params.set("token", this.session.token)
@@ -98,9 +101,7 @@ export class BackendClient {
             params.set("subject", "Validation Report")
             params.set("body", "See attached JSON report.")
             params.set("file", file)
-            params.set("e_id", recipientEmail) 
-
-            const res = await fetch(`${baseUrl}/api/v1/mail`, {
+            const res = await fetch(`${baseUrl}/api/v1/mail/${emailId}/send/`, {
                 method: "POST",
                 body: params
             })
@@ -109,7 +110,5 @@ export class BackendClient {
             this.session = { ...this.session, status: "mail-unavailable" }
             return false
         }
-
     }
-
 }

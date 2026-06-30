@@ -126,7 +126,7 @@ export function mountApp(root: HTMLElement, app: BenchApp): void {
     root.querySelector("#btn-send")!.addEventListener("click", async () => {
         if (!lastReport) { alert("Run All first!"); return }
         const meta = lastMeta ?? getMeta()
-        const ok = await app.backend.sendReport(meta.backendUrl, lastReport, "e_id_placeholder")
+        const emailId = await app.backend.getEmailId(meta.backendUrl)
         alert(ok ? "Report sent!" : "Send failed!")
     })
 }
