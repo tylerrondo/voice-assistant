@@ -1,7 +1,12 @@
-export type ExpectationType = 'Action' | 'Event' | 'Speak' | 'Snapshot' | 'State';
+/**
+ * Verification Harness
+ *
+ * Describes one expected entry in the execution log.
+ * Uses "kind: string" to stay decoupled from ExecutionLog's type list.
+ */
 export interface VerificationExpectation {
-    type: ExpectationType;
-    payload?: any;
+    kind: string;
+    payload?: unknown;
     optional?: boolean;
 }
 //# sourceMappingURL=VerificationExpectation.d.ts.map

@@ -151,14 +151,26 @@ export function mountApp(root: HTMLElement, app: BenchApp): void {
 
         const runner = new VerificationRunner(app.executionLog)
 
-        const verificationScenarios = app.registry.list().map(sc => ({
-            id: sc.name,
-            name: sc.name,
-            expectations: [
-                { type: "Action" as const, optional: false },
-                { type: "Event" as const, optional: false }
+        const verificationScenarios = app.registry.list().map(sc => {
+            const trigger = sc.trigger
+            const emitSteps = sc.steps.filter(
+                (s): s is { kind: "emit"; event: { type: string; payload: unknown } } => s.kind === "emit"
+            )
+
+            const expectations = [
+                { kind: "Action", payload: { type: trigger }, optional: false },
+                ...emitSteps.flatMap(step => [
+                    { kind: "Event", payload: { type: step.event.type }, optional: false },
+                    { kind: "Speak", optional: false }
+                ])
             ]
-        }))
+
+            return {
+                id: sc.name,
+                name: sc.name,
+                expectations
+            }
+        })
 
         const verification = runner.runAll(verificationScenarios)
 
