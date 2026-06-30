@@ -37,7 +37,7 @@
                 </div>
                 <div class="session-field">
                     <label for="s-language">Language</label>
-                    <input id="s-language" value="ru-RU" />
+                    <input id="s-language" value="en-US" />
                 </div>
                 <div class="session-field">
                     <label for="s-recognition">Recognition Provider</label>
