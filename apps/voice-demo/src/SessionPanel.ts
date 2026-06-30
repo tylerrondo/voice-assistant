@@ -4,6 +4,7 @@
  * Test Session configuration panel.
  * Collects tester metadata before the session starts.
  */
+
 export interface SessionMeta {
     tester: string
     language: string
@@ -13,27 +14,79 @@ export interface SessionMeta {
     build: string
     commit: string
     environment: string
-    backendUrl: string
-    login: string
-    password: string
 }
+
 export function renderSessionPanel(root: HTMLElement): () => SessionMeta {
+
     root.innerHTML = `
+        <style>
+            .session-panel { margin-bottom: 1rem; }
+            .session-grid {
+                display: grid;
+                grid-template-columns: repeat(2, minmax(220px, 1fr));
+                gap: 12px 16px;
+                margin-top: 0.5rem;
+            }
+            .session-field {
+                display: flex;
+                flex-direction: column;
+                gap: 4px;
+            }
+            .session-field label {
+                font-size: 0.85rem;
+                font-weight: 600;
+            }
+            .session-field input {
+                padding: 6px 8px;
+                font-size: 1rem;
+                width: 100%;
+                box-sizing: border-box;
+            }
+            @media (max-width: 768px) {
+                .session-grid {
+                    grid-template-columns: 1fr;
+                }
+            }
+        </style>
         <div class="session-panel">
             <h2>Test Session</h2>
-            <label>Tester <input id="s-tester" value="Tester-1" /></label>
-            <label>Language <input id="s-language" value="en-US" /></label>
-            <label>Recognition Provider <input id="s-recognition" value="Browser" /></label>
-            <label>Speech Provider <input id="s-speech" value="Browser" /></label>
-            <label>Scenario Set <input id="s-scenario-set" value="builtin" /></label>
-            <label>Build <input id="s-build" value="1.0.0" /></label>
-            <label>Commit <input id="s-commit" value="bafc789" /></label>
-            <label>Environment <input id="s-env" value="demo" /></label>
-            <label>Backend URL <input id="s-backend-url" value="" /></label>
-            <label>Login <input id="s-login" value="" /></label>
-            <label>Password <input id="s-password" type="password" value="" /></label>
+            <div class="session-grid">
+                <div class="session-field">
+                    <label for="s-tester">Tester</label>
+                    <input id="s-tester" value="Tester-1" />
+                </div>
+                <div class="session-field">
+                    <label for="s-language">Language</label>
+                    <input id="s-language" value="ru-RU" />
+                </div>
+                <div class="session-field">
+                    <label for="s-recognition">Recognition Provider</label>
+                    <input id="s-recognition" value="Browser" />
+                </div>
+                <div class="session-field">
+                    <label for="s-speech">Speech Provider</label>
+                    <input id="s-speech" value="Browser" />
+                </div>
+                <div class="session-field">
+                    <label for="s-scenario-set">Scenario Set</label>
+                    <input id="s-scenario-set" value="builtin" />
+                </div>
+                <div class="session-field">
+                    <label for="s-build">Build</label>
+                    <input id="s-build" value="1.0.0" />
+                </div>
+                <div class="session-field">
+                    <label for="s-commit">Commit</label>
+                    <input id="s-commit" value="bafc789" />
+                </div>
+                <div class="session-field">
+                    <label for="s-env">Environment</label>
+                    <input id="s-env" value="demo" />
+                </div>
+            </div>
         </div>
     `
+
     return (): SessionMeta => ({
         tester: (root.querySelector<HTMLInputElement>("#s-tester")!).value,
         language: (root.querySelector<HTMLInputElement>("#s-language")!).value,
@@ -43,8 +96,6 @@ export function renderSessionPanel(root: HTMLElement): () => SessionMeta {
         build: (root.querySelector<HTMLInputElement>("#s-build")!).value,
         commit: (root.querySelector<HTMLInputElement>("#s-commit")!).value,
         environment: (root.querySelector<HTMLInputElement>("#s-env")!).value,
-        backendUrl: (root.querySelector<HTMLInputElement>("#s-backend-url")!).value,
-        login: (root.querySelector<HTMLInputElement>("#s-login")!).value,
-        password: (root.querySelector<HTMLInputElement>("#s-password")!).value,
     })
+
 }
