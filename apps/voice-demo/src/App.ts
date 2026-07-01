@@ -217,7 +217,7 @@ export function mountApp(root: HTMLElement, app: BenchApp): void {
 
     root.querySelector("#btn-send")!.addEventListener("click", async () => {
         if (!lastReport) { alert("Run All first!"); return }
-        const ok = await app.backend.sendReport(
+        const result = await app.backend.sendReport(
             "https://ibronevik.ru/taxi/c/gruzvill",
             lastReport,
             "2"
