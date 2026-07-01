@@ -135,9 +135,9 @@ export function mountApp(root: HTMLElement, app: BenchApp): void {
         lastMeta = meta
         // Используем корректный API_URL_PREFIX с эндпоинтом auth
         const session = await app.backend.connect(
-            API_URL_PREFIX + "auth",
-            "fizikgeo@gmail.com",
-            "Test12345"
+            "https://ibronevik.ru/taxi/c/gruzvill",
+            meta.login,
+            meta.password
         )
         connLabel.textContent = session.status === "connected" ? "● Connected" : "✗ " + session.status
         mailLabel.textContent = session.status === "connected" ? "Ready" : "—"
@@ -223,7 +223,7 @@ export function mountApp(root: HTMLElement, app: BenchApp): void {
         if (!lastReport) { alert("Run All first!"); return }
         // Используем корректный API_URL_PREFIX с эндпоинтом data
         const result = await app.backend.sendReport(
-            API_URL_PREFIX + "data",
+            "https://ibronevik.ru/taxi/c/gruzvill",
             lastReport,
             "2"
         )
