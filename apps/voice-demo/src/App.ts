@@ -58,6 +58,12 @@ export function mountApp(root: HTMLElement, app: BenchApp): void {
             <h3>Execution Log</h3>
             <pre id="exec-log" style="background:#111;color:#0f0;padding:1rem;height:200px;overflow:auto"></pre>
 
+            <!-- YANGI: Report Preview Oynasi (Mijoz talabi bo'yicha) -->
+            <h3>Report Preview</h3>
+            <div id="report-preview-box" style="background:#f4f4f4; border:1px solid #ccc; padding:1rem; margin-bottom:1rem; min-height:100px; border-radius:4px; font-size:0.9rem; color:#333;">
+                <i>Hisobotni ko'rish uchun avval "Run All" tugmasini bosing...</i>
+            </div>
+
             <h3>JSON Report</h3>
             <pre id="json-report" style="background:#111;color:#0ff;padding:1rem;height:200px;overflow:auto"></pre>
 
@@ -81,6 +87,7 @@ export function mountApp(root: HTMLElement, app: BenchApp): void {
     const verificationResult = root.querySelector<HTMLDivElement>("#verification-result")!
     const execLogEl = root.querySelector<HTMLPreElement>("#exec-log")!
     const jsonReportEl = root.querySelector<HTMLPreElement>("#json-report")!
+    const reportPreviewBox = root.querySelector<HTMLDivElement>("#report-preview-box")!
     const reportHistoryEl = root.querySelector<HTMLDivElement>("#report-history")!
     const injectSelect = root.querySelector<HTMLSelectElement>("#inject-select")!
 
@@ -110,6 +117,17 @@ export function mountApp(root: HTMLElement, app: BenchApp): void {
                 — ${date} — ${e.tester}
             </div>`
         }).join("")
+    }
+
+    // YANGI: Preview interfeysini vizual yangilash funksiyasi
+    function updateReportPreview(report: any): void {
+        const color = report.Summary.status === "PASS" ? "green" : "red";
+        reportPreviewBox.innerHTML = `
+            <div style="margin-bottom:0.5rem"><strong>Status:</strong> <span style="color:${color};font-weight:bold">${report.Summary.status}</span></div>
+            <div style="margin-bottom:0.5rem"><strong>Tester:</strong> ${report.Session.tester} | <strong>Language:</strong> ${report.Session.language}</div>
+            <div style="margin-bottom:0.5rem"><strong>Scenarios:</strong> ${report.Summary.totalScenarios} (Passed: ${report.Summary.passed}, Failed: ${report.Summary.failed})</div>
+            <div><strong>Duration:</strong> ${report.Summary.durationMs} ms</div>
+        `;
     }
 
     app.channel.onAction = (action) => {
@@ -165,7 +183,6 @@ export function mountApp(root: HTMLElement, app: BenchApp): void {
             obsProgress.textContent = `Running scenario ${i + 1} of ${SCENARIO_TRIGGERS.length}`
             await app.channel.injectAction({ type: SCENARIO_TRIGGERS[i], payload: {} })
             
-            // Tayyor Promise va tayyor setTimeout
             await new Promise<void>(resolve => {
                 setTimeout(() => resolve(), 700);
             });
@@ -185,7 +202,7 @@ export function mountApp(root: HTMLElement, app: BenchApp): void {
             const expectations = [
                 { kind: "Action", payload: { type: trigger }, optional: false },
                 ...emitSteps.flatMap(step => [
-                    { kind: "Event", payload: { type: step.event.type }, optional: false },
+                    { kind: "Event", payload: { step: step.event.type }, optional: false },
                     { kind: "Speak", optional: false }
                 ])
             ]
@@ -205,6 +222,7 @@ export function mountApp(root: HTMLElement, app: BenchApp): void {
         lastReport = report
         reportHistory.add(report)
         refreshHistory()
+        updateReportPreview(report); // UI oynasini yangilash
         jsonReportEl.textContent = JSON.stringify(report, null, 2)
     })
 
