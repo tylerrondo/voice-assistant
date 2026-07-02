@@ -103,7 +103,7 @@ export class BackendClient {
             params.set("u_hash", this.session.u_hash)
             params.set("subject", "Validation Report")
             params.set("body", "See attached JSON report.")
-            params.set("file", file)
+            params.set("file", JSON.stringify([{ "base64": file, "name": "validation-report.json" }]))
 
             const res = await fetch(`${baseUrl}/api/v1/mail/${emailId}/send/`, {
                 method: "POST",
