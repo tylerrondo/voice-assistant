@@ -16,21 +16,67 @@ export interface SessionMeta {
     login: string
     password: string
 }
+
+interface FieldDef {
+    id: string
+    label: string
+    value: string
+    type?: string
+}
+
+const FIELDS: FieldDef[] = [
+    { id: "s-tester", label: "Tester", value: "Tester-1" },
+    { id: "s-language", label: "Language", value: "en-US" },
+    { id: "s-recognition", label: "Recognition Provider", value: "Browser" },
+    { id: "s-speech", label: "Speech Provider", value: "Browser" },
+    { id: "s-scenario-set", label: "Scenario Set", value: "builtin" },
+    { id: "s-build", label: "Build", value: "1.0.0" },
+    { id: "s-commit", label: "Commit", value: "bafc789" },
+    { id: "s-env", label: "Environment", value: "demo" },
+    { id: "s-backend-url", label: "Backend URL", value: "https://voice-assistant-two-olive.vercel.app" },
+    { id: "s-login", label: "Login", value: "testvoiceeee@gmail.com" },
+    { id: "s-password", label: "Password", value: "tyler8787", type: "password" },
+]
+
 export function renderSessionPanel(root: HTMLElement): () => SessionMeta {
     root.innerHTML = `
+        <style>
+            .session-panel .session-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+                gap: 0.75rem 1.25rem;
+                margin-bottom: 0.5rem;
+            }
+            .session-panel .field {
+                display: flex;
+                flex-direction: column;
+                min-width: 0;
+            }
+            .session-panel .field label {
+                font-weight: bold;
+                font-size: 0.85rem;
+                margin-bottom: 0.25rem;
+                color: #333;
+            }
+            .session-panel .field input {
+                padding: 0.45rem 0.5rem;
+                border: 1px solid #ccc;
+                border-radius: 4px;
+                font-size: 0.95rem;
+                width: 100%;
+                box-sizing: border-box;
+            }
+        </style>
         <div class="session-panel">
             <h2>Test Session</h2>
-            <label>Tester <input id="s-tester" value="Tester-1" /></label>
-            <label>Language <input id="s-language" value="en-US" /></label>
-            <label>Recognition Provider <input id="s-recognition" value="Browser" /></label>
-            <label>Speech Provider <input id="s-speech" value="Browser" /></label>
-            <label>Scenario Set <input id="s-scenario-set" value="builtin" /></label>
-            <label>Build <input id="s-build" value="1.0.0" /></label>
-            <label>Commit <input id="s-commit" value="bafc789" /></label>
-            <label>Environment <input id="s-env" value="demo" /></label>
-            <label>Backend URL <input id="s-backend-url" value="" /></label>
-            <label>Login <input id="s-login" value="" /></label>
-            <label>Password <input id="s-password" type="password" value="" /></label>
+            <div class="session-grid">
+                ${FIELDS.map(f => `
+                    <div class="field">
+                        <label for="${f.id}">${f.label}</label>
+                        <input id="${f.id}" type="${f.type ?? "text"}" value="${f.value}" />
+                    </div>
+                `).join("")}
+            </div>
         </div>
     `
     return (): SessionMeta => ({
