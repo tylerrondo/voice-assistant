@@ -1,29 +1,25 @@
-export interface HistoryRecord {
-  date: string;
+export interface ReportHistoryEntry {
+  timestamp: string;
+  tester: string;
   status: 'PASS' | 'PASS WITH WARNINGS' | 'FAIL';
 }
 
 export class ReportHistory {
   private storageKey = 'validation_bench_history';
 
-  // Tarixni yuklab olish
-  public getHistory(): HistoryRecord[] {
-    const data = localStorage.getItem(this.storageKey);
-    return data ? JSON.parse(data) : [];
-  }
+  // App.ts shuni chaqiradi: reportHistory.add(report)
+  public add(report: any): void {
+    const history = this.getAll();
 
-  // Yangi natijani tarixga qo'shish
-  public saveRecord(status: 'PASS' | 'PASS WITH WARNINGS' | 'FAIL'): void {
-    const history = this.getHistory();
-    const newRecord: HistoryRecord = {
-      date: new Date().toISOString().split('T')[0], // YYYY-MM-DD formatda
-      status: status
+    const newRecord: ReportHistoryEntry = {
+      timestamp: new Date().toISOString(),
+      tester: report?.Session?.tester || "Tester-1",
+      status: report?.Summary?.status || "PASS"
     };
 
-    // Yangi hisobotni ro'yxat boshiga qo'shamiz
     history.unshift(newRecord);
 
-    // Faqat oxirgi 10 ta testni saqlab qolamiz (ortiqchasi o'chadi)
+    // Faqat oxirgi 10 ta natijani saqlaymiz
     if (history.length > 10) {
       history.pop();
     }
@@ -31,7 +27,12 @@ export class ReportHistory {
     localStorage.setItem(this.storageKey, JSON.stringify(history));
   }
 
-  // Tarixni tozalash (agar kerak bo'lsa)
+  // App.ts shuni chaqiradi: reportHistory.getAll()
+  public getAll(): ReportHistoryEntry[] {
+    const data = localStorage.getItem(this.storageKey);
+    return data ? JSON.parse(data) : [];
+  }
+
   public clearHistory(): void {
     localStorage.removeItem(this.storageKey);
   }
