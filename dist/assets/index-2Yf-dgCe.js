@@ -54,10 +54,10 @@
             <h3>Execution Log</h3>
             <pre id="exec-log" style="background:#111;color:#0f0;padding:1rem;height:200px;overflow:auto"></pre>
 
-            <!-- Report Preview Oynasi -->
+            <!-- Окно предварительного просмотра отчета -->
             <h3>Report Preview</h3>
             <div id="report-preview-box" style="background:#f4f4f4; border:1px solid #ccc; padding:1rem; margin-bottom:1rem; min-height:100px; border-radius:4px; font-size:0.9rem; color:#333;">
-                <i>Hisobotni ko'rish uchun avval "Run All" tugmasini bosing...</i>
+                <i>Чтобы просмотреть отчет, сначала нажмите кнопку "Run All"...</i>
             </div>
 
             <h3>JSON Report</h3>

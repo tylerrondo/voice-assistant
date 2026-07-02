@@ -58,10 +58,10 @@ export function mountApp(root: HTMLElement, app: BenchApp): void {
             <h3>Execution Log</h3>
             <pre id="exec-log" style="background:#111;color:#0f0;padding:1rem;height:200px;overflow:auto"></pre>
 
-            <!-- Report Preview Oynasi -->
+            <!-- Окно предварительного просмотра отчета -->
             <h3>Report Preview</h3>
             <div id="report-preview-box" style="background:#f4f4f4; border:1px solid #ccc; padding:1rem; margin-bottom:1rem; min-height:100px; border-radius:4px; font-size:0.9rem; color:#333;">
-                <i>Hisobotni ko'rish uchun avval "Run All" tugmasini bosing...</i>
+                <i>Чтобы просмотреть отчет, сначала нажмите кнопку "Run All"...</i>
             </div>
 
             <h3>JSON Report</h3>
@@ -103,6 +103,7 @@ export function mountApp(root: HTMLElement, app: BenchApp): void {
         execLogEl.scrollTop = execLogEl.scrollHeight
     }
 
+    // Функция обновления истории
     function refreshHistory(): void {
         const all = reportHistory.getAll()
         if (all.length === 0) {
@@ -119,6 +120,7 @@ export function mountApp(root: HTMLElement, app: BenchApp): void {
         }).join("")
     }
 
+    // Безопасная функция предварительного просмотра отчета
     function updateReportPreview(report: any): void {
         const status = report?.Summary?.status || "PASS";
         const color = status === "PASS" ? "green" : "red";
@@ -204,7 +206,7 @@ export function mountApp(root: HTMLElement, app: BenchApp): void {
                 (s): s is { kind: "emit"; event: { type: string; payload: unknown } } => s.kind === "emit"
             )
             
-            // Ikkala variantni ham beramiz (ham step, ham type) - mutloq xavfsiz va moslashuvchan tekshiruv uchun
+            // Передаем оба варианта (и step, и type) для полной совместимости и надежности
             const expectations = [
                 { kind: "Action", payload: { type: trigger }, optional: false },
                 ...emitSteps.flatMap(step => [
