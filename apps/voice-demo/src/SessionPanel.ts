@@ -34,7 +34,7 @@ const FIELDS: FieldDef[] = [
     { id: "s-commit", label: "Commit", value: "bafc789" },
     { id: "s-env", label: "Environment", value: "demo" },
     { id: "s-backend-url", label: "Backend URL", value: "https://voice-assistant-two-olive.vercel.app" },
-    { id: "s-login", label: "Login", value: "testvoiceeee@gmail.com" },
+    { id: "s-login", label: "Login", value: "testvoiceee@gmail.com" },
     { id: "s-password", label: "Password", value: "tyler8787", type: "password" },
 ]
 
