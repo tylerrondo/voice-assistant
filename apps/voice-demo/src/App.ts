@@ -8,7 +8,6 @@
 import type { BenchApp } from "./Bootstrap"
 import type { SessionMeta } from "./SessionPanel"
 import { renderSessionPanel } from "./SessionPanel"
-import { VerificationRunner } from "../../../packages/verification/dist/index"
 import { buildValidationReport, generateReportFilename } from "./ValidationReportManager"
 import { ReportHistory, type ReportHistoryEntry } from "./ReportHistory"
 import { SessionController } from "./SessionController"
@@ -259,7 +258,7 @@ export function mountApp(root: HTMLElement, app: BenchApp): void {
             return
         }
         const trigger = interactiveScenarios[interactiveIndex]
-        const script = getInteractiveScript(trigger)
+        const script = getInteractiveScript(trigger, getMeta().language)
         intPrompt.textContent = script.promptText
         intExpected.textContent = script.expectedText
         controller.beginScenario(1)
@@ -514,9 +513,16 @@ export function mountApp(root: HTMLElement, app: BenchApp): void {
     root.querySelector("#btn-send")!.addEventListener("click", async () => {
         if (!lastReport) { alert("Run All first!"); return }
 
+        const baseUrl = "https://ibronevik.ru/taxi/c/gruzvill"
+        const emailId = await app.backend.getEmailId(baseUrl)
+        if (!emailId) {
+            alert("❌ Send failed: no email id available")
+            return
+        }
         const result = await app.backend.sendReport(
-            "https://ibronevik.ru/taxi/c/gruzvill",
-            lastReport
+            baseUrl,
+            lastReport,
+            emailId
         )
         alert(result ? "✅ Report sent!" : "❌ Send failed!")
     })
