@@ -1,8 +1,10 @@
 ﻿/**
- * Validation Bench - PR-9d
+ * Validation Bench - PR-9d.2
  *
  * Main UI: Session Panel, Controls, Live Observer, Verification, Report,
- * and now Interactive Runner (step-by-step manual validation).
+ * Interactive Runner (step-by-step manual validation), a real Input
+ * Source switch (Browser microphone vs Inject Action), and an explicit
+ * save state for the tester comment.
  */
 
 import type { BenchApp } from "./Bootstrap"
@@ -13,6 +15,7 @@ import { ReportHistory, type ReportHistoryEntry } from "./ReportHistory"
 import { SessionController } from "./SessionController"
 import { StepState } from "./StepState"
 import { getInteractiveScript, getStepLabel } from "./InteractiveScriptMap"
+import type { InteractionAction } from "../../../packages/interaction-contract/dist/index"
 
 const SCENARIO_TRIGGERS = ["voice.recognized", "interaction.echo", "interaction.delayed"]
 
@@ -50,6 +53,15 @@ export function mountApp(root: HTMLElement, app: BenchApp): void {
                 </label>
             </div>
 
+            <div id="input-source-row" style="margin:1rem 0; display:none">
+                <label style="font-weight:bold">Input Source:
+                    <select id="input-source-select">
+                        <option value="mic">🎤 Browser microphone</option>
+                        <option value="inject">Inject Action (debug)</option>
+                    </select>
+                </label>
+            </div>
+
             <div style="margin:1rem 0">
                 <div style="margin-top:0.5rem">
                     <button id="btn-connect">Connect</button>
@@ -57,13 +69,18 @@ export function mountApp(root: HTMLElement, app: BenchApp): void {
                     <button id="btn-stop">■ Stop</button>
                     <button id="btn-run-all">▶ Run All</button>
                 </div>
-                <div style="margin-top:0.5rem">
+
+                <div id="inject-controls" style="margin-top:0.5rem">
                     <label>Inject action:
                         <select id="inject-select">
                             ${SCENARIO_TRIGGERS.map(t => `<option value="${t}">${t}</option>`).join("")}
                         </select>
                     </label>
                     <button id="btn-inject">Send</button>
+                </div>
+
+                <div id="mic-controls" style="margin-top:0.5rem; display:none">
+                    <span id="mic-status">🎤 Idle</span>
                 </div>
             </div>
 
@@ -72,7 +89,7 @@ export function mountApp(root: HTMLElement, app: BenchApp): void {
                 &nbsp;|&nbsp; <b>Progress:</b> <span id="obs-progress">—</span>
             </div>
 
-            <!-- Interactive Runner (PR-9d.2/9d.3/9d.4) -->
+            <!-- Interactive Runner (PR-9d.2) -->
             <div id="interactive-panel" style="display:none; border:1px solid #ccc; border-radius:6px; padding:1rem; margin:1rem 0; background:#fafafa">
                 <h3 style="margin-top:0">Interactive Runner</h3>
 
@@ -112,6 +129,10 @@ export function mountApp(root: HTMLElement, app: BenchApp): void {
                         <br/>
                         <textarea id="int-comment" rows="2" style="width:100%"></textarea>
                     </label>
+                    <div style="margin-top:0.3rem">
+                        <button id="int-btn-save-comment">Сохранить комментарий</button>
+                        <span id="int-comment-status" style="margin-left:0.5rem; color:#888">Не сохранён</span>
+                    </div>
                 </div>
 
                 <div id="int-summary-box" style="display:none; background:#eef7ee; border:1px solid #b6d7b6; border-radius:4px; padding:0.8rem; margin-top:0.6rem">
@@ -130,7 +151,7 @@ export function mountApp(root: HTMLElement, app: BenchApp): void {
 
             <h3>Report Preview</h3>
             <div id="report-preview-box" style="background:#f4f4f4; border:1px solid #ccc; padding:1rem; margin-bottom:1rem; min-height:100px; border-radius:4px; font-size:0.9rem; color:#333;">
-                <i>Чтобы просмотреть отчет, сначала нажмите кнопку "Run All"...</i>
+                <i>Чтобы просмотреть отчёт, сначала нажмите кнопку "Run All"...</i>
             </div>
 
             <h3>JSON Report</h3>
@@ -161,6 +182,12 @@ export function mountApp(root: HTMLElement, app: BenchApp): void {
     const injectSelect = root.querySelector<HTMLSelectElement>("#inject-select")!
     const modeSelect = root.querySelector<HTMLSelectElement>("#mode-select")!
 
+    const inputSourceRow = root.querySelector<HTMLDivElement>("#input-source-row")!
+    const inputSourceSelect = root.querySelector<HTMLSelectElement>("#input-source-select")!
+    const injectControls = root.querySelector<HTMLDivElement>("#inject-controls")!
+    const micControls = root.querySelector<HTMLDivElement>("#mic-controls")!
+    const micStatus = root.querySelector<HTMLSpanElement>("#mic-status")!
+
     const interactivePanel = root.querySelector<HTMLDivElement>("#interactive-panel")!
     const intSessionState = root.querySelector<HTMLSpanElement>("#int-session-state")!
     const intScenario = root.querySelector<HTMLSpanElement>("#int-scenario")!
@@ -170,6 +197,8 @@ export function mountApp(root: HTMLElement, app: BenchApp): void {
     const intStepLabel = root.querySelector<HTMLDivElement>("#int-step-label")!
     const intConfirmBlock = root.querySelector<HTMLDivElement>("#int-confirm-block")!
     const intComment = root.querySelector<HTMLTextAreaElement>("#int-comment")!
+    const intCommentStatus = root.querySelector<HTMLSpanElement>("#int-comment-status")!
+    const btnSaveComment = root.querySelector<HTMLButtonElement>("#int-btn-save-comment")!
     const intSummaryBox = root.querySelector<HTMLDivElement>("#int-summary-box")!
     const intSummaryContent = root.querySelector<HTMLDivElement>("#int-summary-content")!
 
@@ -192,6 +221,44 @@ export function mountApp(root: HTMLElement, app: BenchApp): void {
     let interactiveIndex = 0
     let manualResults: ManualResult[] = []
     let currentResult: ManualResult | null = null
+
+    // PR-9d.2: resolves when a real microphone recognition result
+    // arrives while the Interactive Runner is waiting for one.
+    let micWaiter: ((action: InteractionAction) => void) | null = null
+
+    // Explicit save state for the tester comment (per step).
+    let savedCommentText = ""
+
+    function setCommentUnsaved(): void {
+        intCommentStatus.textContent = "Есть несохранённые изменения"
+        intCommentStatus.style.color = "#c78a00"
+    }
+
+    function setCommentSaved(): void {
+        intCommentStatus.textContent = "✓ Сохранено"
+        intCommentStatus.style.color = "green"
+    }
+
+    function resetCommentState(): void {
+        intComment.value = ""
+        savedCommentText = ""
+        intCommentStatus.textContent = "Не сохранён"
+        intCommentStatus.style.color = "#888"
+    }
+
+    intComment.addEventListener("input", () => {
+        if (intComment.value !== savedCommentText) {
+            setCommentUnsaved()
+        }
+    })
+
+    btnSaveComment.addEventListener("click", () => {
+        savedCommentText = intComment.value
+        if (currentResult) {
+            currentResult.comment = savedCommentText
+        }
+        setCommentSaved()
+    })
 
     function refreshLog(): void {
         const entries = app.executionLog.getEntries()
@@ -231,6 +298,17 @@ export function mountApp(root: HTMLElement, app: BenchApp): void {
         `;
     }
 
+    // ---- Input Source (PR-9d.2) ----
+
+    function updateInputSourceVisibility(): void {
+        const isMic = inputSourceSelect.value === "mic"
+        injectControls.style.display = isMic ? "none" : "block"
+        micControls.style.display = isMic ? "block" : "none"
+    }
+
+    inputSourceSelect.addEventListener("change", updateInputSourceVisibility)
+    updateInputSourceVisibility()
+
     // ---- Interactive Runner logic ----
 
     function renderInteractiveState(): void {
@@ -265,6 +343,7 @@ export function mountApp(root: HTMLElement, app: BenchApp): void {
         intPrompt.textContent = script.promptText
         intExpected.textContent = script.expectedText
         controller.beginScenario(1)
+        resetCommentState()
         renderInteractiveState()
     }
 
@@ -277,6 +356,31 @@ export function mountApp(root: HTMLElement, app: BenchApp): void {
         loadCurrentPrompt()
     }
 
+    /**
+     * PR-9d.2: starts the real microphone channel (idempotent — 
+     * VoiceChannel.start() no-ops if already running) and waits for
+     * the next real recognition result to arrive via app.channel.onAction.
+     */
+    async function startMicListening(): Promise<void> {
+        micStatus.textContent = "🎤 Listening — say the phrase now…"
+        await app.channel.start()
+        obsState.textContent = app.channel.getState()
+
+        await new Promise<void>((resolve) => {
+            micWaiter = (action) => {
+                if (currentResult) {
+                    currentResult.trigger = action.type
+                }
+                resolve()
+            }
+        })
+
+        micStatus.textContent = "🎤 Idle"
+        refreshLog()
+        controller.waitForTester()
+        renderInteractiveState()
+    }
+
     async function performCurrentStep(): Promise<void> {
         const trigger = interactiveScenarios[interactiveIndex]
         currentResult = {
@@ -287,19 +391,23 @@ export function mountApp(root: HTMLElement, app: BenchApp): void {
             repeated: 0,
             skipped: false
         }
-        await app.channel.injectAction({ type: trigger, payload: {} })
-        refreshLog()
-        controller.waitForTester()
-        renderInteractiveState()
+
+        if (inputSourceSelect.value === "mic") {
+            await startMicListening()
+        } else {
+            await app.channel.injectAction({ type: trigger, payload: {} })
+            refreshLog()
+            controller.waitForTester()
+            renderInteractiveState()
+        }
     }
 
     function commitCurrentResultAndAdvance(): void {
         if (currentResult) {
-            currentResult.comment = intComment.value
+            currentResult.comment = savedCommentText || intComment.value
             manualResults.push(currentResult)
             currentResult = null
         }
-        intComment.value = ""
         controller.finishScenario()
         controller.nextStep()
         interactiveIndex++
@@ -308,6 +416,10 @@ export function mountApp(root: HTMLElement, app: BenchApp): void {
 
     function finishInteractiveSession(): void {
         controller.stop()
+        if (inputSourceSelect.value === "mic") {
+            void app.channel.stop()
+            obsState.textContent = app.channel.getState()
+        }
         intPrompt.textContent = "Все сценарии пройдены."
         intExpected.textContent = ""
         renderInteractiveState()
@@ -409,6 +521,7 @@ export function mountApp(root: HTMLElement, app: BenchApp): void {
     modeSelect.addEventListener("change", () => {
         const interactive = modeSelect.value === "interactive"
         interactivePanel.style.display = interactive ? "block" : "none"
+        inputSourceRow.style.display = interactive ? "block" : "none"
         if (interactive) {
             startedAt = new Date().toISOString()
             app.executionLog.clear()
@@ -417,11 +530,16 @@ export function mountApp(root: HTMLElement, app: BenchApp): void {
         }
     })
 
-    // ---- Existing wiring (unchanged) ----
+    // ---- Existing wiring (unchanged, now also resolves micWaiter) ----
 
     app.channel.onAction = (action) => {
         app.logger.logAction(action)
         refreshLog()
+        if (micWaiter) {
+            const waiter = micWaiter
+            micWaiter = null
+            waiter(action)
+        }
     }
 
     app.channel.onEvent = (event) => {
