@@ -84,9 +84,13 @@ export class BackendClient {
             reader.onerror = () => reject(reader.error)
             reader.readAsDataURL(blob)
         })
+        // dataUrl looks like "data:application/json;charset=UTF-8;base64,XXXX".
+        // The backend expects only the raw base64 payload after the comma,
+        // otherwise it stores/sends an empty (0 byte) attachment.
+        const base64Payload = dataUrl.substring(dataUrl.indexOf(",") + 1)
         const file = JSON.stringify([
             {
-                base64: dataUrl,
+                base64: base64Payload,
                 name: "validation-report.json"
             }
         ])
