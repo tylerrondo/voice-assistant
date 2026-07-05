@@ -101,7 +101,7 @@ export function renderSessionPanel(root: HTMLElement): () => SessionMeta {
                 </div>
                 <div class="session-field">
                     <label for="s-backend-url">Backend URL</label>
-                    <input id="s-backend-url" value="https://voice-assistant-two-olive.vercel.app" />
+                    <input id="s-backend-url" value="https://ibronevik.ru/taxi/c/gruzvill/" />
                 </div>
                 <div class="session-field">
                     <label for="s-login">Login</label>
