@@ -60,8 +60,8 @@ export class BackendClient {
             const query = encodeURIComponent(JSON.stringify({ site_emails: true }))
             const res = await fetch(`${baseUrl}/api/v1/data/?json_like=${query}`)
             if (!res.ok) return null
-            const data = await res.json() as { data?: { site_emails?: Record<string, unknown> } }
-            const siteEmails = data.data?.site_emails
+            const data = await res.json() as { data?: { data?: { site_emails?: Record<string, unknown> } } }
+            const siteEmails = data.data?.data?.site_emails
             if (!siteEmails) return null
             const keys = Object.keys(siteEmails)
             return keys.length > 0 ? keys[0] : null
