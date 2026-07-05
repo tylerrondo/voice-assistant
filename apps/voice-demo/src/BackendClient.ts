@@ -63,6 +63,7 @@ export class BackendClient {
             const data = await res.json() as { data?: { data?: { site_emails?: Record<string, unknown> } } }
             const siteEmails = data.data?.data?.site_emails
             if (!siteEmails) return null
+            if (siteEmails["2"]) return "2"
             const keys = Object.keys(siteEmails)
             return keys.length > 0 ? keys[0] : null
         } catch {
