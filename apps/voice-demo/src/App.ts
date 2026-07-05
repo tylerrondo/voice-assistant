@@ -318,14 +318,26 @@ export function mountApp(root: HTMLElement, app: BenchApp): void {
         intScenario.textContent = `${shownScenario} / ${progress.totalScenarios}`
         intProgress.textContent = `${progress.progressPercent}%`
 
-        const paused = controller.getState() === StepState.Paused
-        const finished = controller.getState() === StepState.Finished
-        const waiting = controller.getState() === StepState.WaitingTester
+        const state = controller.getState()
+        const paused = state === StepState.Paused
+        const finished = state === StepState.Finished
+        const waiting = state === StepState.WaitingTester
+        const running = state === StepState.Running
+        const confirmed = !!currentResult && currentResult.recognized !== null && currentResult.heard !== null
 
-        btnNext.toggleAttribute("disabled", paused || finished)
-        btnRepeat.toggleAttribute("disabled", paused || finished)
+        // Next Step: enabled to start the step (Running), or to advance
+        // only after the tester has confirmed both checks (WaitingTester + confirmed).
+        btnNext.toggleAttribute("disabled", paused || finished || (waiting && !confirmed))
+
+        // Repeat only makes sense once an attempt has actually happened.
+        btnRepeat.toggleAttribute("disabled", paused || finished || running)
+
+        // Skip is available any time except when paused/finished.
         btnSkip.toggleAttribute("disabled", paused || finished)
-        btnPause.toggleAttribute("disabled", paused || finished)
+
+        // Pause only makes sense while something is actively running/listening.
+        btnPause.toggleAttribute("disabled", !running)
+
         btnResume.toggleAttribute("disabled", !paused)
 
         intConfirmBlock.style.display = waiting ? "block" : "none"
@@ -514,10 +526,10 @@ export function mountApp(root: HTMLElement, app: BenchApp): void {
         renderInteractiveState()
     })
 
-    btnRecYes.addEventListener("click", () => { if (currentResult) currentResult.recognized = true })
-    btnRecNo.addEventListener("click", () => { if (currentResult) currentResult.recognized = false })
-    btnHeardYes.addEventListener("click", () => { if (currentResult) currentResult.heard = true })
-    btnHeardNo.addEventListener("click", () => { if (currentResult) currentResult.heard = false })
+    btnRecYes.addEventListener("click", () => { if (currentResult) currentResult.recognized = true; renderInteractiveState() })
+    btnRecNo.addEventListener("click", () => { if (currentResult) currentResult.recognized = false; renderInteractiveState() })
+    btnHeardYes.addEventListener("click", () => { if (currentResult) currentResult.heard = true; renderInteractiveState() })
+    btnHeardNo.addEventListener("click", () => { if (currentResult) currentResult.heard = false; renderInteractiveState() })
 
     modeSelect.addEventListener("change", () => {
         const interactive = modeSelect.value === "interactive"
