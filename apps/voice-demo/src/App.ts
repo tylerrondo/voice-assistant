@@ -149,7 +149,7 @@ export function mountApp(root: HTMLElement, app: BenchApp): void {
             <h3>Execution Log</h3>
             <pre id="exec-log" style="background:#111;color:#0f0;padding:1rem;height:200px;overflow:auto"></pre>
 
-            <h3>Report Preview</h3>
+            <h3>Last Completed Report</h3>
             <div id="report-preview-box" style="background:#f4f4f4; border:1px solid #ccc; padding:1rem; margin-bottom:1rem; min-height:100px; border-radius:4px; font-size:0.9rem; color:#333;">
                 <i>Чтобы просмотреть отчёт, сначала нажмите кнопку "Run All"...</i>
             </div>
@@ -287,9 +287,17 @@ export function mountApp(root: HTMLElement, app: BenchApp): void {
     function updateReportPreview(report: any): void {
         const status = report?.Summary?.status || "PASS";
         const color = status === "PASS" ? "green" : "red";
+        // PR-9d.2 UX fix (per client feedback): this box only ever shows
+        // a snapshot from the last completed run/session, not a live
+        // view of the current in-progress session. Labelling it
+        // "Last Completed Report" plus the generation timestamp makes
+        // that explicit, so a tester isn't misled if they've since
+        // switched language/settings without re-running a full test.
+        const generatedAt = new Date().toLocaleString();
 
         reportPreviewBox.innerHTML = `
             <div style="background: #fff; border-left: 4px solid ${color}; padding: 0.8rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                <div style="margin-bottom:0.4rem; color:#888; font-size:0.8rem;">Generated at: ${generatedAt}</div>
                 <div style="margin-bottom:0.4rem"><strong>Status:</strong> <span style="color:${color};font-weight:bold">${status}</span></div>
                 <div style="margin-bottom:0.4rem"><strong>Tester:</strong> ${report?.Session?.tester || "Tester"} | <strong>Language:</strong> ${report?.Session?.language || "en-US"}</div>
                 <div style="margin-bottom:0.4rem"><strong>Scenarios:</strong> ${report?.Summary?.totalScenarios || 0} (Passed: ${report?.Summary?.passed || 0}, Failed: ${report?.Summary?.failed || 0})</div>
