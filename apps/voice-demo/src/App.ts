@@ -327,11 +327,25 @@ export function mountApp(root: HTMLElement, app: BenchApp): void {
         const progress = controller.getProgress()
         const shownScenario = Math.min(progress.currentScenario, progress.totalScenarios)
         intScenario.textContent = `${shownScenario} / ${progress.totalScenarios}`
-        intProgress.textContent = `${progress.progressPercent}%`
+
+        // PR-9d.2 fix (per client feedback): "Progress" previously showed
+        // per-step progress (always 0% the instant a new step starts,
+        // since each step internally resets to totalSteps=1/currentStep=0),
+        // which contradicted "Scenario: 2/3" right next to it. It now
+        // shows overall session completion: how many of the total
+        // scenarios have already been finished.
+        const overallPercent = progress.totalScenarios > 0
+            ? Math.round(((shownScenario - 1) / progress.totalScenarios) * 100)
+            : 0
+        intProgress.textContent = `${overallPercent}%`
 
         const paused = controller.getState() === StepState.Paused
         const finished = controller.getState() === StepState.Finished
         const waiting = controller.getState() === StepState.WaitingTester
+
+        if (finished) {
+            intProgress.textContent = "100%"
+        }
 
         btnNext.toggleAttribute("disabled", paused || finished)
         btnRepeat.toggleAttribute("disabled", paused || finished)
@@ -368,6 +382,18 @@ export function mountApp(root: HTMLElement, app: BenchApp): void {
         intExpected.textContent = script.expectedText
         controller.beginScenario(1)
         resetCommentState()
+
+        // PR-9d.2 fix (per client feedback): mark the boundary between
+        // steps directly in the Execution Log, so it's clear which
+        // Action/Event/Speak entries belong to which step instead of
+        // one continuous, unlabeled stream.
+        app.executionLog.append("Step", {
+            number: interactiveIndex + 1,
+            total: interactiveScenarios.length,
+            trigger
+        })
+        refreshLog()
+
         renderInteractiveState()
     }
 
