@@ -20,12 +20,16 @@ import type { InteractionAction } from "../../../packages/interaction-contract/d
 const SCENARIO_TRIGGERS = ["voice.recognized", "interaction.echo", "interaction.delayed"]
 
 interface ManualResult {
+    step: number
     trigger: string
     recognized: boolean | null
     heard: boolean | null
+    recognizedText: string | null
+    speechText: string | null
     comment: string
     repeated: number
     skipped: boolean
+    durationMs: number
 }
 
 export function mountApp(root: HTMLElement, app: BenchApp): void {
@@ -438,7 +442,15 @@ export function mountApp(root: HTMLElement, app: BenchApp): void {
         await new Promise<void>((resolve) => {
             micWaiter = (action) => {
                 if (currentResult) {
-                    currentResult.trigger = action.type
+                    // PR-9d.2 fix: previously this overwrote
+                    // currentResult.trigger with the raw action type
+                    // ("voice.recognized"), destroying the intended
+                    // step label and never actually recording what was
+                    // said. The recognized text now goes into its own
+                    // dedicated field instead.
+                    const payload = (action as any)?.payload
+                    currentResult.recognizedText =
+                        payload && typeof payload.text === "string" ? payload.text : null
                 }
                 resolve()
             }
@@ -452,13 +464,18 @@ export function mountApp(root: HTMLElement, app: BenchApp): void {
 
     async function performCurrentStep(): Promise<void> {
         const trigger = interactiveScenarios[interactiveIndex]
+        const stepStartedAt = Date.now()
         currentResult = {
+            step: interactiveIndex + 1,
             trigger,
             recognized: null,
             heard: null,
+            recognizedText: null,
+            speechText: null,
             comment: "",
             repeated: 0,
-            skipped: false
+            skipped: false,
+            durationMs: 0
         }
 
         if (inputSourceSelect.value === "mic") {
@@ -468,6 +485,13 @@ export function mountApp(root: HTMLElement, app: BenchApp): void {
             refreshLog()
             controller.waitForTester()
             renderInteractiveState()
+        }
+
+        // PR-9d.2 fix (per client feedback): record how long this
+        // attempt actually took, from starting the step to recognition
+        // (or the injected action) completing.
+        if (currentResult) {
+            currentResult.durationMs = Date.now() - stepStartedAt
         }
     }
 
@@ -543,8 +567,26 @@ export function mountApp(root: HTMLElement, app: BenchApp): void {
             validationMode: "Interactive",
             inputSource: inputSourceSelect.value
         })
+        // PR-9d.2 fix (per client feedback): expose a richer, clearly
+        // named structure per step instead of just trigger/recognized/
+        // heard flags, so a reader can see exactly what was said, what
+        // was played back, and how long the attempt took — without
+        // needing to cross-reference the raw Execution Log.
+        const detailedResults = manualResults.map(r => ({
+            step: r.step,
+            trigger: r.trigger,
+            recognizedText: r.recognizedText,
+            recognizedCorrectly: r.recognized,
+            speechPlayed: r.heard,
+            speechText: r.speechText,
+            comment: r.comment,
+            repeat: r.repeated,
+            skipped: r.skipped,
+            durationMs: r.durationMs
+        }))
+
         report.ManualValidation = {
-            results: manualResults,
+            results: detailedResults,
             warnings,
             repeatedSteps: repeated,
             skippedSteps: skipped
@@ -596,12 +638,16 @@ export function mountApp(root: HTMLElement, app: BenchApp): void {
             currentResult = null
         } else {
             manualResults.push({
+                step: interactiveIndex + 1,
                 trigger: interactiveScenarios[interactiveIndex],
                 recognized: null,
                 heard: null,
+                recognizedText: null,
+                speechText: null,
                 comment: "",
                 repeated: 0,
-                skipped: true
+                skipped: true,
+                durationMs: 0
             })
         }
         controller.finishScenario()
@@ -702,6 +748,12 @@ export function mountApp(root: HTMLElement, app: BenchApp): void {
     app.channel.onSpeak = (text) => {
         app.logger.logSpeak(text)
         refreshLog()
+        // PR-9d.2 fix (per client feedback): record what was actually
+        // spoken back for this step, so the report can show it
+        // alongside the recognized text.
+        if (currentResult) {
+            currentResult.speechText = text
+        }
     }
 
     root.querySelector("#btn-connect")!.addEventListener("click", async () => {
