@@ -244,6 +244,13 @@ export function mountApp(root: HTMLElement, app: BenchApp): void {
         savedCommentText = ""
         intCommentStatus.textContent = "Не сохранён"
         intCommentStatus.style.color = "#888"
+        // PR-9d.2 fix: also clear the Recognized/Heard button
+        // highlighting when a new step starts, so a fresh step never
+        // visually shows the previous step's leftover selection.
+        btnRecYes.setAttribute("style", "")
+        btnRecNo.setAttribute("style", "")
+        btnHeardYes.setAttribute("style", "")
+        btnHeardNo.setAttribute("style", "")
     }
 
     intComment.addEventListener("input", () => {
@@ -612,10 +619,32 @@ export function mountApp(root: HTMLElement, app: BenchApp): void {
         renderInteractiveState()
     })
 
-    btnRecYes.addEventListener("click", () => { if (currentResult) currentResult.recognized = true })
-    btnRecNo.addEventListener("click", () => { if (currentResult) currentResult.recognized = false })
-    btnHeardYes.addEventListener("click", () => { if (currentResult) currentResult.heard = true })
-    btnHeardNo.addEventListener("click", () => { if (currentResult) currentResult.heard = false })
+    // PR-9d.2 fix (per client feedback): the Recognized/Heard buttons
+    // gave no visual indication after being clicked — a tester could
+    // not tell whether their choice was registered, which was active,
+    // or press either button repeatedly with no visible effect. These
+    // two functions highlight whichever choice is currently selected
+    // for the step in progress, and are re-run on every click and on
+    // every new step so the highlight never carries over incorrectly.
+    const SELECTED_YES_STYLE = "background:#c8f7c5; font-weight:bold; border-color:#2e7d32"
+    const SELECTED_NO_STYLE = "background:#f7c5c5; font-weight:bold; border-color:#c62828"
+
+    function updateRecognizedButtons(): void {
+        const value = currentResult?.recognized ?? null
+        btnRecYes.setAttribute("style", value === true ? SELECTED_YES_STYLE : "")
+        btnRecNo.setAttribute("style", value === false ? SELECTED_NO_STYLE : "")
+    }
+
+    function updateHeardButtons(): void {
+        const value = currentResult?.heard ?? null
+        btnHeardYes.setAttribute("style", value === true ? SELECTED_YES_STYLE : "")
+        btnHeardNo.setAttribute("style", value === false ? SELECTED_NO_STYLE : "")
+    }
+
+    btnRecYes.addEventListener("click", () => { if (currentResult) { currentResult.recognized = true; updateRecognizedButtons() } })
+    btnRecNo.addEventListener("click", () => { if (currentResult) { currentResult.recognized = false; updateRecognizedButtons() } })
+    btnHeardYes.addEventListener("click", () => { if (currentResult) { currentResult.heard = true; updateHeardButtons() } })
+    btnHeardNo.addEventListener("click", () => { if (currentResult) { currentResult.heard = false; updateHeardButtons() } })
 
     modeSelect.addEventListener("change", () => {
         const interactive = modeSelect.value === "interactive"
