@@ -94,19 +94,25 @@ export function mountApp(root: HTMLElement, app: BenchApp): void {
             </div>
 
             <!-- Interactive Runner (PR-9d.2) -->
-            <div id="interactive-panel" style="display:none; border:1px solid #ccc; border-radius:6px; padding:1rem; margin:1rem 0; background:#fafafa">
+            <div id="interactive-panel" data-testid="interactive-runner" style="display:none; border:1px solid #ccc; border-radius:6px; padding:1rem; margin:1rem 0; background:#fafafa">
                 <h3 style="margin-top:0">Interactive Runner</h3>
 
                 <div style="margin-bottom:0.5rem">
-                    <b>Session State:</b> <span id="int-session-state">Idle</span>
-                    &nbsp;|&nbsp; <b>Scenario:</b> <span id="int-scenario">— / —</span>
-                    &nbsp;|&nbsp; <b>Progress:</b> <span id="int-progress">0%</span>
+                    <b>Session State:</b> <span id="int-session-state" data-testid="session-state">Idle</span>
+                    &nbsp;|&nbsp; <b>Scenario:</b> <span id="int-scenario" data-testid="current-step">— / —</span>
+                    &nbsp;|&nbsp; <b>Progress:</b> <span id="int-progress" data-testid="progress-value">0%</span>
                 </div>
 
                 <div style="background:#fff; border:1px solid #ddd; border-radius:4px; padding:0.8rem; margin-bottom:0.6rem">
                     <div id="int-step-label" style="font-weight:bold; margin-bottom:0.3rem">Step</div>
                     <div id="int-prompt" style="font-size:1.05rem; margin-bottom:0.4rem">—</div>
                     <div id="int-expected" style="color:#555; font-size:0.9rem">—</div>
+                    <div style="margin-top:0.4rem; font-size:0.9rem; color:#333">
+                        Recognized: <span id="recognized-text" data-testid="recognized-text">—</span>
+                    </div>
+                    <div style="font-size:0.9rem; color:#333">
+                        Speech: <span id="speech-text" data-testid="speech-text">—</span>
+                    </div>
                 </div>
 
                 <div style="margin-bottom:0.6rem">
@@ -131,7 +137,7 @@ export function mountApp(root: HTMLElement, app: BenchApp): void {
                     <label style="display:block; margin-top:0.4rem">
                         Комментарий тестировщика:
                         <br/>
-                        <textarea id="int-comment" rows="2" style="width:100%"></textarea>
+                        <textarea id="int-comment" data-testid="manual-comment" rows="2" style="width:100%"></textarea>
                     </label>
                     <div style="margin-top:0.3rem">
                         <button id="int-btn-save-comment">Сохранить комментарий</button>
@@ -152,10 +158,10 @@ export function mountApp(root: HTMLElement, app: BenchApp): void {
             </div>
 
             <h3>Execution Log</h3>
-            <pre id="exec-log" style="background:#111;color:#0f0;padding:1rem;height:200px;overflow:auto"></pre>
+            <pre id="exec-log" data-testid="execution-log" style="background:#111;color:#0f0;padding:1rem;height:200px;overflow:auto"></pre>
 
             <h3>Last Completed Report</h3>
-            <div id="report-preview-box" style="background:#f4f4f4; border:1px solid #ccc; padding:1rem; margin-bottom:1rem; min-height:100px; border-radius:4px; font-size:0.9rem; color:#333;">
+            <div id="report-preview-box" data-testid="last-report" style="background:#f4f4f4; border:1px solid #ccc; padding:1rem; margin-bottom:1rem; min-height:100px; border-radius:4px; font-size:0.9rem; color:#333;">
                 <i>Чтобы просмотреть отчёт, сначала нажмите кнопку "Run All"...</i>
             </div>
 
@@ -202,6 +208,8 @@ export function mountApp(root: HTMLElement, app: BenchApp): void {
     const intStepLabel = root.querySelector<HTMLDivElement>("#int-step-label")!
     const intConfirmBlock = root.querySelector<HTMLDivElement>("#int-confirm-block")!
     const intComment = root.querySelector<HTMLTextAreaElement>("#int-comment")!
+    const recognizedTextEl = root.querySelector<HTMLSpanElement>("#recognized-text")!
+    const speechTextEl = root.querySelector<HTMLSpanElement>("#speech-text")!
     const intCommentStatus = root.querySelector<HTMLSpanElement>("#int-comment-status")!
     const btnSaveComment = root.querySelector<HTMLButtonElement>("#int-btn-save-comment")!
     const intSummaryBox = root.querySelector<HTMLDivElement>("#int-summary-box")!
@@ -257,6 +265,10 @@ export function mountApp(root: HTMLElement, app: BenchApp): void {
         btnRecNo.setAttribute("style", "")
         btnHeardYes.setAttribute("style", "")
         btnHeardNo.setAttribute("style", "")
+        // PR-9d.2.1 fix (per client's testability request): clear the
+        // dedicated recognized/speech text indicators for the new step.
+        recognizedTextEl.textContent = "—"
+        speechTextEl.textContent = "—"
     }
 
     intComment.addEventListener("input", () => {
@@ -451,6 +463,7 @@ export function mountApp(root: HTMLElement, app: BenchApp): void {
                     const payload = (action as any)?.payload
                     currentResult.recognizedText =
                         payload && typeof payload.text === "string" ? payload.text : null
+                    recognizedTextEl.textContent = currentResult.recognizedText ?? "—"
                 }
                 resolve()
             }
@@ -465,17 +478,35 @@ export function mountApp(root: HTMLElement, app: BenchApp): void {
     async function performCurrentStep(): Promise<void> {
         const trigger = interactiveScenarios[interactiveIndex]
         const stepStartedAt = Date.now()
-        currentResult = {
-            step: interactiveIndex + 1,
-            trigger,
-            recognized: null,
-            heard: null,
-            recognizedText: null,
-            speechText: null,
-            comment: "",
-            repeated: 0,
-            skipped: false,
-            durationMs: 0
+
+        // PR-9d.2 fix: this function is called both to start a brand
+        // NEW step AND to re-run the SAME step for "Repeat Step".
+        // Previously it always replaced currentResult with a fresh
+        // object (repeated: 0), which silently discarded the repeat
+        // counter incremented by the Repeat Step handler right before
+        // calling this — so the "attempt" number logged never advanced
+        // past 2, no matter how many times Repeat was pressed. Now we
+        // only create a new result object when there isn't one yet
+        // (a genuinely new step); otherwise we keep it and just clear
+        // the per-attempt recognition fields.
+        if (!currentResult) {
+            currentResult = {
+                step: interactiveIndex + 1,
+                trigger,
+                recognized: null,
+                heard: null,
+                recognizedText: null,
+                speechText: null,
+                comment: "",
+                repeated: 0,
+                skipped: false,
+                durationMs: 0
+            }
+        } else {
+            currentResult.recognized = null
+            currentResult.heard = null
+            currentResult.recognizedText = null
+            currentResult.speechText = null
         }
 
         if (inputSourceSelect.value === "mic") {
@@ -754,6 +785,7 @@ export function mountApp(root: HTMLElement, app: BenchApp): void {
         if (currentResult) {
             currentResult.speechText = text
         }
+        speechTextEl.textContent = text
     }
 
     // PR-9d.2 fix (per client feedback, item 5): the old "Speak" log
