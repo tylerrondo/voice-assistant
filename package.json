@@ -12,7 +12,11 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "test:smoke": "playwright test tests/playwright/smoke.spec.ts",
+    "test:automatic": "playwright test tests/playwright/automatic.spec.ts",
+    "test:interactive": "playwright test tests/playwright/interactive.spec.ts"
   },
   "dependencies": {
     "react": "^19.2.7",
@@ -20,6 +24,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.61.1",
     "@types/node": "^24.13.2",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",

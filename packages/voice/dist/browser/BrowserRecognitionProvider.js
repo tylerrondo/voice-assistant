@@ -24,7 +24,10 @@ export class BrowserRecognitionProvider {
         this.bindEvents();
     }
     async start() {
-        this.isActive = true;
+        // Only track as "active" (awaiting a real onend) when actually
+        // supported — otherwise stop() would wait forever for an
+        // 'onend' event that the no-op stub will never fire.
+        this.isActive = this.isSupported;
         this.recognition.start();
     }
     async stop() {
@@ -45,11 +48,38 @@ export class BrowserRecognitionProvider {
     setLanguage(language) {
         this.recognition.lang = language;
     }
+    /**
+     * PR-10 fix: WebKit/Safari (and Playwright's WebKit project) do
+     * not implement the SpeechRecognition API at all. The constructor
+     * previously threw immediately in that case, which crashed the
+     * ENTIRE app on load (not just the mic feature) — since
+     * Bootstrap.ts constructs this provider eagerly, before the user
+     * ever touches mic-related UI. This now falls back to a no-op
+     * stub instead of throwing, so the rest of Validation Bench (all
+     * Automatic / Inject Action functionality) still works fine on
+     * browsers without speech recognition support. Real microphone
+     * input simply won't produce results there, which is an inherent
+     * platform limitation, not a bug.
+     */
+    isSupported = true;
     createRecognition() {
         const Ctor = window.SpeechRecognition ??
             window.webkitSpeechRecognition;
         if (!Ctor) {
-            throw new Error("SpeechRecognition API is not supported in this browser.");
+            console.warn("SpeechRecognition API is not supported in this browser. " +
+                "Real microphone input will be unavailable; Automatic/Inject Action modes are unaffected.");
+            this.isSupported = false;
+            return {
+                lang: "",
+                interimResults: false,
+                maxAlternatives: 1,
+                continuous: false,
+                start: () => { },
+                stop: () => { },
+                onresult: null,
+                onerror: null,
+                onend: null
+            };
         }
         return new Ctor();
     }

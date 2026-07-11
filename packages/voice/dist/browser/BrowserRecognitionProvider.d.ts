@@ -38,6 +38,20 @@ export declare class BrowserRecognitionProvider implements RecognitionProvider {
     stop(): Promise<void>;
     subscribe(listener: (result: RecognitionResult) => void): Unsubscribe;
     setLanguage(language: string): void;
+    /**
+     * PR-10 fix: WebKit/Safari (and Playwright's WebKit project) do
+     * not implement the SpeechRecognition API at all. The constructor
+     * previously threw immediately in that case, which crashed the
+     * ENTIRE app on load (not just the mic feature) — since
+     * Bootstrap.ts constructs this provider eagerly, before the user
+     * ever touches mic-related UI. This now falls back to a no-op
+     * stub instead of throwing, so the rest of Validation Bench (all
+     * Automatic / Inject Action functionality) still works fine on
+     * browsers without speech recognition support. Real microphone
+     * input simply won't produce results there, which is an inherent
+     * platform limitation, not a bug.
+     */
+    isSupported: boolean;
     private createRecognition;
     private configureRecognition;
     private bindEvents;
