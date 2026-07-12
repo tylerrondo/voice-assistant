@@ -6,8 +6,8 @@
 
 # Test info
 
-- Name: interactive.spec.ts >> Interactive mode (Inject Action) >> Session Summary shows 3 fully confirmed scenarios with no repeats/skips
-- Location: tests\playwright\interactive.spec.ts:28:5
+- Name: smoke.spec.ts >> Smoke Suite >> 7. after Run All, the generated report records Automatic mode configuration
+- Location: tests\playwright\smoke.spec.ts:112:5
 
 # Error details
 

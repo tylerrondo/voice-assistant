@@ -6,8 +6,8 @@
 
 # Test info
 
-- Name: interactive.spec.ts >> Interactive mode (Inject Action) >> completes all 3 steps and shows a finished session
-- Location: tests\playwright\interactive.spec.ts:21:5
+- Name: smoke.spec.ts >> Smoke Suite >> 8. Next Step is unreachable before an Interactive session has started
+- Location: tests\playwright\smoke.spec.ts:126:5
 
 # Error details
 

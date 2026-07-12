@@ -6,8 +6,8 @@
 
 # Test info
 
-- Name: interactive.spec.ts >> Interactive mode (Inject Action) >> Skip Step marks the step as skipped in the summary
-- Location: tests\playwright\interactive.spec.ts:43:5
+- Name: smoke.spec.ts >> Smoke Suite >> 3. switching to Interactive mode reveals Input Source and Interactive Runner
+- Location: tests\playwright\smoke.spec.ts:63:5
 
 # Error details
 
