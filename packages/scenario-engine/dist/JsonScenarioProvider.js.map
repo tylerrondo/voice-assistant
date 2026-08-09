@@ -1,0 +1,1 @@
+{"version":3,"file":"JsonScenarioProvider.js","sourceRoot":"","sources":["../src/JsonScenarioProvider.ts"],"names":[],"mappings":"AAAA;;;;;;;GAOG;AAIH,OAAO,EAAE,mBAAmB,EAAE,MAAM,wBAAwB,CAAA;AAE5D,MAAM,OAAO,oBAAoB;IAEA;IAA7B,YAA6B,GAAY;QAAZ,QAAG,GAAH,GAAG,CAAS;IAAG,CAAC;IAE7C,KAAK,CAAC,IAAI;QACN,OAAO,mBAAmB,CAAC,IAAI,CAAC,GAAG,CAAC,CAAA;IACxC,CAAC;CAEJ"}

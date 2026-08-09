@@ -21,6 +21,15 @@ export class ScenarioRegistry {
         this.scenarios.delete(trigger)
     }
 
+    /**
+     * PR-11: removes every registered scenario. Used when switching
+     * the active ScenarioSet (e.g. Built-in -> JSON File) so the
+     * registry only ever reflects one ScenarioSet at a time.
+     */
+    clear(): void {
+        this.scenarios.clear()
+    }
+
     find(trigger: string): Scenario | undefined {
         return this.scenarios.get(trigger)
     }

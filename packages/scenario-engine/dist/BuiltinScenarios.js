@@ -1,60 +1,22 @@
 /**
- * Scenario Engine
+ * Scenario Engine — PR-11
  *
- * A small set of built-in scenarios, used only to verify the
- * infrastructure works end to end. These are examples and can be
- * freely replaced or extended by consumers via ScenarioRegistry.
+ * PR-11 moved the built-in scenarios out of source code and into
+ * scenarios/builtin.json (loaded by BuiltinScenarioProvider). This
+ * file no longer describes any scenario itself — it only keeps the
+ * `registerBuiltinScenarios(registry)` convenience entry point that
+ * existing callers (Bootstrap.ts, DemoRegistry.ts) already use, so
+ * PR-11 did not require touching every call site.
  */
-export const builtinScenarios = [
-    {
-        name: "voice-recognized-ok",
-        trigger: "voice.recognized",
-        steps: [
-            {
-                kind: "emit",
-                event: {
-                    type: "interaction.ok",
-                    payload: {}
-                }
-            }
-        ]
-    },
-    {
-        name: "echo",
-        trigger: "interaction.echo",
-        steps: [
-            {
-                kind: "emit",
-                event: {
-                    type: "interaction.echo-response",
-                    payload: {}
-                }
-            }
-        ]
-    },
-    {
-        name: "delayed-response",
-        trigger: "interaction.delayed",
-        steps: [
-            { kind: "delay", ms: 500 },
-            {
-                kind: "emit",
-                event: {
-                    type: "interaction.delayed-response",
-                    payload: {}
-                }
-            }
-        ]
-    }
-];
+import { loadBuiltinScenarioSet } from "./BuiltinScenarioProvider";
+import { loadScenarioSetIntoRegistry } from "./ScenarioSetLoader";
 /**
- * Convenience helper: registers all built-in scenarios into the
- * given registry. Consumers that don't want the examples can
- * simply skip calling this and register their own scenarios instead.
+ * Loads scenarios/builtin.json (validated) into the given registry.
+ * Consumers that don't want the built-in examples can simply skip
+ * calling this and register their own scenarios instead.
  */
 export function registerBuiltinScenarios(registry) {
-    for (const scenario of builtinScenarios) {
-        registry.register(scenario);
-    }
+    const builtinSet = loadBuiltinScenarioSet();
+    loadScenarioSetIntoRegistry(registry, builtinSet);
 }
 //# sourceMappingURL=BuiltinScenarios.js.map

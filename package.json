@@ -16,7 +16,10 @@
     "test:e2e": "playwright test",
     "test:smoke": "playwright test tests/playwright/smoke.spec.ts",
     "test:automatic": "playwright test tests/playwright/automatic.spec.ts",
-    "test:interactive": "playwright test tests/playwright/interactive.spec.ts"
+    "test:interactive": "playwright test tests/playwright/interactive.spec.ts",
+    "test:report": "node scripts/run-with-report.mjs",
+    "report:generate": "node scripts/generate-playwright-report.mjs",
+    "report:zip": "node scripts/zip-playwright-report.mjs"
   },
   "dependencies": {
     "react": "^19.2.7",
@@ -29,6 +32,7 @@
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.2",
+    "archiver": "^7.0.1",
     "eslint": "^10.5.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.3",

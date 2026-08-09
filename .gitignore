@@ -13,3 +13,11 @@ dist-ssr
 *.local
 .vercel
 .env*
+
+# PR-14: generated Playwright report package (regenerated via
+# `npm run test:report`, handed to reviewers as playwright-report.zip)
+playwright-report/
+test-results/
+playwright-summary.json
+playwright-execution.md
+playwright-report.zip

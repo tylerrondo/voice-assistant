@@ -17,10 +17,10 @@ test.describe("Report generation", () => {
         await expect(report).toContainText("Mode: Interactive")
         await expect(report).toContainText("Input Source: inject")
 
-        const jsonText = await page.locator("#json-report").innerText()
+        const jsonText = await page.getByTestId("json-report").innerText()
         const parsed = JSON.parse(jsonText)
         expect(parsed.ValidationMode).toBe("Interactive")
-        expect(parsed.ManualValidation.results).toHaveLength(3)
+        expect(parsed.ManualValidation.results).toHaveLength(5)
         expect(parsed.ExecutionLog.length).toBeGreaterThan(0)
     })
 
@@ -30,11 +30,11 @@ test.describe("Report generation", () => {
         await setInputSource(page, "inject")
         await completeInteractiveSessionWithInject(page)
 
-        const firstJson = JSON.parse(await page.locator("#json-report").innerText())
+        const firstJson = JSON.parse(await page.getByTestId("json-report").innerText())
         expect(firstJson.ExecutionLog.length).toBeGreaterThan(0)
 
         // Start a brand new session, which clears the LIVE Execution Log.
-        await page.locator("#int-btn-restart").click()
+        await page.getByTestId("interactive-reset-button").click()
 
         // The report generated for the FIRST session must still show
         // its own ExecutionLog, unaffected by the new session's clear().

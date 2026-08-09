@@ -23,7 +23,16 @@ export function buildValidationReport(
   startedAt: string,
   verification: any,
   executionLog: any,
-  options?: { validationMode?: string; inputSource?: string }
+  options?: {
+    validationMode?: string;
+    inputSource?: string;
+    // PR-11: which ScenarioSet actually ran, so a report can be
+    // traced back to a specific builtin.json or uploaded file.
+    scenarioSource?: 'builtin' | 'file';
+    scenarioId?: string;
+    scenarioName?: string;
+    scenarioFile?: string | null;
+  }
 ) {
   // Statusni avtomatik hisoblash
   let status: 'PASS' | 'PASS WITH WARNINGS' | 'FAIL' = 'PASS';
@@ -43,7 +52,8 @@ export function buildValidationReport(
   return {
     Session: {
       tester: meta.tester || "Tester-1",
-      language: meta.language || "en-US",
+      language: meta.voiceLanguage || meta.language || "en-US",
+      uiLanguage: meta.uiLanguage || "en-US",
       startedAt: startedAt
     },
     Environment: {
@@ -53,10 +63,17 @@ export function buildValidationReport(
     TestConfiguration: {
       recognitionProvider: meta.recognitionProvider || "Browser",
       speechProvider: meta.speechProvider || "Browser",
-      scenarioSet: meta.scenarioSet || "builtin",
+      scenarioSet: meta.scenarioSet || "automatic",
       inputSource: options?.inputSource || "inject"
     },
     ValidationMode: options?.validationMode || "Automatic",
+    // PR-11: External JSON Scenarios — records which ScenarioSet
+    // actually ran (builtin.json vs an uploaded file), so the report
+    // is reproducible even after the tester switches sources later.
+    ScenarioSource: options?.scenarioSource || "builtin",
+    ScenarioId: options?.scenarioId || "builtin",
+    ScenarioName: options?.scenarioName || "Built-in Validation Scenarios",
+    ScenarioFile: options?.scenarioSource === "file" ? (options?.scenarioFile || null) : null,
     ScenarioStatistics: {
       total: verification.totalScenarios || 0
     },

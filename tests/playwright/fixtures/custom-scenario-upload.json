@@ -1,0 +1,61 @@
+{
+  "version": 2,
+  "id": "custom-scenario-upload",
+  "name": "Custom Scenario Upload (PR-11 fixture)",
+  "description": "Small 2-scenario set used only to test the JSON File upload path; distinct from the builtin Driver Standard Trip set.",
+  "language": "ru-RU",
+  "author": "Platform Core",
+  "tags": [
+    "test-fixture"
+  ],
+  "scenarios": [
+    {
+      "id": "accept-order",
+      "name": "accept-order",
+      "activation": {
+        "type": "voice",
+        "value": "voice.accept-order"
+      },
+      "steps": [
+        {
+          "kind": "emit",
+          "event": {
+            "type": "driver.order.accepted",
+            "payload": {
+              "orderId": 1001
+            }
+          }
+        },
+        {
+          "kind": "end"
+        }
+      ]
+    },
+    {
+      "id": "finish-trip",
+      "name": "finish-trip",
+      "activation": {
+        "type": "voice",
+        "value": "voice.finish-trip"
+      },
+      "steps": [
+        {
+          "kind": "delay",
+          "ms": 100
+        },
+        {
+          "kind": "emit",
+          "event": {
+            "type": "driver.trip.finished",
+            "payload": {
+              "orderId": 1001
+            }
+          }
+        },
+        {
+          "kind": "end"
+        }
+      ]
+    }
+  ]
+}

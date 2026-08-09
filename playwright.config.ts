@@ -15,7 +15,11 @@ export default defineConfig({
     workers: process.env.CI ? 2 : undefined,
     reporter: [
         ["html", { open: "never" }],
-        ["list"]
+        ["list"],
+        // PR-14: machine-readable results, read by
+        // scripts/generate-playwright-report.mjs to build
+        // playwright-summary.json / playwright-execution.md.
+        ["json", { outputFile: "test-results/results.json" }]
     ],
 
     use: {

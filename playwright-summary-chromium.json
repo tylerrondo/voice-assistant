@@ -1,0 +1,15 @@
+{
+  "project": "Voice Assistant",
+  "pr": "PR-14",
+  "date": "2026-08-03T07:25:41.688Z",
+  "applicationVersion": "0.0.0",
+  "gitCommit": "unknown",
+  "playwrightVersion": "1.61.1",
+  "browser": "chromium",
+  "totalTests": 43,
+  "passed": 43,
+  "failed": 0,
+  "skipped": 0,
+  "flaky": 0,
+  "durationMs": 176079
+}

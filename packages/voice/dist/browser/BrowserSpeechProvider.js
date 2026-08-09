@@ -1,11 +1,22 @@
 export class BrowserSpeechProvider {
+    defaultLanguage;
     onStarted = null;
     onFinished = null;
     onError = null;
+    setLanguage(language) {
+        this.defaultLanguage = language;
+    }
     async speak(options) {
+        const synthesis = window.speechSynthesis;
+        // Chrome may leave speechSynthesis paused after cancel(); resume so the
+        // next session in a different Validation mode can still be heard.
+        if (synthesis.paused) {
+            synthesis.resume();
+        }
         const utterance = new SpeechSynthesisUtterance(options.text);
-        if (options.language) {
-            utterance.lang = options.language;
+        const language = options.language ?? this.defaultLanguage;
+        if (language) {
+            utterance.lang = language;
         }
         await new Promise((resolve) => {
             utterance.onstart = () => {
@@ -20,11 +31,15 @@ export class BrowserSpeechProvider {
                 this.onError?.(options.text, message);
                 resolve();
             };
-            window.speechSynthesis.speak(utterance);
+            synthesis.speak(utterance);
         });
     }
     async stop() {
-        window.speechSynthesis.cancel();
+        const synthesis = window.speechSynthesis;
+        synthesis.cancel();
+        if (synthesis.paused) {
+            synthesis.resume();
+        }
     }
 }
 //# sourceMappingURL=BrowserSpeechProvider.js.map

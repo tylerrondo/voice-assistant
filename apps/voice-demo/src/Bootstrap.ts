@@ -13,7 +13,8 @@ import {
     DefaultSpeechMapper
 } from "../../../packages/voice/dist/channel/index"
 import { EmulatorContract } from "../../../packages/emulator/dist/index"
-import { ScenarioRegistry, registerBuiltinScenarios } from "../../../packages/scenario-engine/dist/index"
+import { ScenarioRegistry, loadBuiltinScenarioSet, loadScenarioSetIntoRegistry } from "../../../packages/scenario-engine/dist/index"
+import type { ScenarioSet } from "../../../packages/scenario-engine/dist/index"
 import { ExecutionLog, LogDispatcher, ConsoleLogSink, MemoryLogSink } from "../../../packages/execution-log/dist/index"
 import type { InteractionContract } from "../../../packages/interaction-contract/dist/index"
 import { DemoLogger } from "./DemoLogger"
@@ -29,11 +30,18 @@ export interface BenchApp {
     readonly interaction: InteractionContract
     readonly recognition: BrowserRecognitionProvider
     readonly speech: BrowserSpeechProvider
+    /** PR-11: the ScenarioSet currently loaded into `registry`. */
+    activeScenarioSet: ScenarioSet
+    /** PR-11: "builtin" until a JSON file is loaded via the UI. */
+    activeScenarioSource: "builtin" | "file"
+    /** PR-11: set when activeScenarioSource === "file". */
+    activeScenarioFileName: string | null
 }
 
 export function bootstrap(language = "en-US"): BenchApp {
     const registry = new ScenarioRegistry()
-    registerBuiltinScenarios(registry)
+    const builtinScenarioSet = loadBuiltinScenarioSet()
+    loadScenarioSetIntoRegistry(registry, builtinScenarioSet)
     const dispatcher = new LogDispatcher()
     const consoleSink = new ConsoleLogSink()
     const memorySink = new MemoryLogSink()
@@ -52,5 +60,10 @@ export function bootstrap(language = "en-US"): BenchApp {
         speechMapper: new DefaultSpeechMapper()
     })
     const backend = new BackendClient()
-    return { channel, logger, executionLog, memorySink, registry, backend, interaction, recognition, speech }
+    return {
+        channel, logger, executionLog, memorySink, registry, backend, interaction, recognition, speech,
+        activeScenarioSet: builtinScenarioSet,
+        activeScenarioSource: "builtin",
+        activeScenarioFileName: null
+    }
 }

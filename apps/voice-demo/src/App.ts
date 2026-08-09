@@ -15,9 +15,21 @@ import { ReportHistory, type ReportHistoryEntry } from "./ReportHistory"
 import { SessionController } from "./SessionController"
 import { StepState } from "./StepState"
 import { getInteractiveScript, getStepLabel } from "./InteractiveScriptMap"
+import {
+    applySessionPanelLabels,
+    formatRunningScenario,
+    formatValidationModeLabel,
+    getBenchUiStrings,
+    getProgressDoneLabel
+} from "./BenchUiI18n"
 import type { InteractionAction } from "../../../packages/interaction-contract/dist/index"
-
-const SCENARIO_TRIGGERS = ["voice.recognized", "interaction.echo", "interaction.delayed"]
+import {
+    JsonScenarioProvider,
+    loadBuiltinScenarioSet,
+    loadScenarioSetIntoRegistry,
+    ScenarioSetValidationError
+} from "../../../packages/scenario-engine/dist/index"
+import type { ScenarioSet } from "../../../packages/scenario-engine/dist/index"
 
 interface ManualResult {
     step: number
@@ -37,29 +49,65 @@ export function mountApp(root: HTMLElement, app: BenchApp): void {
     const reportHistory = new ReportHistory()
     const controller = new SessionController()
 
+    // PR-11: External JSON Scenarios — triggers always come from
+    // whichever ScenarioSet is currently loaded into app.registry
+    // (builtin.json by default, or an uploaded file), instead of a
+    // hardcoded list. Both Automatic and Interactive read this.
+    function getScenarioTriggers(): string[] {
+        return app.registry.list().map(s => s.trigger)
+    }
+
+    function getScenarioReportOptions() {
+        return {
+            scenarioSource: app.activeScenarioSource,
+            scenarioId: app.activeScenarioSet.id,
+            scenarioName: app.activeScenarioSet.name,
+            scenarioFile: app.activeScenarioFileName
+        }
+    }
+
     root.innerHTML = `
         <div style="font-family:sans-serif;padding:1rem;max-width:900px">
-            <h1>Validation Bench</h1>
+            <h1 id="page-title">Validation Bench</h1>
 
             <div id="session-root"></div>
 
             <div style="margin:0.5rem 0;font-weight:bold">
-                Backend: <span id="conn-label">—</span>
-                &nbsp;|&nbsp; Mail: <span id="mail-label">—</span>
+                <span id="label-backend">Backend:</span> <span id="conn-label" data-testid="connection-status">—</span>
+                &nbsp;|&nbsp; <span id="label-mail">Mail:</span> <span id="mail-label">—</span>
             </div>
 
             <div style="margin:1rem 0">
-                <label style="font-weight:bold">Validation Mode:
-                    <select id="mode-select">
+                <label style="font-weight:bold"><span id="label-validation-mode">Validation Mode:</span>
+                    <select id="mode-select" data-testid="validation-mode">
                         <option value="automatic">Automatic</option>
                         <option value="interactive">Interactive</option>
                     </select>
                 </label>
             </div>
 
-            <div id="input-source-row" style="margin:1rem 0; display:none">
-                <label style="font-weight:bold">Input Source:
-                    <select id="input-source-select">
+            <!-- PR-11: External JSON Scenarios -->
+            <div id="scenario-source-row" style="margin:1rem 0">
+                <div style="font-weight:bold" id="label-scenario-source">Scenario Source:</div>
+                <label style="margin-right:1rem">
+                    <input type="radio" name="scenario-source" id="scenario-source-builtin" data-testid="scenario-source-builtin" value="builtin" checked />
+                    <span id="label-scenario-source-builtin">Built-in</span>
+                </label>
+                <label>
+                    <input type="radio" name="scenario-source" id="scenario-source-file" data-testid="scenario-source-file" value="file" />
+                    <span id="label-scenario-source-file">JSON File</span>
+                </label>
+                <div style="margin-top:0.4rem">
+                    <input id="scenario-file-input" data-testid="scenario-file-input" type="file" accept=".json,application/json" style="display:none" />
+                    <button id="btn-choose-scenario-file" data-testid="scenario-choose-file-button" type="button" disabled>Choose File...</button>
+                    <span style="margin-left:0.5rem"><b id="label-scenario-file">Scenario File:</b> <span id="scenario-file-name" data-testid="scenario-file-name">builtin.json</span></span>
+                </div>
+                <div id="scenario-error" data-testid="scenario-error" style="color:#c62828; font-size:0.9rem; margin-top:0.3rem; display:none"></div>
+            </div>
+
+            <div id="input-source-row" data-testid="input-source-row" style="margin:1rem 0; display:none">
+                <label style="font-weight:bold"><span id="label-input-source">Input Source:</span>
+                    <select id="input-source-select" data-testid="input-source">
                         <option value="mic">🎤 Browser microphone</option>
                         <option value="inject">Inject Action (debug)</option>
                     </select>
@@ -68,39 +116,39 @@ export function mountApp(root: HTMLElement, app: BenchApp): void {
 
             <div style="margin:1rem 0">
                 <div style="margin-top:0.5rem">
-                    <button id="btn-connect">Connect</button>
-                    <button id="btn-start">▶ Start</button>
-                    <button id="btn-stop">■ Stop</button>
-                    <button id="btn-run-all">▶ Run All</button>
+                    <button id="btn-connect" data-testid="connect-button">Connect</button>
+                    <button id="btn-start" data-testid="start-button">▶ Start</button>
+                    <button id="btn-stop" data-testid="stop-button">■ Stop</button>
+                    <button id="btn-run-all" data-testid="run-all-button">▶ Run All</button>
                 </div>
 
-                <div id="inject-controls" style="margin-top:0.5rem">
-                    <label>Inject action:
-                        <select id="inject-select">
-                            ${SCENARIO_TRIGGERS.map(t => `<option value="${t}">${t}</option>`).join("")}
+                <div id="inject-controls" data-testid="inject-controls" style="margin-top:0.5rem">
+                    <label><span id="label-inject-action">Inject action:</span>
+                        <select id="inject-select" data-testid="inject-action">
+                            ${getScenarioTriggers().map(t => `<option value="${t}">${t}</option>`).join("")}
                         </select>
                     </label>
-                    <button id="btn-inject">Send</button>
+                    <button id="btn-inject" data-testid="inject-send-button">Send</button>
                 </div>
 
-                <div id="mic-controls" style="margin-top:0.5rem; display:none">
-                    <span id="mic-status">🎤 Idle</span>
+                <div id="mic-controls" data-testid="mic-controls" style="margin-top:0.5rem; display:none">
+                    <span id="mic-status" data-testid="mic-status">🎤 Idle</span>
                 </div>
             </div>
 
             <div style="margin:0.5rem 0">
-                <b>Channel State:</b> <span id="obs-state">—</span>
-                &nbsp;|&nbsp; <b>Progress:</b> <span id="obs-progress">—</span>
+                <span id="label-channel-state"><b>Channel State:</b></span> <span id="obs-state" data-testid="automatic-channel-state">—</span>
+                &nbsp;|&nbsp; <span id="label-progress"><b>Progress:</b></span> <span id="obs-progress" data-testid="automatic-progress">—</span>
             </div>
 
             <!-- Interactive Runner (PR-9d.2) -->
             <div id="interactive-panel" data-testid="interactive-runner" style="display:none; border:1px solid #ccc; border-radius:6px; padding:1rem; margin:1rem 0; background:#fafafa">
-                <h3 style="margin-top:0">Interactive Runner</h3>
+                <h3 id="interactive-runner-title" style="margin-top:0">Interactive Runner</h3>
 
                 <div style="margin-bottom:0.5rem">
-                    <b>Session State:</b> <span id="int-session-state" data-testid="session-state">Idle</span>
-                    &nbsp;|&nbsp; <b>Scenario:</b> <span id="int-scenario" data-testid="current-step">— / —</span>
-                    &nbsp;|&nbsp; <b>Progress:</b> <span id="int-progress" data-testid="progress-value">0%</span>
+                    <span id="label-int-session-state"><b>Session State:</b></span> <span id="int-session-state" data-testid="session-state">Idle</span>
+                    &nbsp;|&nbsp; <span id="label-int-scenario"><b>Scenario:</b></span> <span id="int-scenario" data-testid="current-step">— / —</span>
+                    &nbsp;|&nbsp; <span id="label-int-progress"><b>Progress:</b></span> <span id="int-progress" data-testid="progress-value">0%</span>
                 </div>
 
                 <div style="background:#fff; border:1px solid #ddd; border-radius:4px; padding:0.8rem; margin-bottom:0.6rem">
@@ -108,78 +156,85 @@ export function mountApp(root: HTMLElement, app: BenchApp): void {
                     <div id="int-prompt" style="font-size:1.05rem; margin-bottom:0.4rem">—</div>
                     <div id="int-expected" style="color:#555; font-size:0.9rem">—</div>
                     <div style="margin-top:0.4rem; font-size:0.9rem; color:#333">
-                        Recognized: <span id="recognized-text" data-testid="recognized-text">—</span>
+                        <span id="label-recognized">Recognized:</span> <span id="recognized-text" data-testid="recognized-text">—</span>
                     </div>
                     <div style="font-size:0.9rem; color:#333">
-                        Speech: <span id="speech-text" data-testid="speech-text">—</span>
+                        <span id="label-speech">Speech:</span> <span id="speech-text" data-testid="speech-text">—</span>
                     </div>
                 </div>
 
                 <div style="margin-bottom:0.6rem">
-                    <button id="int-btn-next">▶ Next Step</button>
-                    <button id="int-btn-repeat">↺ Repeat Step</button>
-                    <button id="int-btn-skip">⏭ Skip Step</button>
-                    <button id="int-btn-pause">⏸ Pause</button>
-                    <button id="int-btn-resume">⏵ Resume</button>
+                    <button id="int-btn-next" data-testid="interactive-next-button">▶ Next Step</button>
+                    <button id="int-btn-repeat" data-testid="interactive-repeat-button">↺ Repeat Step</button>
+                    <button id="int-btn-skip" data-testid="interactive-skip-button">⏭ Skip Step</button>
+                    <button id="int-btn-pause" data-testid="interactive-stop-button">⏸ Pause</button>
+                    <button id="int-btn-resume" data-testid="interactive-resume-button">⏵ Resume</button>
                 </div>
 
                 <div id="int-confirm-block" style="display:none; margin-bottom:0.6rem">
                     <div style="margin-bottom:0.3rem">
-                        <b>Распознано верно?</b>
-                        <button id="int-btn-recognized-yes">✓ Верно</button>
-                        <button id="int-btn-recognized-no">✗ Неверно</button>
+                        <b id="label-recognized-q">Recognized correctly?</b>
+                        <button id="int-btn-recognized-yes" data-testid="manual-recognized-yes-button">✓ Correct</button>
+                        <button id="int-btn-recognized-no" data-testid="manual-recognized-no-button">✗ Incorrect</button>
                     </div>
                     <div style="margin-bottom:0.3rem">
-                        <b>Ожидаемая речь услышана?</b>
-                        <button id="int-btn-heard-yes">✓ Услышал</button>
-                        <button id="int-btn-heard-no">✗ Не услышал</button>
+                        <b id="label-heard-q">Expected speech heard?</b>
+                        <button id="int-btn-heard-yes" data-testid="manual-heard-yes-button">✓ Heard</button>
+                        <button id="int-btn-heard-no" data-testid="manual-heard-no-button">✗ Not heard</button>
                     </div>
                     <label style="display:block; margin-top:0.4rem">
-                        Комментарий тестировщика:
+                        <span id="label-tester-comment">Tester comment:</span>
                         <br/>
                         <textarea id="int-comment" data-testid="manual-comment" rows="2" style="width:100%"></textarea>
                     </label>
                     <div style="margin-top:0.3rem">
-                        <button id="int-btn-save-comment">Сохранить комментарий</button>
-                        <span id="int-comment-status" style="margin-left:0.5rem; color:#888">Не сохранён</span>
+                        <button id="int-btn-save-comment" data-testid="manual-save-comment-button">Save comment</button>
+                        <span id="int-comment-status" style="margin-left:0.5rem; color:#888">Not saved</span>
                     </div>
                 </div>
 
                 <div id="int-summary-box" style="display:none; background:#eef7ee; border:1px solid #b6d7b6; border-radius:4px; padding:0.8rem; margin-top:0.6rem">
-                    <div style="font-weight:bold; margin-bottom:0.4rem">Session Summary</div>
-                    <div id="int-summary-content"></div>
-                    <button id="int-btn-restart" style="margin-top:0.6rem">↻ Start New Session</button>
+                    <div style="font-weight:bold; margin-bottom:0.4rem" id="int-summary-title">Session Summary</div>
+                    <div id="int-summary-content" data-testid="interactive-summary"></div>
+                    <button id="int-btn-restart" data-testid="interactive-reset-button" style="margin-top:0.6rem">↻ Start New Session</button>
                 </div>
             </div>
 
             <div>
-                <h3>Verification</h3>
-                <div id="verification-result">—</div>
+                <h3 id="verification-title">Verification</h3>
+                <div id="verification-result" data-testid="verification-panel">—</div>
             </div>
 
-            <h3>Execution Log</h3>
+            <h3 id="execution-log-title">Execution Log</h3>
             <pre id="exec-log" data-testid="execution-log" style="background:#111;color:#0f0;padding:1rem;height:200px;overflow:auto"></pre>
 
-            <h3>Last Completed Report</h3>
+            <h3 id="last-report-title">Last Completed Report</h3>
             <div id="report-preview-box" data-testid="last-report" style="background:#f4f4f4; border:1px solid #ccc; padding:1rem; margin-bottom:1rem; min-height:100px; border-radius:4px; font-size:0.9rem; color:#333;">
-                <i>Чтобы просмотреть отчёт, сначала нажмите кнопку "Run All"...</i>
+                <i id="report-preview-placeholder">Run All or finish an Interactive session to view a report here.</i>
             </div>
 
-            <h3>JSON Report</h3>
-            <pre id="json-report" style="background:#111;color:#0ff;padding:1rem;height:200px;overflow:auto"></pre>
+            <h3 id="json-report-title">JSON Report</h3>
+            <pre id="json-report" data-testid="json-report" style="background:#111;color:#0ff;padding:1rem;height:200px;overflow:auto"></pre>
 
-            <h3>Report History</h3>
-            <pre id="report-history" style="font-size:0.9rem">—</pre>
+            <h3 id="report-history-title">Report History</h3>
+            <pre id="report-history" data-testid="report-history" style="font-size:0.9rem">—</pre>
 
             <div style="margin-top:1rem">
-                <button id="btn-download">Download JSON</button>
-                <button id="btn-send">Send Report</button>
+                <input id="json-upload-input" data-testid="legacy-upload-input" type="file" accept=".json,application/json" tabindex="-1" aria-hidden="true" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0" />
+                <label id="btn-upload" data-testid="legacy-upload-button" for="json-upload-input" role="button" tabindex="0" style="display:inline-block;padding:1px 6px;border:1px solid #767676;border-radius:2px;background:#efefef;cursor:pointer;font-size:13px;margin-right:0.25rem">Upload</label>
+                <span id="upload-json-status" style="margin-left:0.5rem; color:#666; font-size:0.9rem"></span>
+                <button id="btn-download" data-testid="download-json-button">Download JSON</button>
+                <button id="btn-send" data-testid="send-report-button">Send Report</button>
             </div>
         </div>
     `
 
     const sessionRoot = root.querySelector<HTMLElement>("#session-root")!
     const getMeta = renderSessionPanel(sessionRoot)
+    const uiLanguageSelect = sessionRoot.querySelector<HTMLSelectElement>("#s-ui-language")!
+    const voiceLanguageSelect = sessionRoot.querySelector<HTMLSelectElement>("#s-voice-language")!
+
+    const ui = () => getBenchUiStrings(getMeta().uiLanguage)
 
     const connLabel = root.querySelector<HTMLSpanElement>("#conn-label")!
     const mailLabel = root.querySelector<HTMLSpanElement>("#mail-label")!
@@ -191,7 +246,88 @@ export function mountApp(root: HTMLElement, app: BenchApp): void {
     const reportPreviewBox = root.querySelector<HTMLDivElement>("#report-preview-box")!
     const reportHistoryEl = root.querySelector<HTMLDivElement>("#report-history")!
     const injectSelect = root.querySelector<HTMLSelectElement>("#inject-select")!
+
+    // PR-11: rebuilds the "Inject action" dropdown from whichever
+    // ScenarioSet is currently active. Called once at mount and again
+    // every time the tester switches Scenario Source.
+    function refreshInjectOptions(): void {
+        const triggers = getScenarioTriggers()
+        injectSelect.innerHTML = triggers.map(t => `<option value="${t}">${t}</option>`).join("")
+    }
+
+    // PR-11: External JSON Scenarios ---------------------------------
+
+    function setScenarioError(message: string | null): void {
+        scenarioErrorEl.style.display = message ? "block" : "none"
+        scenarioErrorEl.textContent = message ?? ""
+    }
+
+    function activateScenarioSet(
+        set: ScenarioSet,
+        source: "builtin" | "file",
+        fileName: string | null
+    ): void {
+        loadScenarioSetIntoRegistry(app.registry, set)
+        app.activeScenarioSet = set
+        app.activeScenarioSource = source
+        app.activeScenarioFileName = fileName
+        scenarioFileNameEl.textContent = fileName ?? "builtin.json"
+        refreshInjectOptions()
+        setScenarioError(null)
+        // A newly activated ScenarioSet invalidates any Interactive
+        // session already in progress against the old one.
+        if (modeSelect.value === "interactive") {
+            startInteractiveSession()
+        }
+    }
+
+    function activateBuiltinScenarios(): void {
+        activateScenarioSet(loadBuiltinScenarioSet(), "builtin", null)
+    }
+
+    // Keeps the radio buttons in sync with whichever ScenarioSet is
+    // actually active. Used after a failed upload: the invalid file
+    // never becomes active, so the radios must reflect that instead
+    // of appearing to have switched.
+    function syncScenarioSourceRadios(): void {
+        scenarioSourceBuiltinRadio.checked = app.activeScenarioSource === "builtin"
+        scenarioSourceFileRadio.checked = app.activeScenarioSource === "file"
+        btnChooseScenarioFile.disabled = app.activeScenarioSource === "builtin"
+    }
+
+    async function activateScenarioFile(file: File): Promise<void> {
+        const text = await file.text()
+        let raw: unknown
+        try {
+            raw = JSON.parse(text)
+        } catch {
+            const message = ui().alertUploadInvalidJson
+            setScenarioError(message)
+            syncScenarioSourceRadios()
+            alert(message)
+            return
+        }
+        try {
+            const set = await new JsonScenarioProvider(raw).load()
+            activateScenarioSet(set, "file", file.name)
+        } catch (error) {
+            const message = error instanceof ScenarioSetValidationError
+                ? error.message
+                : String(error)
+            setScenarioError(message)
+            syncScenarioSourceRadios()
+            alert(message)
+        }
+    }
     const modeSelect = root.querySelector<HTMLSelectElement>("#mode-select")!
+
+    // PR-11: External JSON Scenarios
+    const scenarioSourceBuiltinRadio = root.querySelector<HTMLInputElement>("#scenario-source-builtin")!
+    const scenarioSourceFileRadio = root.querySelector<HTMLInputElement>("#scenario-source-file")!
+    const scenarioFileInput = root.querySelector<HTMLInputElement>("#scenario-file-input")!
+    const btnChooseScenarioFile = root.querySelector<HTMLButtonElement>("#btn-choose-scenario-file")!
+    const scenarioFileNameEl = root.querySelector<HTMLSpanElement>("#scenario-file-name")!
+    const scenarioErrorEl = root.querySelector<HTMLDivElement>("#scenario-error")!
 
     const inputSourceRow = root.querySelector<HTMLDivElement>("#input-source-row")!
     const inputSourceSelect = root.querySelector<HTMLSelectElement>("#input-source-select")!
@@ -225,10 +361,128 @@ export function mountApp(root: HTMLElement, app: BenchApp): void {
     const btnRecNo = root.querySelector<HTMLButtonElement>("#int-btn-recognized-no")!
     const btnHeardYes = root.querySelector<HTMLButtonElement>("#int-btn-heard-yes")!
     const btnHeardNo = root.querySelector<HTMLButtonElement>("#int-btn-heard-no")!
+    const btnRunAll = root.querySelector<HTMLButtonElement>("#btn-run-all")!
+    const btnStart = root.querySelector<HTMLButtonElement>("#btn-start")!
+    const btnStop = root.querySelector<HTMLButtonElement>("#btn-stop")!
+    const btnInject = root.querySelector<HTMLButtonElement>("#btn-inject")!
+    const btnConnect = root.querySelector<HTMLButtonElement>("#btn-connect")!
+    const btnUpload = root.querySelector<HTMLLabelElement>("#btn-upload")!
+    const jsonUploadInput = root.querySelector<HTMLInputElement>("#json-upload-input")!
+    const uploadJsonStatus = root.querySelector<HTMLSpanElement>("#upload-json-status")!
+    const btnDownload = root.querySelector<HTMLButtonElement>("#btn-download")!
+    const btnSend = root.querySelector<HTMLButtonElement>("#btn-send")!
+
+    function applyUiLanguage(): void {
+        const strings = ui()
+        const uiLanguage = getMeta().uiLanguage
+
+        document.documentElement.lang = uiLanguage
+        root.dir = uiLanguage === "ar-MA" ? "rtl" : "ltr"
+
+        document.title = strings.pageTitle
+        root.querySelector<HTMLElement>("#page-title")!.textContent = strings.pageTitle
+        applySessionPanelLabels(sessionRoot, strings)
+
+        root.querySelector<HTMLElement>("#label-backend")!.textContent = `${strings.backend}:`
+        root.querySelector<HTMLElement>("#label-mail")!.textContent = `${strings.mail}:`
+        root.querySelector<HTMLElement>("#label-validation-mode")!.textContent = `${strings.validationMode}:`
+        modeSelect.options[0].text = strings.automatic
+        modeSelect.options[1].text = strings.interactive
+        root.querySelector<HTMLElement>("#label-input-source")!.textContent = `${strings.inputSource}:`
+        inputSourceSelect.options[0].text = strings.inputMic
+        inputSourceSelect.options[1].text = strings.inputInject
+
+        btnConnect.textContent = strings.connect
+        btnStart.textContent = strings.start
+        btnStop.textContent = strings.stop
+        btnRunAll.textContent = strings.runAll
+        root.querySelector<HTMLElement>("#label-inject-action")!.textContent = strings.injectAction
+        btnInject.textContent = strings.send
+
+        if (micStatus.textContent === "🎤 Idle" || micStatus.textContent === strings.micIdle ||
+            micStatus.textContent === getBenchUiStrings("en-US").micIdle ||
+            micStatus.textContent === getBenchUiStrings("ru-RU").micIdle ||
+            micStatus.textContent === getBenchUiStrings("ar-MA").micIdle) {
+            micStatus.textContent = strings.micIdle
+        }
+
+        root.querySelector<HTMLElement>("#label-channel-state")!.innerHTML = `<b>${strings.channelState}:</b>`
+        root.querySelector<HTMLElement>("#label-progress")!.innerHTML = `<b>${strings.progress}:</b>`
+        root.querySelector<HTMLElement>("#interactive-runner-title")!.textContent = strings.interactiveRunner
+        root.querySelector<HTMLElement>("#label-int-session-state")!.innerHTML = `<b>${strings.sessionState}:</b>`
+        root.querySelector<HTMLElement>("#label-int-scenario")!.innerHTML = `<b>${strings.scenario}:</b>`
+        root.querySelector<HTMLElement>("#label-int-progress")!.innerHTML = `<b>${strings.progress}:</b>`
+        root.querySelector<HTMLElement>("#label-recognized")!.textContent = `${strings.recognized}:`
+        root.querySelector<HTMLElement>("#label-speech")!.textContent = `${strings.speech}:`
+
+        btnRepeat.textContent = strings.repeatStep
+        btnSkip.textContent = strings.skipStep
+        btnPause.textContent = strings.pause
+        btnResume.textContent = strings.resume
+        root.querySelector<HTMLElement>("#label-recognized-q")!.textContent = strings.recognizedQuestion
+        btnRecYes.textContent = strings.recognizedYes
+        btnRecNo.textContent = strings.recognizedNo
+        root.querySelector<HTMLElement>("#label-heard-q")!.textContent = strings.heardQuestion
+        btnHeardYes.textContent = strings.heardYes
+        btnHeardNo.textContent = strings.heardNo
+        root.querySelector<HTMLElement>("#label-tester-comment")!.textContent = strings.testerComment
+        btnSaveComment.textContent = strings.saveComment
+        root.querySelector<HTMLElement>("#int-summary-title")!.textContent = strings.sessionSummary
+        btnRestart.textContent = strings.startNewSession
+
+        root.querySelector<HTMLElement>("#verification-title")!.textContent = strings.verification
+        root.querySelector<HTMLElement>("#execution-log-title")!.textContent = strings.executionLog
+        root.querySelector<HTMLElement>("#last-report-title")!.textContent = strings.lastCompletedReport
+        root.querySelector<HTMLElement>("#json-report-title")!.textContent = strings.jsonReport
+        root.querySelector<HTMLElement>("#report-history-title")!.textContent = strings.reportHistory
+        root.querySelector<HTMLElement>("#label-scenario-source")!.textContent = strings.scenarioSourceLabel
+        root.querySelector<HTMLElement>("#label-scenario-source-builtin")!.textContent = strings.scenarioSourceBuiltin
+        root.querySelector<HTMLElement>("#label-scenario-source-file")!.textContent = strings.scenarioSourceFile
+        root.querySelector<HTMLElement>("#label-scenario-file")!.textContent = strings.scenarioFileLabel
+        btnChooseScenarioFile.textContent = strings.chooseScenarioFile
+
+        btnDownload.textContent = strings.downloadJson
+        btnUpload.textContent = strings.uploadJson
+        if (uploadedJsonFileName) {
+            uploadJsonStatus.textContent = `${strings.uploadJsonLoaded}: ${uploadedJsonFileName}`
+        }
+        btnSend.textContent = strings.sendReport
+
+        if (!lastReport) {
+            root.querySelector<HTMLElement>("#report-preview-placeholder")!.textContent = strings.reportPreviewHint
+        }
+
+        refreshCommentStatusLabel()
+
+        if (lastReport) {
+            updateReportPreview(lastReport)
+        }
+
+        if (controller.getState() === StepState.Finished && intSummaryBox.style.display !== "none") {
+            intPrompt.textContent = strings.allScenariosDone
+            renderInteractiveSummary()
+        }
+
+        renderInteractiveState()
+    }
+
+    function applyVoiceLanguage(): void {
+        const voiceLanguage = getMeta().voiceLanguage
+        app.recognition.setLanguage(voiceLanguage)
+        app.speech.setLanguage(voiceLanguage)
+
+        if (modeSelect.value === "interactive" &&
+            controller.getState() !== StepState.Finished &&
+            interactiveIndex < interactiveScenarios.length) {
+            loadCurrentPrompt()
+        }
+    }
 
     let startedAt = new Date().toISOString()
+    let isRunning = false
     let lastReport: ReturnType<typeof buildValidationReport> | null = null
     let lastMeta: SessionMeta | null = null
+    let uploadedJsonFileName: string | null = null
 
     // Interactive Runner state
     let interactiveScenarios: string[] = []
@@ -243,21 +497,32 @@ export function mountApp(root: HTMLElement, app: BenchApp): void {
     // Explicit save state for the tester comment (per step).
     let savedCommentText = ""
 
+    function refreshCommentStatusLabel(): void {
+        const strings = ui()
+        if (intComment.value !== savedCommentText && intComment.value.length > 0) {
+            intCommentStatus.textContent = strings.commentUnsaved
+            intCommentStatus.style.color = "#c78a00"
+        } else if (savedCommentText && intComment.value === savedCommentText) {
+            intCommentStatus.textContent = strings.commentSaved
+            intCommentStatus.style.color = "green"
+        } else {
+            intCommentStatus.textContent = strings.commentNotSaved
+            intCommentStatus.style.color = "#888"
+        }
+    }
+
     function setCommentUnsaved(): void {
-        intCommentStatus.textContent = "Есть несохранённые изменения"
-        intCommentStatus.style.color = "#c78a00"
+        refreshCommentStatusLabel()
     }
 
     function setCommentSaved(): void {
-        intCommentStatus.textContent = "✓ Сохранено"
-        intCommentStatus.style.color = "green"
+        refreshCommentStatusLabel()
     }
 
     function resetCommentState(): void {
         intComment.value = ""
         savedCommentText = ""
-        intCommentStatus.textContent = "Не сохранён"
-        intCommentStatus.style.color = "#888"
+        refreshCommentStatusLabel()
         // PR-9d.2 fix: also clear the Recognized/Heard button
         // highlighting when a new step starts, so a fresh step never
         // visually shows the previous step's leftover selection.
@@ -293,6 +558,20 @@ export function mountApp(root: HTMLElement, app: BenchApp): void {
         execLogEl.scrollTop = execLogEl.scrollHeight
     }
 
+    /**
+     * PR-9e.2 fix: each Automatic / Interactive session must start from a
+     * clean voice stack. Interactive mic mode stops recognition via
+     * channel.stop(); without re-preparing here, the next Automatic run
+     * could lose Event/Speak handling or stay silent after speechSynthesis
+     * was cancelled.
+     */
+    async function prepareVoiceForNewSession(): Promise<void> {
+        await app.channel.stop()
+        app.channel.ensureInteractionSubscribed()
+        await app.speech.stop()
+        obsState.textContent = app.channel.getState()
+    }
+
     function refreshHistory(): void {
         const all = reportHistory.getAll()
         if (all.length === 0) {
@@ -310,27 +589,23 @@ export function mountApp(root: HTMLElement, app: BenchApp): void {
     }
 
     function updateReportPreview(report: any): void {
-        const status = report?.Summary?.status || "PASS";
-        const color = status === "PASS" ? "green" : "red";
-        // PR-9d.2 UX fix (per client feedback): this box only ever shows
-        // a snapshot from the last completed run/session, not a live
-        // view of the current in-progress session. Labelling it
-        // "Last Completed Report" plus the generation timestamp makes
-        // that explicit, so a tester isn't misled if they've since
-        // switched language/settings without re-running a full test.
-        const generatedAt = new Date().toLocaleString();
+        const strings = ui()
+        const status = report?.Summary?.status || "PASS"
+        const color = status === "PASS" ? "green" : "red"
+        const generatedAt = new Date().toLocaleString()
+        const validationMode = formatValidationModeLabel(report?.ValidationMode || "Automatic", getMeta().uiLanguage)
 
         reportPreviewBox.innerHTML = `
             <div style="background: #fff; border-left: 4px solid ${color}; padding: 0.8rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-                <div style="margin-bottom:0.4rem; color:#888; font-size:0.8rem;">Generated at: ${generatedAt}</div>
-                <div style="margin-bottom:0.4rem"><strong>Status:</strong> <span style="color:${color};font-weight:bold">${status}</span></div>
-                <div style="margin-bottom:0.4rem"><strong>Tester:</strong> ${report?.Session?.tester || "Tester"} | <strong>Language:</strong> ${report?.Session?.language || "en-US"}</div>
-                <div style="margin-bottom:0.4rem"><strong>Mode:</strong> ${report?.ValidationMode || "Automatic"} | <strong>Input Source:</strong> ${report?.TestConfiguration?.inputSource || "inject"}</div>
-                <div style="margin-bottom:0.4rem"><strong>Recognition:</strong> ${report?.TestConfiguration?.recognitionProvider || "Browser"} | <strong>Speech:</strong> ${report?.TestConfiguration?.speechProvider || "Browser"} | <strong>Scenario Set:</strong> ${report?.TestConfiguration?.scenarioSet || "builtin"}</div>
-                <div style="margin-bottom:0.4rem"><strong>Scenarios:</strong> ${report?.Summary?.totalScenarios || 0} (Passed: ${report?.Summary?.passed || 0}, Failed: ${report?.Summary?.failed || 0})</div>
-                <div><strong>Duration:</strong> ${report?.Summary?.durationMs || 0} ms</div>
+                <div style="margin-bottom:0.4rem; color:#888; font-size:0.8rem;">${strings.generatedAt}: ${generatedAt}</div>
+                <div style="margin-bottom:0.4rem"><strong>${strings.status}:</strong> <span style="color:${color};font-weight:bold">${status}</span></div>
+                <div style="margin-bottom:0.4rem"><strong>${strings.tester}:</strong> ${report?.Session?.tester || "Tester"} | <strong>${strings.uiLanguage}:</strong> ${report?.Session?.uiLanguage || "en-US"} | <strong>${strings.voiceLanguage}:</strong> ${report?.Session?.language || "en-US"}</div>
+                <div style="margin-bottom:0.4rem"><strong>${strings.mode}:</strong> ${validationMode} | <strong>${strings.inputSourceShort}:</strong> ${report?.TestConfiguration?.inputSource || "inject"}</div>
+                <div style="margin-bottom:0.4rem"><strong>${strings.recognition}:</strong> ${report?.TestConfiguration?.recognitionProvider || "Browser"} | <strong>${strings.speechLabel}:</strong> ${report?.TestConfiguration?.speechProvider || "Browser"} | <strong>${strings.scenarioSet}:</strong> ${report?.TestConfiguration?.scenarioSet || "automatic"}</div>
+                <div style="margin-bottom:0.4rem"><strong>${strings.scenarios}:</strong> ${report?.Summary?.totalScenarios || 0} (${strings.passed}: ${report?.Summary?.passed || 0}, ${strings.failed}: ${report?.Summary?.failed || 0})</div>
+                <div><strong>${strings.duration}:</strong> ${report?.Summary?.durationMs || 0} ms</div>
             </div>
-        `;
+        `
     }
 
     // ---- Input Source (PR-9d.2) ----
@@ -348,7 +623,10 @@ export function mountApp(root: HTMLElement, app: BenchApp): void {
     // ---- Interactive Runner logic ----
 
     function renderInteractiveState(): void {
-        intSessionState.textContent = controller.getState()
+        const strings = ui()
+        const state = controller.getState()
+        intSessionState.textContent = state
+        intSessionState.setAttribute("data-state", state)
         const progress = controller.getProgress()
         const shownScenario = Math.min(progress.currentScenario, progress.totalScenarios)
         intScenario.textContent = `${shownScenario} / ${progress.totalScenarios}`
@@ -386,11 +664,11 @@ export function mountApp(root: HTMLElement, app: BenchApp): void {
         // the tester's confirmation does it mean "go to next step".
         // Using one label for both meanings was confusing testers.
         if (waiting) {
-            btnNext.textContent = "▶ Next Step"
+            btnNext.textContent = strings.nextStep
         } else {
             btnNext.textContent = inputSourceSelect.value === "mic"
-                ? "🎤 Start Listening"
-                : "▶ Start Step"
+                ? strings.startListening
+                : strings.startStep
         }
     }
 
@@ -400,9 +678,9 @@ export function mountApp(root: HTMLElement, app: BenchApp): void {
             return
         }
         const trigger = interactiveScenarios[interactiveIndex]
-        const language = getMeta().language
-        const script = getInteractiveScript(trigger, language)
-        intStepLabel.textContent = getStepLabel(language)
+        const voiceLanguage = getMeta().voiceLanguage
+        const script = getInteractiveScript(trigger, voiceLanguage)
+        intStepLabel.textContent = getStepLabel(voiceLanguage)
         intPrompt.textContent = script.promptText
         intExpected.textContent = script.expectedText
         controller.beginScenario(1)
@@ -423,7 +701,7 @@ export function mountApp(root: HTMLElement, app: BenchApp): void {
     }
 
     function startInteractiveSession(): void {
-        interactiveScenarios = [...SCENARIO_TRIGGERS]
+        interactiveScenarios = [...getScenarioTriggers()]
         interactiveIndex = 0
         manualResults = []
         intSummaryBox.style.display = "none"
@@ -445,8 +723,8 @@ export function mountApp(root: HTMLElement, app: BenchApp): void {
      * function runs (first step, Next Step, and every Repeat Step).
      */
     async function startMicListening(): Promise<void> {
-        micStatus.textContent = "🎤 Listening — say the phrase now…"
-        app.recognition.setLanguage(getMeta().language)
+        micStatus.textContent = ui().micListening
+        app.recognition.setLanguage(getMeta().voiceLanguage)
         await app.channel.stop()
         await app.channel.start()
         obsState.textContent = app.channel.getState()
@@ -469,7 +747,7 @@ export function mountApp(root: HTMLElement, app: BenchApp): void {
             }
         })
 
-        micStatus.textContent = "🎤 Idle"
+        micStatus.textContent = ui().micIdle
         refreshLog()
         controller.waitForTester()
         renderInteractiveState()
@@ -554,13 +832,30 @@ export function mountApp(root: HTMLElement, app: BenchApp): void {
         }
     }
 
+    function renderInteractiveSummary(): void {
+        const strings = ui()
+        const total = manualResults.length
+        const confirmed = manualResults.filter(r => r.recognized && r.heard).length
+        const warnings = manualResults.filter(r => r.recognized !== r.heard).length
+        const repeated = manualResults.reduce((sum, r) => sum + r.repeated, 0)
+        const skipped = manualResults.filter(r => r.skipped).length
+
+        intSummaryContent.innerHTML = `
+            <div>${strings.summaryTotal}: <b>${total}</b></div>
+            <div>${strings.summaryConfirmed}: <b style="color:green">${confirmed}</b></div>
+            <div>${strings.summaryWarnings}: <b style="color:orange">${warnings}</b></div>
+            <div>${strings.summaryRepeats}: <b>${repeated}</b></div>
+            <div>${strings.summarySkipped}: <b>${skipped}</b></div>
+        `
+    }
+
     function finishInteractiveSession(): void {
         controller.stop()
-        if (inputSourceSelect.value === "mic") {
-            void app.channel.stop()
+        void prepareVoiceForNewSession().then(() => {
             obsState.textContent = app.channel.getState()
-        }
-        intPrompt.textContent = "Все сценарии пройдены."
+        })
+        const strings = ui()
+        intPrompt.textContent = strings.allScenariosDone
         intExpected.textContent = ""
         renderInteractiveState()
 
@@ -571,13 +866,7 @@ export function mountApp(root: HTMLElement, app: BenchApp): void {
         const skipped = manualResults.filter(r => r.skipped).length
 
         intSummaryBox.style.display = "block"
-        intSummaryContent.innerHTML = `
-            <div>Всего сценариев: <b>${total}</b></div>
-            <div>Подтверждено полностью: <b style="color:green">${confirmed}</b></div>
-            <div>С расхождениями: <b style="color:orange">${warnings}</b></div>
-            <div>Повторов: <b>${repeated}</b></div>
-            <div>Пропущено: <b>${skipped}</b></div>
-        `
+        renderInteractiveSummary()
 
         // Feed results into the same report pipeline used by Automatic mode.
         // PR-9d.2 fix: always read the CURRENT session settings here
@@ -596,7 +885,8 @@ export function mountApp(root: HTMLElement, app: BenchApp): void {
         const entries = app.executionLog.getEntries()
         const report = buildValidationReport(meta, startedAt, verification, entries, {
             validationMode: "Interactive",
-            inputSource: inputSourceSelect.value
+            inputSource: inputSourceSelect.value,
+            ...getScenarioReportOptions()
         })
         // PR-9d.2 fix (per client feedback): expose a richer, clearly
         // named structure per step instead of just trigger/recognized/
@@ -729,12 +1019,14 @@ export function mountApp(root: HTMLElement, app: BenchApp): void {
         const interactive = modeSelect.value === "interactive"
         interactivePanel.style.display = interactive ? "block" : "none"
         inputSourceRow.style.display = interactive ? "block" : "none"
-        if (interactive) {
-            startedAt = new Date().toISOString()
-            app.executionLog.clear()
-            execLogEl.textContent = ""
-            startInteractiveSession()
-        }
+        void prepareVoiceForNewSession().then(() => {
+            if (interactive) {
+                startedAt = new Date().toISOString()
+                app.executionLog.clear()
+                execLogEl.textContent = ""
+                startInteractiveSession()
+            }
+        })
     })
 
     // PR-9d.2 fix (per client feedback): after a session finished,
@@ -745,10 +1037,12 @@ export function mountApp(root: HTMLElement, app: BenchApp): void {
     // session directly, right next to the summary the tester is
     // already looking at.
     btnRestart.addEventListener("click", () => {
-        startedAt = new Date().toISOString()
-        app.executionLog.clear()
-        execLogEl.textContent = ""
-        startInteractiveSession()
+        void prepareVoiceForNewSession().then(() => {
+            startedAt = new Date().toISOString()
+            app.executionLog.clear()
+            execLogEl.textContent = ""
+            startInteractiveSession()
+        })
     })
 
     // ---- Existing wiring (unchanged, now also resolves micWaiter) ----
@@ -808,6 +1102,14 @@ export function mountApp(root: HTMLElement, app: BenchApp): void {
         refreshLog()
     }
 
+    function setAutomaticRunLocked(locked: boolean): void {
+        isRunning = locked
+        btnRunAll.disabled = locked
+        btnStart.disabled = locked
+        btnStop.disabled = locked
+        btnInject.disabled = locked
+    }
+
     root.querySelector("#btn-connect")!.addEventListener("click", async () => {
         const meta = getMeta()
         lastMeta = meta
@@ -816,11 +1118,15 @@ export function mountApp(root: HTMLElement, app: BenchApp): void {
             meta.login,
             meta.password
         )
-        connLabel.textContent = session.status === "connected" ? "● Connected" : "✗ " + session.status
-        mailLabel.textContent = session.status === "connected" ? "Ready" : "—"
+        const strings = ui()
+        connLabel.textContent = session.status === "connected"
+            ? strings.connConnected
+            : `${strings.connFailedPrefix} ${session.status}`
+        mailLabel.textContent = session.status === "connected" ? strings.mailReady : "—"
     })
 
-    root.querySelector("#btn-start")!.addEventListener("click", async () => {
+    btnStart.addEventListener("click", async () => {
+        if (isRunning) return
         startedAt = new Date().toISOString()
         app.executionLog.clear()
         execLogEl.textContent = ""
@@ -828,60 +1134,152 @@ export function mountApp(root: HTMLElement, app: BenchApp): void {
         obsState.textContent = app.channel.getState()
     })
 
-    root.querySelector("#btn-stop")!.addEventListener("click", async () => {
+    btnStop.addEventListener("click", async () => {
+        if (isRunning) return
         await app.channel.stop()
         obsState.textContent = app.channel.getState()
     })
 
-    root.querySelector("#btn-inject")!.addEventListener("click", async () => {
+    btnInject.addEventListener("click", async () => {
+        if (isRunning) return
         const type = injectSelect.value
         await app.channel.injectAction({ type, payload: {} })
         refreshLog()
     })
 
-    root.querySelector("#btn-run-all")!.addEventListener("click", async () => {
-        // PR-9d.2 fix: use the currently selected session settings,
-        // not a stale lastMeta from an earlier click.
-        const meta = getMeta()
-        lastMeta = meta
-
-        for (let i = 0; i < SCENARIO_TRIGGERS.length; i++) {
-            obsProgress.textContent = `Running scenario ${i + 1} of ${SCENARIO_TRIGGERS.length}`
-            await app.channel.injectAction({ type: SCENARIO_TRIGGERS[i], payload: {} })
-
-            await new Promise<void>(resolve => {
-                setTimeout(() => resolve(), 700);
-            });
-
-            refreshLog()
-        }
-
-        obsProgress.textContent = "Done"
-
-        const totalScenariosCount = app.registry.list().length || 3
-        const verification = {
-            totalScenarios: totalScenariosCount,
-            passed: totalScenariosCount,
-            failed: 0,
-            errors: [] as string[]
-        }
-
-        verificationResult.innerHTML = `<span style="color:green;font-weight:bold">✅ PASS (${verification.passed}/${verification.totalScenarios})</span>`
-
-        const entries = app.executionLog.getEntries()
-        const report = buildValidationReport(meta, startedAt, verification, entries, {
-            validationMode: "Automatic",
-            inputSource: "inject"
-        })
-        lastReport = report
-        reportHistory.add(report)
-        refreshHistory()
-        updateReportPreview(report)
-        jsonReportEl.textContent = JSON.stringify(report, null, 2)
+    // PR-11: External JSON Scenarios
+    scenarioSourceBuiltinRadio.addEventListener("change", () => {
+        if (!scenarioSourceBuiltinRadio.checked) return
+        btnChooseScenarioFile.disabled = true
+        activateBuiltinScenarios()
     })
 
-    root.querySelector("#btn-download")!.addEventListener("click", () => {
-        if (!lastReport) { alert("Run All first!"); return }
+    scenarioSourceFileRadio.addEventListener("change", () => {
+        if (!scenarioSourceFileRadio.checked) return
+        btnChooseScenarioFile.disabled = false
+        // The previously active ScenarioSet (builtin or a prior file)
+        // stays active until a new file is actually chosen and passes
+        // validation — Run All/Interactive never run against nothing.
+    })
+
+    btnChooseScenarioFile.addEventListener("click", () => {
+        scenarioFileInput.click()
+    })
+
+    scenarioFileInput.addEventListener("change", () => {
+        const file = scenarioFileInput.files?.[0]
+        if (!file) return
+        void activateScenarioFile(file).finally(() => {
+            scenarioFileInput.value = ""
+        })
+    })
+
+    btnRunAll.addEventListener("click", async () => {
+        // PR-9e.2: isRunning prevents overlapping Automatic cycles. Without
+        // this guard, rapid Run All clicks start parallel loops and corrupt
+        // ExecutionLog / the generated report.
+        if (isRunning) return
+
+        // PR-11: guard against an empty/broken active ScenarioSet.
+        // Checking the registry directly (not a manually-tracked flag)
+        // means this can never go stale — it reflects exactly what
+        // Run All is about to execute. (A flag set on upload failure
+        // and cleared only via the radio's "change" event went stale
+        // here: re-checking a radio programmatically, as the failure
+        // path does, does not fire "change", so the flag never got
+        // cleared even though Built-in was correctly still active —
+        // this silently blocked every subsequent Run All. Found via a
+        // real Playwright run, not caught by tsc.)
+        if (app.registry.list().length === 0) {
+            alert("No scenarios are loaded. Select a valid Scenario Source before running.")
+            return
+        }
+
+        setAutomaticRunLocked(true)
+
+        try {
+            await prepareVoiceForNewSession()
+
+            startedAt = new Date().toISOString()
+            app.executionLog.clear()
+            execLogEl.textContent = ""
+
+            // PR-9d.2 fix: use the currently selected session settings,
+            // not a stale lastMeta from an earlier click.
+            const meta = getMeta()
+            lastMeta = meta
+
+            const uiLanguage = meta.uiLanguage
+            const triggers = getScenarioTriggers()
+            for (let i = 0; i < triggers.length; i++) {
+                obsProgress.textContent = formatRunningScenario(uiLanguage, i + 1, triggers.length)
+                await app.channel.injectAction({ type: triggers[i], payload: {} })
+
+                await new Promise<void>(resolve => {
+                    setTimeout(() => resolve(), 700)
+                })
+
+                refreshLog()
+            }
+
+            obsProgress.textContent = getProgressDoneLabel(uiLanguage)
+
+            const totalScenariosCount = app.registry.list().length || 0
+            const verification = {
+                totalScenarios: totalScenariosCount,
+                passed: totalScenariosCount,
+                failed: 0,
+                errors: [] as string[]
+            }
+
+            verificationResult.innerHTML = `<span style="color:green;font-weight:bold">✅ PASS (${verification.passed}/${verification.totalScenarios})</span>`
+
+            const entries = app.executionLog.getEntries()
+            const report = buildValidationReport(meta, startedAt, verification, entries, {
+                validationMode: "Automatic",
+                inputSource: "inject",
+                ...getScenarioReportOptions()
+            })
+            lastReport = report
+            reportHistory.add(report)
+            refreshHistory()
+            updateReportPreview(report)
+            jsonReportEl.textContent = JSON.stringify(report, null, 2)
+        } finally {
+            setAutomaticRunLocked(false)
+        }
+    })
+
+    btnUpload.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault()
+            jsonUploadInput.click()
+        }
+    })
+
+    jsonUploadInput.addEventListener("change", () => {
+        const file = jsonUploadInput.files?.[0]
+        if (!file) return
+
+        const reader = new FileReader()
+        reader.onload = () => {
+            try {
+                JSON.parse(String(reader.result ?? ""))
+                uploadedJsonFileName = file.name
+                uploadJsonStatus.textContent = `${ui().uploadJsonLoaded}: ${file.name}`
+            } catch {
+                uploadedJsonFileName = null
+                uploadJsonStatus.textContent = ""
+                alert(ui().alertUploadInvalidJson)
+            } finally {
+                jsonUploadInput.value = ""
+            }
+        }
+        reader.readAsText(file)
+    })
+
+    btnDownload.addEventListener("click", () => {
+        if (!lastReport) { alert(ui().alertRunAllFirst); return }
         const meta = lastMeta ?? getMeta()
         const blob = new Blob([JSON.stringify(lastReport, null, 2)], { type: "application/json" })
         const url = URL.createObjectURL(blob)
@@ -892,13 +1290,14 @@ export function mountApp(root: HTMLElement, app: BenchApp): void {
         URL.revokeObjectURL(url)
     })
 
-    root.querySelector("#btn-send")!.addEventListener("click", async () => {
-        if (!lastReport) { alert("Run All first!"); return }
+    btnSend.addEventListener("click", async () => {
+        const strings = ui()
+        if (!lastReport) { alert(strings.alertRunAllFirst); return }
 
         const baseUrl = "https://ibronevik.ru/taxi/c/gruzvill"
         const emailId = await app.backend.getEmailId(baseUrl)
         if (!emailId) {
-            alert("❌ Send failed: no email id available")
+            alert(strings.alertSendNoEmail)
             return
         }
         const result = await app.backend.sendReport(
@@ -906,7 +1305,18 @@ export function mountApp(root: HTMLElement, app: BenchApp): void {
             lastReport,
             emailId
         )
-        alert(result ? "✅ Report sent!" : "❌ Send failed!")
+        alert(result ? strings.alertSendSuccess : strings.alertSendFailed)
     })
+
+    uiLanguageSelect.addEventListener("change", () => {
+        applyUiLanguage()
+    })
+
+    voiceLanguageSelect.addEventListener("change", () => {
+        applyVoiceLanguage()
+    })
+
+    applyUiLanguage()
+    applyVoiceLanguage()
 
 }

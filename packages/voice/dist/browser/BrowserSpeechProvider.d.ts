@@ -22,9 +22,11 @@
 import type { SpeechProvider } from "../provider/SpeechProvider";
 import type { SpeechOptions } from "../types/SpeechOptions";
 export declare class BrowserSpeechProvider implements SpeechProvider {
+    private defaultLanguage;
     onStarted: ((text: string) => void) | null;
     onFinished: ((text: string) => void) | null;
     onError: ((text: string, message: string) => void) | null;
+    setLanguage(language: string): void;
     speak(options: SpeechOptions): Promise<void>;
     stop(): Promise<void>;
 }

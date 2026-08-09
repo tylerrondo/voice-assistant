@@ -41,29 +41,33 @@ test.describe("Smoke Suite", () => {
         // PR-10 fix: no longer asserts specific default values
         // (e.g. "Tester-1", "en-US", "ibronevik.ru") — only that each
         // field is present/enabled and its value has a sane shape.
-        const tester = page.locator("#s-tester")
+        const tester = page.getByTestId("session-tester")
         await expect(tester).toBeEditable()
         await expect(tester).not.toHaveValue("")
 
-        const language = page.locator("#s-language")
-        await expect(language).toBeEnabled()
-        expect(await language.inputValue()).toMatch(/^[a-z]{2}-[A-Z]{2}$/)
+        const uiLanguage = page.getByTestId("session-ui-language")
+        await expect(uiLanguage).toBeEnabled()
+        expect(await uiLanguage.inputValue()).toMatch(/^[a-z]{2}-[A-Z]{2}$/)
 
-        const backendUrl = page.locator("#s-backend-url")
+        const voiceLanguage = page.getByTestId("session-voice-language")
+        await expect(voiceLanguage).toBeEnabled()
+        expect(await voiceLanguage.inputValue()).toMatch(/^[a-z]{2}-[A-Z]{2}$/)
+
+        const backendUrl = page.getByTestId("session-backend-url")
         await expect(backendUrl).toBeEditable()
         expect(await backendUrl.inputValue()).toMatch(/^https?:\/\//)
 
-        const login = page.locator("#s-login")
+        const login = page.getByTestId("session-login")
         await expect(login).not.toHaveValue("")
 
-        const password = page.locator("#s-password")
+        const password = page.getByTestId("session-password")
         expect(await password.getAttribute("type")).toBe("password")
     })
 
     test("3. switching to Interactive mode reveals Input Source and Interactive Runner", async ({ page }) => {
         await page.goto("/")
         await setValidationMode(page, "interactive")
-        await expect(page.locator("#input-source-row")).toBeVisible()
+        await expect(page.getByTestId("input-source-row")).toBeVisible()
         await expect(page.getByTestId("interactive-runner")).toBeVisible()
     })
 
@@ -71,12 +75,12 @@ test.describe("Smoke Suite", () => {
         await page.goto("/")
         await setValidationMode(page, "interactive")
         await setInputSource(page, "inject")
-        await expect(page.locator("#inject-controls")).toBeVisible()
-        await expect(page.locator("#mic-controls")).toBeHidden()
+        await expect(page.getByTestId("inject-controls")).toBeVisible()
+        await expect(page.getByTestId("mic-controls")).toBeHidden()
 
         await setInputSource(page, "mic")
-        await expect(page.locator("#mic-controls")).toBeVisible()
-        await expect(page.locator("#inject-controls")).toBeHidden()
+        await expect(page.getByTestId("mic-controls")).toBeVisible()
+        await expect(page.getByTestId("inject-controls")).toBeHidden()
     })
 
     test("5. Run All (Automatic) produces a passing verification and a populated log", async ({ page }) => {
@@ -85,7 +89,7 @@ test.describe("Smoke Suite", () => {
         const log = await page.getByTestId("execution-log").innerText()
         expect(log.trim().length).toBeGreaterThan(0)
 
-        const report = JSON.parse(await page.locator("#json-report").innerText())
+        const report = JSON.parse(await page.getByTestId("json-report").innerText())
         expect(report.Summary.failed).toBe(0)
         expect(report.Summary.passed).toBe(report.Summary.totalScenarios)
 
@@ -108,7 +112,14 @@ test.describe("Smoke Suite", () => {
             "current-step",
             "progress-value",
             "recognized-text",
-            "speech-text"
+            "speech-text",
+            // PR-11: External JSON Scenarios
+            "scenario-source-builtin",
+            "scenario-source-file",
+            "scenario-file-input",
+            "scenario-choose-file-button",
+            "scenario-file-name",
+            "scenario-error"
         ]) {
             await expect(page.getByTestId(testId)).toHaveCount(1)
         }
@@ -118,11 +129,11 @@ test.describe("Smoke Suite", () => {
         await page.goto("/")
         // Capture what THIS test actually selected, so the assertion
         // below compares against real state, not a duplicated literal.
-        const selectedMode = await page.locator("#mode-select").inputValue()
+        const selectedMode = await page.getByTestId("validation-mode").inputValue()
         await runAll(page)
         // PR-10 fix: read structured JSON instead of scanning
         // displayed (potentially localized) text in the report box.
-        const report = JSON.parse(await page.locator("#json-report").innerText())
+        const report = JSON.parse(await page.getByTestId("json-report").innerText())
 
         // PR-10 fix (per client review): validate against a known set
         // of allowed values AND against what the test itself set,
@@ -144,12 +155,12 @@ test.describe("Smoke Suite", () => {
         await page.goto("/")
         // Still in Automatic mode: the Interactive Runner (and its
         // Next Step button) must not be usable at all.
-        await expect(page.locator("#int-btn-next")).toBeHidden()
+        await expect(page.getByTestId("interactive-next-button")).toBeHidden()
     })
 
     test("9. Repeat Step is unreachable before an Interactive session has started", async ({ page }) => {
         await page.goto("/")
-        await expect(page.locator("#int-btn-repeat")).toBeHidden()
+        await expect(page.getByTestId("interactive-repeat-button")).toBeHidden()
     })
 
     test("10. Download Report before any report exists fails safely, not silently", async ({ page }) => {
@@ -167,7 +178,7 @@ test.describe("Smoke Suite", () => {
             dialogType = dialog.type()
             await dialog.dismiss()
         })
-        await page.locator("#btn-download").click()
+        await page.getByTestId("download-json-button").click()
         expect(dialogType).toBe("alert")
     })
 
@@ -178,7 +189,7 @@ test.describe("Smoke Suite", () => {
             dialogType = dialog.type()
             await dialog.dismiss()
         })
-        await page.locator("#btn-send").click()
+        await page.getByTestId("send-report-button").click()
         expect(dialogType).toBe("alert")
     })
 

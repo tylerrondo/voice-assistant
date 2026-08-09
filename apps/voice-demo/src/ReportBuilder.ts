@@ -37,7 +37,7 @@ export function buildReport(
 
     return {
         tester: meta.tester,
-        language: meta.language,
+        language: meta.voiceLanguage,
         build: meta.build,
         commit: meta.commit,
         browser,

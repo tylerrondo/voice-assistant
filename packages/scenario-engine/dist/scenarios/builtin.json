@@ -1,0 +1,98 @@
+{
+    "version": 2,
+    "id": "driver-standard-trip",
+    "name": "Driver Standard Trip",
+    "description": "Standard driver workflow from accepting an order to finishing the trip.",
+    "language": "ru-RU",
+    "author": "Platform Core",
+    "tags": ["driver", "trip", "validation", "training"],
+    "scenarios": [
+        {
+            "id": "accept-order",
+            "name": "Accept order",
+            "description": "Driver accepts assigned order.",
+            "category": "order",
+            "difficulty": "easy",
+            "activation": { "type": "voice", "value": "voice.accept-order" },
+            "expectedPhrase": "Принять заказ",
+            "aliases": ["Принимаю заказ", "Беру заказ", "Согласен"],
+            "steps": [
+                {
+                    "kind": "emit",
+                    "event": { "type": "driver.order.accepted", "payload": { "orderId": 1001 } }
+                },
+                { "kind": "end" }
+            ]
+        },
+        {
+            "id": "arrived",
+            "name": "Arrived to passenger",
+            "description": "Driver informs that he has arrived.",
+            "category": "pickup",
+            "difficulty": "easy",
+            "activation": { "type": "voice", "value": "voice.arrived" },
+            "expectedPhrase": "Я приехал",
+            "aliases": ["Прибыл", "На месте", "Ожидаю пассажира"],
+            "steps": [
+                { "kind": "delay", "ms": 500 },
+                {
+                    "kind": "emit",
+                    "event": { "type": "driver.arrived", "payload": { "orderId": 1001 } }
+                },
+                { "kind": "end" }
+            ]
+        },
+        {
+            "id": "start-trip",
+            "name": "Start trip",
+            "description": "Trip begins.",
+            "category": "trip",
+            "difficulty": "easy",
+            "activation": { "type": "voice", "value": "voice.start-trip" },
+            "expectedPhrase": "Начать поездку",
+            "aliases": ["Поехали", "Начинаем поездку"],
+            "steps": [
+                {
+                    "kind": "emit",
+                    "event": { "type": "driver.trip.started", "payload": { "orderId": 1001 } }
+                },
+                { "kind": "end" }
+            ]
+        },
+        {
+            "id": "finish-trip",
+            "name": "Finish trip",
+            "description": "Trip completed.",
+            "category": "trip",
+            "difficulty": "easy",
+            "activation": { "type": "voice", "value": "voice.finish-trip" },
+            "expectedPhrase": "Завершить поездку",
+            "aliases": ["Поездка завершена", "Закончить поездку"],
+            "steps": [
+                { "kind": "delay", "ms": 300 },
+                {
+                    "kind": "emit",
+                    "event": { "type": "driver.trip.finished", "payload": { "orderId": 1001, "payment": "cash" } }
+                },
+                { "kind": "end" }
+            ]
+        },
+        {
+            "id": "become-available",
+            "name": "Become available",
+            "description": "Driver is ready to receive the next order.",
+            "category": "status",
+            "difficulty": "easy",
+            "activation": { "type": "voice", "value": "voice.available" },
+            "expectedPhrase": "Готов к следующему заказу",
+            "aliases": ["Свободен", "Жду следующий заказ", "Готов работать"],
+            "steps": [
+                {
+                    "kind": "emit",
+                    "event": { "type": "driver.available", "payload": { "driverStatus": "available" } }
+                },
+                { "kind": "end" }
+            ]
+        }
+    ]
+}

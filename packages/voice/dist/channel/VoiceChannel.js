@@ -50,8 +50,11 @@ export class VoiceChannel {
         await this.options.speech.stop();
         this.unsubscribeRecognition?.();
         this.unsubscribeRecognition = null;
-        this.unsubscribeInteraction?.();
-        this.unsubscribeInteraction = null;
+        // PR-9e.2 fix: keep the interaction subscription alive after stop().
+        // Automatic Run All and Inject Action flows never call start(), they rely
+        // on ensureInteractionSubscribed() instead. Tearing down this listener
+        // when Interactive mic mode stops the channel left later Automatic runs
+        // without Event/Speak handling and without audible TTS.
         this.state = VoiceChannelState.Stopped;
     }
     getState() {
