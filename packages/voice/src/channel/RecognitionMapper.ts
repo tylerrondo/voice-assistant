@@ -4,8 +4,8 @@
  * Converts a RecognitionResult into an InteractionAction.
  *
  * This is a temporary, minimal default implementation.
- * Real intent resolution belongs to PR-7 (Intent Resolver),
- * which can replace this mapper without changing VoiceChannel.
+ * A future semantic/intent resolver may replace this mapper
+ * without changing VoiceChannel.
  */
 
 import type { InteractionAction } from "../../../interaction-contract/dist/index"
