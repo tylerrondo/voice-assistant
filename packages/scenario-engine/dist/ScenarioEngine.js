@@ -20,7 +20,7 @@
  * that text is automatically attached as `recognizedText` on every
  * emitted event's payload. This lets simple default scenarios (like
  * voice-recognized-ok) speak back what the user actually said,
- * without needing full intent/template resolution (PR-7/PR-8).
+ * without needing a full intent/template resolution layer.
  */
 import { RealTimeDelayProvider } from "./DelayProvider";
 export class ScenarioEngine {

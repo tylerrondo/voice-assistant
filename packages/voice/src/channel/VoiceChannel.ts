@@ -7,7 +7,8 @@
  * Pure transport: this class contains NO domain logic, NO intent
  * resolution and NO template rendering of its own. Conversion is
  * delegated to RecognitionMapper / SpeechMapper, which can be
- * replaced later (PR-7, PR-8) without changing this class.
+ * replaced later by a future semantic/intent resolver without
+ * changing this class.
  *
  * Optional observability hooks (onAction/onEvent/onSpeak) were added
  * for Validation Bench (PR-9c) to allow external observers (e.g. the
