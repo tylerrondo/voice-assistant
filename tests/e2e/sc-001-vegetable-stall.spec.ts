@@ -115,46 +115,69 @@ test.describe('SC-001: Scenario JSON Contract & Schema Validation', () => {
 // ============================================================================
 // SUITE 2: SC-001 Live Application Runtime Execution E2E Tests
 // ============================================================================
-test.describe('SC-001: Live Application Runtime Execution E2E (UI & ScenarioEngine)', () => {
+test.describe('SC-001: Live Application Runtime Execution E2E (External JSON & Strict Trace)', () => {
 
-  test('RUNTIME-E2E-01: Load Validation Bench, Dispatch External Scenario & Verify Live Execution Trace', async ({ page }) => {
-    // 1. Open live application
-    await page.goto(process.env.APP_URL || 'https://voice-assistant-two-olive.vercel.app');
-    
-    // 2. Ensure Scenario Bench is ready
+  test('RUNTIME-E2E-01: Upload External JSON, Activate File Source & Verify Strict 6-Step Execution Trace', async ({ page }) => {
+    // 1. Open Live Validation Bench
+    const appUrl = process.env.APP_URL || 'https://voice-assistant-two-olive.vercel.app';
+    await page.goto(appUrl);
     await expect(page.locator('body')).toBeVisible();
-    const startButton = page.getByRole('button', { name: /запустить сценарий|start scenario/i });
-    await expect(startButton).toBeVisible();
 
-    // 3. Trigger execution of the loaded ScenarioSet v2
+    // 2. Select External JSON Source via UI
+    const fileSourceRadio = page.locator('[data-testid="scenario-source-file"]').or(page.getByLabel(/загрузить json|файл json|upload json/i)).or(page.locator('input[type="file"]').locator('..'));
+    if (await fileSourceRadio.isVisible()) {
+      await fileSourceRadio.click();
+    }
+
+    // 3. Upload the exact external scenario JSON file
+    const fileInput = page.locator('[data-testid="scenario-file-input"]').or(page.locator('input[type="file"]')).first();
+    await fileInput.setInputFiles(scenarioFilePath);
+
+    // 4. Verify External File is active and confirmed in UI
+    const fileNameDisplay = page.locator('[data-testid="scenario-file-name"]').or(page.locator('text=scenario-sc-001-vegetable-stall.json')).first();
+    await expect(fileNameDisplay).toBeVisible({ timeout: 5000 });
+
+    // 5. Verify Scenario Metadata in UI header
+    await expect(page.locator('text=scenario-set-sc-001-vegetable-stall').or(page.locator('text=Продавец овощной лавки')).first()).toBeVisible();
+
+    // 6. Launch Execution
+    const startButton = page.getByRole('button', { name: /запустить сценарий|start scenario|выполнить/i });
+    await expect(startButton).toBeVisible();
     await startButton.click();
 
-    // 4. Verify Step 1 Execution Runtime (Inventory stock query)
-    await expect(page.locator('text=INVENTORY_STOCK_RESOLVED').first()).toBeVisible({ timeout: 10000 });
-    await expect(page.locator('text=15').first()).toBeVisible();
+    // 7. Verify STEP 1: INVENTORY_STOCK_RESOLVED (15.0 kg)
+    const step1Trace = page.locator('[data-testid="step-result-0"]').or(page.locator('text=INVENTORY_STOCK_RESOLVED').locator('..')).first();
+    await expect(step1Trace).toBeVisible({ timeout: 10000 });
+    await expect(step1Trace).toContainText('15');
 
-    // 5. Verify Step 2 Runtime [CRITICAL]: Sale, Total 30 AED, Receipt emitted and Stock = 13 kg
-    await expect(page.locator('text=SALE_TRANSACTION_COMPLETED').first()).toBeVisible({ timeout: 10000 });
-    await expect(page.locator('text=REC-2026-001').first()).toBeVisible();
-    await expect(page.locator('text=30').first()).toBeVisible();
+    // 8. Verify STEP 2 [CRITICAL ATOMIC SALE]: 2 kg, 30 AED, 13 kg remaining, REC-2026-001, receiptPrinted=true
+    const step2Trace = page.locator('[data-testid="step-result-1"]').or(page.locator('text=SALE_TRANSACTION_COMPLETED').locator('..')).first();
+    await expect(step2Trace).toBeVisible({ timeout: 10000 });
+    await expect(step2Trace).toContainText('REC-2026-001');
+    await expect(step2Trace).toContainText('30');
+    await expect(step2Trace).toContainText('13'); // verified remainingStock
 
-    // 6. Verify Step 3 Runtime: Price updated to 20 AED
-    await expect(page.locator('text=ITEM_PRICE_UPDATED').first()).toBeVisible({ timeout: 10000 });
-    await expect(page.locator('text=20').first()).toBeVisible();
+    // 9. Verify STEP 3: ITEM_PRICE_UPDATED (20.0 AED)
+    const step3Trace = page.locator('[data-testid="step-result-2"]').or(page.locator('text=ITEM_PRICE_UPDATED').locator('..')).first();
+    await expect(step3Trace).toBeVisible({ timeout: 10000 });
+    await expect(step3Trace).toContainText('20');
 
-    // 7. Verify Step 4 Runtime: Item marked out of stock
-    await expect(page.locator('text=ITEM_STATUS_OUT_OF_STOCK_TRIGGERED').first()).toBeVisible({ timeout: 10000 });
+    // 10. Verify STEP 4: ITEM_STATUS_OUT_OF_STOCK_TRIGGERED
+    const step4Trace = page.locator('[data-testid="step-result-3"]').or(page.locator('text=ITEM_STATUS_OUT_OF_STOCK_TRIGGERED').locator('..')).first();
+    await expect(step4Trace).toBeVisible({ timeout: 10000 });
 
-    // 8. Verify Step 5 Runtime: Strawberry catalog creation
-    await expect(page.locator('text=CATALOG_ITEM_CREATED').first()).toBeVisible({ timeout: 10000 });
-    await expect(page.locator('text=Клубника').first()).toBeVisible();
+    // 11. Verify STEP 5: CATALOG_ITEM_CREATED (Strawberries / Клубника, 35 AED)
+    const step5Trace = page.locator('[data-testid="step-result-4"]').or(page.locator('text=CATALOG_ITEM_CREATED').locator('..')).first();
+    await expect(step5Trace).toBeVisible({ timeout: 10000 });
+    await expect(step5Trace).toContainText('Клубника');
 
-    // 9. Verify Step 6 Runtime: Potato stock update
-    await expect(page.locator('text=INVENTORY_STOCK_UPDATED').first()).toBeVisible({ timeout: 10000 });
-    await expect(page.locator('text=10').first()).toBeVisible();
+    // 12. Verify STEP 6: INVENTORY_STOCK_UPDATED (10.0 kg)
+    const step6Trace = page.locator('[data-testid="step-result-5"]').or(page.locator('text=INVENTORY_STOCK_UPDATED').locator('..')).first();
+    await expect(step6Trace).toBeVisible({ timeout: 10000 });
+    await expect(step6Trace).toContainText('10');
 
-    // 10. Verify Final Scenario Status in UI Execution Log
-    await expect(page.locator('text=100%').or(page.locator('text=6/6'))).toBeVisible({ timeout: 15000 });
+    // 13. Verify Sequence Termination: kind: "end" reached and 100% PASS
+    await expect(page.locator('text=100%').or(page.locator('text=6/6')).first()).toBeVisible({ timeout: 15000 });
   });
 
 });
