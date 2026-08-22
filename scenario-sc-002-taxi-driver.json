@@ -1,0 +1,155 @@
+{
+  "version": 2,
+  "id": "scenario-set-sc-002-taxi-driver",
+  "name": "Taxi Driver Standard Trip",
+  "description": "Эталонный сценарий голосового ассистента водителя такси (5 рабочих операций): принятие заказа, прибытие, старт поездки, завершение и статус 'свободен'.",
+  "scenarios": [
+    {
+      "id": "accept-order",
+      "name": "Принятие заказа",
+      "activation": {
+        "type": "voice",
+        "value": "voice.accept-order"
+      },
+      "expectedPhrase": "Принять заказ",
+      "aliases": [
+        "Принимаю заказ",
+        "Беру заказ",
+        "Согласен"
+      ],
+      "steps": [
+        {
+          "kind": "emit",
+          "event": {
+            "type": "driver.order.accepted",
+            "payload": {
+              "orderId": 1001
+            }
+          }
+        },
+        {
+          "kind": "end"
+        }
+      ]
+    },
+    {
+      "id": "arrived",
+      "name": "Прибытие к пассажиру",
+      "activation": {
+        "type": "voice",
+        "value": "voice.arrived"
+      },
+      "expectedPhrase": "Я приехал",
+      "aliases": [
+        "Прибыл",
+        "На месте",
+        "Ожидаю пассажира"
+      ],
+      "steps": [
+        {
+          "kind": "delay",
+          "ms": 500
+        },
+        {
+          "kind": "emit",
+          "event": {
+            "type": "driver.arrived",
+            "payload": {
+              "orderId": 1001
+            }
+          }
+        },
+        {
+          "kind": "end"
+        }
+      ]
+    },
+    {
+      "id": "start-trip",
+      "name": "Начало поездки",
+      "activation": {
+        "type": "voice",
+        "value": "voice.start-trip"
+      },
+      "expectedPhrase": "Начать поездку",
+      "aliases": [
+        "Поехали",
+        "Начинаем поездку"
+      ],
+      "steps": [
+        {
+          "kind": "emit",
+          "event": {
+            "type": "driver.trip.started",
+            "payload": {
+              "orderId": 1001
+            }
+          }
+        },
+        {
+          "kind": "end"
+        }
+      ]
+    },
+    {
+      "id": "finish-trip",
+      "name": "Завершение поездки",
+      "activation": {
+        "type": "voice",
+        "value": "voice.finish-trip"
+      },
+      "expectedPhrase": "Завершить поездку",
+      "aliases": [
+        "Поездка завершена",
+        "Закончить поездку"
+      ],
+      "steps": [
+        {
+          "kind": "delay",
+          "ms": 300
+        },
+        {
+          "kind": "emit",
+          "event": {
+            "type": "driver.trip.finished",
+            "payload": {
+              "orderId": 1001,
+              "payment": "cash"
+            }
+          }
+        },
+        {
+          "kind": "end"
+        }
+      ]
+    },
+    {
+      "id": "become-available",
+      "name": "Водитель свободен",
+      "activation": {
+        "type": "voice",
+        "value": "voice.available"
+      },
+      "expectedPhrase": "Готов к следующему заказу",
+      "aliases": [
+        "Свободен",
+        "Жду следующий заказ",
+        "Готов работать"
+      ],
+      "steps": [
+        {
+          "kind": "emit",
+          "event": {
+            "type": "driver.available",
+            "payload": {
+              "driverStatus": "available"
+            }
+          }
+        },
+        {
+          "kind": "end"
+        }
+      ]
+    }
+  ]
+}
