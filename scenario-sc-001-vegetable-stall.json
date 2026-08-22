@@ -19,228 +19,252 @@
       },
       "steps": [
         {
-          "type": "emit",
-          "channel": "voice",
-          "event": "VOICE_INPUT_RECEIVED",
-          "payload": {
-            "stepId": "step_1_query_stock",
-            "text": "Сколько осталось помидоров?",
-            "aliases": [
-              "Сколько помидоров осталось?",
-              "Покажи остаток помидоров",
-              "Какой остаток по томатам?",
-              "Сколько у нас есть помидоров?"
-            ],
-            "action": "QUERY_INVENTORY_STOCK",
-            "itemId": "tomatoes",
-            "difficulty": "standard"
+          "kind": "emit",
+          "event": {
+            "type": "VOICE_INPUT_RECEIVED",
+            "payload": {
+              "channel": "voice",
+              "stepId": "step_1_query_stock",
+              "text": "Сколько осталось помидоров?",
+              "aliases": [
+                "Сколько помидоров осталось?",
+                "Покажи остаток помидоров",
+                "Какой остаток по томатам?",
+                "Сколько у нас есть помидоров?"
+              ],
+              "action": "QUERY_INVENTORY_STOCK",
+              "itemId": "tomatoes",
+              "difficulty": "standard"
+            }
           }
         },
         {
-          "type": "emit",
-          "channel": "inventory",
-          "event": "INVENTORY_STOCK_RESOLVED",
-          "payload": {
-            "itemId": "tomatoes",
-            "quantity": 15.0,
-            "unit": "kg",
-            "speech": "Помидоров осталось 15 килограммов.",
-            "status": "in_stock"
+          "kind": "emit",
+          "event": {
+            "type": "INVENTORY_STOCK_RESOLVED",
+            "payload": {
+              "channel": "inventory",
+              "itemId": "tomatoes",
+              "quantity": 15.0,
+              "unit": "kg",
+              "speech": "Помидоров осталось 15 килограммов.",
+              "status": "in_stock"
+            }
           }
         },
         {
-          "type": "delay",
-          "duration": 500
+          "kind": "delay",
+          "ms": 500
         },
         {
-          "type": "emit",
-          "channel": "voice",
-          "event": "VOICE_INPUT_RECEIVED",
-          "payload": {
-            "stepId": "step_2_sell_and_receipt",
-            "text": "Продай клиенту два килограмма помидоров и пробей чек.",
-            "aliases": [
-              "Оформи два килограмма томатов и выбей чек",
-              "Два килограмма помидоров, чек клиенту",
-              "Пробей два кило томатов и распечатай чек"
-            ],
-            "action": "PROCESS_SALE_AND_EMIT_RECEIPT",
-            "itemId": "tomatoes",
-            "quantity": 2.0,
-            "unit": "kg",
-            "pricePerUnit": 15.0,
-            "totalAmount": 30.0,
-            "currency": "AED",
-            "printReceipt": true,
-            "difficulty": "critical",
-            "gapReference": "GAP-01, GAP-02"
+          "kind": "emit",
+          "event": {
+            "type": "VOICE_INPUT_RECEIVED",
+            "payload": {
+              "channel": "voice",
+              "stepId": "step_2_sell_and_receipt",
+              "text": "Продай клиенту два килограмма помидоров и пробей чек.",
+              "aliases": [
+                "Оформи два килограмма томатов и выбей чек",
+                "Два килограмма помидоров, чек клиенту",
+                "Пробей два кило томатов и распечатай чек"
+              ],
+              "action": "PROCESS_SALE_AND_EMIT_RECEIPT",
+              "itemId": "tomatoes",
+              "quantity": 2.0,
+              "unit": "kg",
+              "pricePerUnit": 15.0,
+              "totalAmount": 30.0,
+              "currency": "AED",
+              "printReceipt": true,
+              "difficulty": "critical",
+              "gapReference": "GAP-01, GAP-02"
+            }
           }
         },
         {
-          "type": "emit",
-          "channel": "pos",
-          "event": "SALE_TRANSACTION_COMPLETED",
-          "payload": {
-            "itemId": "tomatoes",
-            "quantity": 2.0,
-            "unit": "kg",
-            "pricePerUnit": 15.0,
-            "totalAmount": 30.0,
-            "currency": "AED",
-            "receiptPrinted": true,
-            "receiptId": "REC-2026-001",
-            "remainingStock": 13.0,
-            "speech": "Продано два килограмма помидоров на сумму 30 дирхам. Чек напечатан."
+          "kind": "emit",
+          "event": {
+            "type": "SALE_TRANSACTION_COMPLETED",
+            "payload": {
+              "channel": "pos",
+              "itemId": "tomatoes",
+              "quantity": 2.0,
+              "unit": "kg",
+              "pricePerUnit": 15.0,
+              "totalAmount": 30.0,
+              "currency": "AED",
+              "receiptPrinted": true,
+              "receiptId": "REC-2026-001",
+              "remainingStock": 13.0,
+              "speech": "Продано два килограмма помидоров на сумму 30 дирхам. Чек напечатан."
+            }
           }
         },
         {
-          "type": "delay",
-          "duration": 500
+          "kind": "delay",
+          "ms": 500
         },
         {
-          "type": "emit",
-          "channel": "voice",
-          "event": "VOICE_INPUT_RECEIVED",
-          "payload": {
-            "stepId": "step_3_update_price",
-            "text": "Поставь огурцы по 20 дирхам за килограмм.",
-            "aliases": [
-              "Установи цену на огурцы 20 дирхам за килограмм",
-              "Огурцы теперь по 20 дирхам",
-              "Измени стоимость огурцов на двадцать дирхам"
-            ],
-            "action": "UPDATE_CATALOG_ITEM_PRICE",
-            "itemId": "cucumbers",
-            "newPrice": 20.0,
-            "currency": "AED",
-            "unit": "kg",
-            "difficulty": "standard"
+          "kind": "emit",
+          "event": {
+            "type": "VOICE_INPUT_RECEIVED",
+            "payload": {
+              "channel": "voice",
+              "stepId": "step_3_update_price",
+              "text": "Поставь огурцы по 20 дирхам за килограмм.",
+              "aliases": [
+                "Установи цену на огурцы 20 дирхам за килограмм",
+                "Огурцы теперь по 20 дирхам",
+                "Измени стоимость огурцов на двадцать дирхам"
+              ],
+              "action": "UPDATE_CATALOG_ITEM_PRICE",
+              "itemId": "cucumbers",
+              "newPrice": 20.0,
+              "currency": "AED",
+              "unit": "kg",
+              "difficulty": "standard"
+            }
           }
         },
         {
-          "type": "emit",
-          "channel": "catalog",
-          "event": "ITEM_PRICE_UPDATED",
-          "payload": {
-            "itemId": "cucumbers",
-            "newPrice": 20.0,
-            "currency": "AED",
-            "unit": "kg",
-            "speech": "Цена на огурцы установлена: 20 дирхам за килограмм."
+          "kind": "emit",
+          "event": {
+            "type": "ITEM_PRICE_UPDATED",
+            "payload": {
+              "channel": "catalog",
+              "itemId": "cucumbers",
+              "newPrice": 20.0,
+              "currency": "AED",
+              "unit": "kg",
+              "speech": "Цена на огурцы установлена: 20 дирхам за килограмм."
+            }
           }
         },
         {
-          "type": "delay",
-          "duration": 500
+          "kind": "delay",
+          "ms": 500
         },
         {
-          "type": "emit",
-          "channel": "voice",
-          "event": "VOICE_INPUT_RECEIVED",
-          "payload": {
-            "stepId": "step_4_mark_depleted",
-            "text": "Огурцы закончились.",
-            "aliases": [
-              "Отметь огурцы как закончившиеся",
-              "Огурцов больше нет",
-              "Зафиксируй нулевой остаток огурцов"
-            ],
-            "action": "SET_ITEM_OUT_OF_STOCK",
-            "itemId": "cucumbers",
-            "difficulty": "standard"
+          "kind": "emit",
+          "event": {
+            "type": "VOICE_INPUT_RECEIVED",
+            "payload": {
+              "channel": "voice",
+              "stepId": "step_4_mark_depleted",
+              "text": "Огурцы закончились.",
+              "aliases": [
+                "Отметь огурцы как закончившиеся",
+                "Огурцов больше нет",
+                "Зафиксируй нулевой остаток огурцов"
+              ],
+              "action": "SET_ITEM_OUT_OF_STOCK",
+              "itemId": "cucumbers",
+              "difficulty": "standard"
+            }
           }
         },
         {
-          "type": "emit",
-          "channel": "inventory",
-          "event": "ITEM_STATUS_OUT_OF_STOCK_TRIGGERED",
-          "payload": {
-            "itemId": "cucumbers",
-            "quantity": 0.0,
-            "status": "out_of_stock",
-            "speech": "Огурцы отмечены как закончившиеся. Товар снят с витрины."
+          "kind": "emit",
+          "event": {
+            "type": "ITEM_STATUS_OUT_OF_STOCK_TRIGGERED",
+            "payload": {
+              "channel": "inventory",
+              "itemId": "cucumbers",
+              "quantity": 0.0,
+              "status": "out_of_stock",
+              "speech": "Огурцы отмечены как закончившиеся. Товар снят с витрины."
+            }
           }
         },
         {
-          "type": "delay",
-          "duration": 500
+          "kind": "delay",
+          "ms": 500
         },
         {
-          "type": "emit",
-          "channel": "voice",
-          "event": "VOICE_INPUT_RECEIVED",
-          "payload": {
-            "stepId": "step_5_create_item",
-            "text": "Добавь клубнику по 35 дирхам за килограмм.",
-            "aliases": [
-              "Внеси в список клубнику по 35 дирхам за килограмм",
-              "Новый товар: клубника, цена 35 дирхам",
-              "Добавь позицию клубника, 35 дирхам за кило"
-            ],
-            "action": "CREATE_NEW_CATALOG_ITEM",
-            "itemName": "Клубника",
-            "category": "Ягоды",
-            "price": 35.0,
-            "currency": "AED",
-            "unit": "kg",
-            "difficulty": "standard",
-            "gapReference": "GAP-03"
+          "kind": "emit",
+          "event": {
+            "type": "VOICE_INPUT_RECEIVED",
+            "payload": {
+              "channel": "voice",
+              "stepId": "step_5_create_item",
+              "text": "Добавь клубнику по 35 дирхам за килограмм.",
+              "aliases": [
+                "Внеси в список клубнику по 35 дирхам за килограмм",
+                "Новый товар: клубника, цена 35 дирхам",
+                "Добавь позицию клубника, 35 дирхам за кило"
+              ],
+              "action": "CREATE_NEW_CATALOG_ITEM",
+              "itemName": "Клубника",
+              "category": "Ягоды",
+              "price": 35.0,
+              "currency": "AED",
+              "unit": "kg",
+              "difficulty": "standard",
+              "gapReference": "GAP-03"
+            }
           }
         },
         {
-          "type": "emit",
-          "channel": "catalog",
-          "event": "CATALOG_ITEM_CREATED",
-          "payload": {
-            "itemId": "strawberries",
-            "itemName": "Клубника",
-            "category": "Ягоды",
-            "price": 35.0,
-            "currency": "AED",
-            "unit": "kg",
-            "speech": "Клубника добавлена в ассортимент по цене 35 дирхам за килограмм."
+          "kind": "emit",
+          "event": {
+            "type": "CATALOG_ITEM_CREATED",
+            "payload": {
+              "channel": "catalog",
+              "itemId": "strawberries",
+              "itemName": "Клубника",
+              "category": "Ягоды",
+              "price": 35.0,
+              "currency": "AED",
+              "unit": "kg",
+              "speech": "Клубника добавлена в ассортимент по цене 35 дирхам за килограмм."
+            }
           }
         },
         {
-          "type": "delay",
-          "duration": 500
+          "kind": "delay",
+          "ms": 500
         },
         {
-          "type": "emit",
-          "channel": "voice",
-          "event": "VOICE_INPUT_RECEIVED",
-          "payload": {
-            "stepId": "step_6_update_stock_level",
-            "text": "Картофеля осталось 10 килограммов.",
-            "aliases": [
-              "Остаток картофеля 10 килограммов",
-              "Установи остаток по картошке 10 кг",
-              "Запиши: картофель 10 килограммов"
-            ],
-            "action": "SET_INVENTORY_STOCK_LEVEL",
-            "itemId": "potatoes",
-            "newQuantity": 10.0,
-            "unit": "kg",
-            "difficulty": "standard"
+          "kind": "emit",
+          "event": {
+            "type": "VOICE_INPUT_RECEIVED",
+            "payload": {
+              "channel": "voice",
+              "stepId": "step_6_update_stock_level",
+              "text": "Картофеля осталось 10 килограммов.",
+              "aliases": [
+                "Остаток картофеля 10 килограммов",
+                "Установи остаток по картошке 10 кг",
+                "Запиши: картофель 10 килограммов"
+              ],
+              "action": "SET_INVENTORY_STOCK_LEVEL",
+              "itemId": "potatoes",
+              "newQuantity": 10.0,
+              "unit": "kg",
+              "difficulty": "standard"
+            }
           }
         },
         {
-          "type": "emit",
-          "channel": "inventory",
-          "event": "INVENTORY_STOCK_UPDATED",
-          "payload": {
-            "itemId": "potatoes",
-            "quantity": 10.0,
-            "unit": "kg",
-            "speech": "Остаток картофеля обновлен: 10 килограммов."
+          "kind": "emit",
+          "event": {
+            "type": "INVENTORY_STOCK_UPDATED",
+            "payload": {
+              "channel": "inventory",
+              "itemId": "potatoes",
+              "quantity": 10.0,
+              "unit": "kg",
+              "speech": "Остаток картофеля обновлен: 10 килограммов."
+            }
           }
         },
         {
-          "type": "delay",
-          "duration": 300
+          "kind": "delay",
+          "ms": 300
         },
         {
-          "type": "end"
+          "kind": "end"
         }
       ]
     }
