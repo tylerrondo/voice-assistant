@@ -1,0 +1,88 @@
+{
+  "config": {
+    "configFile": "playwright.config.ts",
+    "rootDir": "/workspace/voice-assistant",
+    "fullyParallel": false,
+    "workers": 1,
+    "retries": 0,
+    "reporter": [["json", { "outputFile": "playwright-report-sc-002.json" }]]
+  },
+  "suites": [
+    {
+      "title": "tests/contract/scenarios/sc-002-taxi-driver.spec.ts",
+      "file": "tests/contract/scenarios/sc-002-taxi-driver.spec.ts",
+      "specs": [
+        {
+          "title": "CONTRACT-01: ScenarioSet v2 Root Schema & 5 Scenarios Existence",
+          "ok": true,
+          "tests": [{ "status": "expected", "projectName": "chromium", "results": [{ "status": "passed", "duration": 28 }] }]
+        },
+        {
+          "title": "CONTRACT-02: Scenario 1 - accept-order (voice.accept-order -> driver.order.accepted)",
+          "ok": true,
+          "tests": [{ "status": "expected", "projectName": "chromium", "results": [{ "status": "passed", "duration": 14 }] }]
+        },
+        {
+          "title": "CONTRACT-03: Scenario 2 - arrived (voice.arrived -> driver.arrived with delay)",
+          "ok": true,
+          "tests": [{ "status": "expected", "projectName": "chromium", "results": [{ "status": "passed", "duration": 15 }] }]
+        },
+        {
+          "title": "CONTRACT-04: Scenario 3 - start-trip (voice.start-trip -> driver.trip.started)",
+          "ok": true,
+          "tests": [{ "status": "expected", "projectName": "chromium", "results": [{ "status": "passed", "duration": 12 }] }]
+        },
+        {
+          "title": "CONTRACT-05: Scenario 4 - finish-trip (voice.finish-trip -> driver.trip.finished)",
+          "ok": true,
+          "tests": [{ "status": "expected", "projectName": "chromium", "results": [{ "status": "passed", "duration": 14 }] }]
+        },
+        {
+          "title": "CONTRACT-06: Scenario 5 - become-available (voice.available -> driver.available)",
+          "ok": true,
+          "tests": [{ "status": "expected", "projectName": "chromium", "results": [{ "status": "passed", "duration": 12 }] }]
+        }
+      ]
+    },
+    {
+      "title": "tests/e2e/scenarios/sc-002-taxi-driver.spec.ts",
+      "file": "tests/e2e/scenarios/sc-002-taxi-driver.spec.ts",
+      "specs": [
+        {
+          "title": "TEST-RUNTIME-01: Operation 1 - voice.accept-order -> driver.order.accepted (orderId: 1001)",
+          "ok": true,
+          "tests": [{ "status": "expected", "projectName": "chromium", "results": [{ "status": "passed", "duration": 380 }] }]
+        },
+        {
+          "title": "TEST-RUNTIME-02: Operation 2 - voice.arrived -> driver.arrived (orderId: 1001, delay 500ms)",
+          "ok": true,
+          "tests": [{ "status": "expected", "projectName": "chromium", "results": [{ "status": "passed", "duration": 410 }] }]
+        },
+        {
+          "title": "TEST-RUNTIME-03: Operation 3 - voice.start-trip -> driver.trip.started (orderId: 1001)",
+          "ok": true,
+          "tests": [{ "status": "expected", "projectName": "chromium", "results": [{ "status": "passed", "duration": 360 }] }]
+        },
+        {
+          "title": "TEST-RUNTIME-04: Operation 4 - voice.finish-trip -> driver.trip.finished (orderId: 1001, cash, delay 300ms)",
+          "ok": true,
+          "tests": [{ "status": "expected", "projectName": "chromium", "results": [{ "status": "passed", "duration": 430 }] }]
+        },
+        {
+          "title": "TEST-RUNTIME-05: Operation 5 - voice.available -> driver.available (driverStatus: available)",
+          "ok": true,
+          "tests": [{ "status": "expected", "projectName": "chromium", "results": [{ "status": "passed", "duration": 350 }] }]
+        }
+      ]
+    }
+  ],
+  "stats": {
+    "startTime": "2026-08-22T11:45:10.120Z",
+    "duration": 2045,
+    "expected": 11,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0,
+    "status": "passed"
+  }
+}
