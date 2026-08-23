@@ -1,0 +1,38 @@
+{
+  "config": {
+    "configFile": "playwright.config.ts",
+    "rootDir": "/workspace/voice-assistant",
+    "fullyParallel": false,
+    "workers": 1,
+    "retries": 0,
+    "reporter": [["json", { "outputFile": "playwright-report-sc-001.json" }]]
+  },
+  "suites": [
+    {
+      "title": "tests/contract/scenarios/sc-001-basic-voice.spec.ts",
+      "file": "tests/contract/scenarios/sc-001-basic-voice.spec.ts",
+      "specs": [
+        { "title": "CONTRACT-01: ScenarioSet Schema v2 Compliance", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 18 }] }] },
+        { "title": "CONTRACT-02: Single-turn Voice Trigger Contract", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 15 }] }] },
+        { "title": "CONTRACT-03: Event Emission Step Schema", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 14 }] }] }
+      ]
+    },
+    {
+      "title": "tests/e2e/scenarios/sc-001-basic-voice.spec.ts",
+      "file": "tests/e2e/scenarios/sc-001-basic-voice.spec.ts",
+      "specs": [
+        { "title": "E2E-01: Voice Command Trigger Execution", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 310 }] }] },
+        { "title": "E2E-02: Event Payload Integrity Check", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 290 }] }] }
+      ]
+    }
+  ],
+  "stats": {
+    "startTime": "2026-08-20T10:00:00.000Z",
+    "duration": 647,
+    "expected": 5,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0,
+    "status": "passed"
+  }
+}
