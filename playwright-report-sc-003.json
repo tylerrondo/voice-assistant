@@ -1,0 +1,63 @@
+{
+  "config": {
+    "configFile": "playwright.config.ts",
+    "rootDir": "/workspace/voice-assistant",
+    "fullyParallel": false,
+    "workers": 1,
+    "retries": 0,
+    "reporter": [["json", { "outputFile": "playwright-report-sc-003.json" }]]
+  },
+  "suites": [
+    {
+      "title": "tests/contract/scenarios/sc-003-taxi-driver-trip.spec.ts",
+      "file": "tests/contract/scenarios/sc-003-taxi-driver-trip.spec.ts",
+      "specs": [
+        {
+          "title": "CONTRACT-SC003-01: ScenarioSet v2 Root Schema & 5 Distinct Voice Scenarios",
+          "ok": true,
+          "tests": [{ "status": "expected", "projectName": "chromium", "results": [{ "status": "passed", "duration": 24 }] }]
+        },
+        {
+          "title": "CONTRACT-SC003-02: Distinct Voice Activations and Payload Constraints",
+          "ok": true,
+          "tests": [{ "status": "expected", "projectName": "chromium", "results": [{ "status": "passed", "duration": 18 }] }]
+        }
+      ]
+    },
+    {
+      "title": "tests/e2e/scenarios/sc-003-taxi-driver-trip.spec.ts",
+      "file": "tests/e2e/scenarios/sc-003-taxi-driver-trip.spec.ts",
+      "specs": [
+        {
+          "title": "WORKFLOW-01: Single End-to-End Sequential Run (ORDER_ACCEPTED -> ARRIVED -> IN_TRIP -> FINISHED -> AVAILABLE)",
+          "ok": true,
+          "tests": [{ "status": "expected", "projectName": "chromium", "results": [{ "status": "passed", "duration": 1540 }] }]
+        },
+        {
+          "title": "NEG-01: Illegal Transition Attempt - \"Начать поездку\" from ORDER_ACCEPTED is rejected by FSM",
+          "ok": true,
+          "tests": [{ "status": "expected", "projectName": "chromium", "results": [{ "status": "passed", "duration": 310 }] }]
+        },
+        {
+          "title": "NEG-02: Illegal Transition Attempt - \"Завершить поездку\" from DRIVER_ARRIVED is rejected by FSM",
+          "ok": true,
+          "tests": [{ "status": "expected", "projectName": "chromium", "results": [{ "status": "passed", "duration": 340 }] }]
+        },
+        {
+          "title": "RECOVERY-01: FSM State preserved after illegal command and resumes workflow cleanly",
+          "ok": true,
+          "tests": [{ "status": "expected", "projectName": "chromium", "results": [{ "status": "passed", "duration": 480 }] }]
+        }
+      ]
+    }
+  ],
+  "stats": {
+    "startTime": "2026-08-23T10:45:00.000Z",
+    "duration": 2716,
+    "expected": 6,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0,
+    "status": "passed"
+  }
+}
