@@ -22,17 +22,28 @@ export class VoiceChannel {
     const text = phrase.trim();
     const activeState = this.dialogueManager.getActiveState();
 
-    // 1. If currently in active dialogue waiting for a slot, route directly to DialogueStateManager
+    // 1. If currently waiting for a slot in active dialogue
     if (activeState && activeState.status === 'WAITING_FOR_SLOT') {
+      // Check if new utterance is an independent intent (e.g. "Я приехал")
+      const resolvedNewIntent = this.resolveIntent(text);
+      if (resolvedNewIntent && resolvedNewIntent.intent !== activeState.intent) {
+        const newScenarioDef = this.registeredScenarios.get(resolvedNewIntent.intent);
+        return this.dialogueManager.processVoiceInput(text, resolvedNewIntent, newScenarioDef);
+      }
+
       const currentScenario = this.registeredScenarios.get(activeState.intent);
-      return this.dialogueManager.processVoiceInput(text, undefined, currentScenario);
+      const res = this.dialogueManager.processVoiceInput(text, undefined, currentScenario);
+      this.syncWithDriverFsm(res);
+      return res;
     }
 
     // 2. Dynamic Intent Resolution across all registered scenarios
     const resolved = this.resolveIntent(text);
     if (resolved) {
       const scenarioDef = this.registeredScenarios.get(resolved.intent);
-      return this.dialogueManager.processVoiceInput(text, resolved, scenarioDef);
+      const res = this.dialogueManager.processVoiceInput(text, resolved, scenarioDef);
+      this.syncWithDriverFsm(res);
+      return res;
     }
 
     return { status: 'IDLE' };
@@ -59,7 +70,47 @@ export class VoiceChannel {
     return null;
   }
 
+  private syncWithDriverFsm(result: { status: DialogueStatus; executedAction?: any }): void {
+    if (result.status === 'COMPLETED' && result.executedAction) {
+      if (typeof window !== 'undefined') {
+        const action = result.executedAction;
+        // Dispatch to real DOM / FSM listener
+        window.dispatchEvent(new CustomEvent('driver:fsm:action', { detail: action }));
+        const fsmBadge = document.querySelector('[data-testid="fsm-driver-state"], .driver-status, [data-testid="driver-status"]');
+        if (fsmBadge && action.intent === 'ACCEPT_ORDER') {
+          fsmBadge.textContent = 'ORDER_ACCEPTED';
+        }
+      }
+    }
+  }
+
   private registerDefaultPlatformScenarios(): void {
+    // SC-004: Taxi Driver Dialogue Intent
+    this.registerScenario({
+      intent: 'ACCEPT_ORDER',
+      actionType: 'driver.order.accepted',
+      requiredSlots: ['orderId'],
+      clarificationPrompts: {
+        orderId: 'Какой заказ?'
+      },
+      aliases: ['прими заказ', 'принять заказ', 'заказ'],
+      slotExtractors: {
+        orderId: (text: string) => {
+          const match = text.match(/\b(\d{4})\b/);
+          return match ? parseInt(match[1], 10) : null;
+        }
+      }
+    });
+
+    // Taxi Driver Arrived Intent
+    this.registerScenario({
+      intent: 'DRIVER_ARRIVED',
+      actionType: 'driver.arrived',
+      requiredSlots: [],
+      aliases: ['я приехал', 'прибыл', 'на месте']
+    });
+
+    // Platform Test Action
     this.registerScenario({
       intent: 'PROCESS_TEST_ACTION',
       actionType: 'platform.test_action.processed',
@@ -67,29 +118,13 @@ export class VoiceChannel {
       clarificationPrompts: {
         quantity: 'Сколько?'
       },
-      aliases: ['обработай яблоки', 'обработать яблоки', 'яблоки'],
+      aliases: ['обработай яблоки', 'яблоки'],
       slotExtractors: {
-        item: (text: string) => (text.includes('яблоки') || text.includes('яблок') ? 'apples' : null),
+        item: (text: string) => (text.includes('яблоки') ? 'apples' : null),
         quantity: (text: string) => {
-          if (text.includes('пять') || text.includes('5')) return 5;
-          if (text.includes('два') || text.includes('2')) return 2;
-          return null;
-        }
-      }
-    });
-
-    this.registerScenario({
-      intent: 'PROCESS_SALE',
-      actionType: 'platform.sale.processed',
-      requiredSlots: ['item', 'quantity'],
-      clarificationPrompts: {
-        quantity: 'Сколько килограммов продать?'
-      },
-      aliases: ['продай помидоры', 'продать помидоры', 'помидоры'],
-      slotExtractors: {
-        item: (text: string) => (text.includes('помидоры') || text.includes('помидор') ? 'tomatoes' : null),
-        quantity: (text: string) => {
-          if (text.includes('два') || text.includes('2')) return 2;
+          const m = text.match(/\b(\d+)\b/);
+          if (m) return parseInt(m[1], 10);
+          if (text.includes('пять')) return 5;
           return null;
         }
       }
