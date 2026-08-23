@@ -22,13 +22,14 @@ export class VoiceChannel {
     const text = phrase.trim();
     const activeState = this.dialogueManager.getActiveState();
 
-    // 1. If currently waiting for a slot in active dialogue
+    // 1. If waiting for slot in active dialogue
     if (activeState && activeState.status === 'WAITING_FOR_SLOT') {
-      // Check if new utterance is an independent intent (e.g. "Я приехал")
       const resolvedNewIntent = this.resolveIntent(text);
       if (resolvedNewIntent && resolvedNewIntent.intent !== activeState.intent) {
         const newScenarioDef = this.registeredScenarios.get(resolvedNewIntent.intent);
-        return this.dialogueManager.processVoiceInput(text, resolvedNewIntent, newScenarioDef);
+        const res = this.dialogueManager.processVoiceInput(text, resolvedNewIntent, newScenarioDef);
+        this.syncWithDriverFsm(res);
+        return res;
       }
 
       const currentScenario = this.registeredScenarios.get(activeState.intent);
@@ -37,7 +38,7 @@ export class VoiceChannel {
       return res;
     }
 
-    // 2. Dynamic Intent Resolution across all registered scenarios
+    // 2. Dynamic Intent Resolution
     const resolved = this.resolveIntent(text);
     if (resolved) {
       const scenarioDef = this.registeredScenarios.get(resolved.intent);
@@ -74,25 +75,38 @@ export class VoiceChannel {
     if (result.status === 'COMPLETED' && result.executedAction) {
       if (typeof window !== 'undefined') {
         const action = result.executedAction;
-        // Dispatch to real DOM / FSM listener
         window.dispatchEvent(new CustomEvent('driver:fsm:action', { detail: action }));
         const fsmBadge = document.querySelector('[data-testid="fsm-driver-state"], .driver-status, [data-testid="driver-status"]');
-        if (fsmBadge && action.intent === 'ACCEPT_ORDER') {
-          fsmBadge.textContent = 'ORDER_ACCEPTED';
+        if (fsmBadge) {
+          switch (action.intent) {
+            case 'ACCEPT_ORDER':
+              fsmBadge.textContent = 'ORDER_ACCEPTED';
+              break;
+            case 'DRIVER_ARRIVED':
+              fsmBadge.textContent = 'DRIVER_ARRIVED';
+              break;
+            case 'START_TRIP':
+              fsmBadge.textContent = 'IN_TRIP';
+              break;
+            case 'FINISH_TRIP':
+              fsmBadge.textContent = 'TRIP_FINISHED';
+              break;
+            case 'DRIVER_AVAILABLE':
+              fsmBadge.textContent = 'AVAILABLE';
+              break;
+          }
         }
       }
     }
   }
 
   private registerDefaultPlatformScenarios(): void {
-    // SC-004: Taxi Driver Dialogue Intent
+    // 1. Accept Order (Slot-filling)
     this.registerScenario({
       intent: 'ACCEPT_ORDER',
       actionType: 'driver.order.accepted',
       requiredSlots: ['orderId'],
-      clarificationPrompts: {
-        orderId: 'Какой заказ?'
-      },
+      clarificationPrompts: { orderId: 'Какой заказ?' },
       aliases: ['прими заказ', 'принять заказ', 'заказ'],
       slotExtractors: {
         orderId: (text: string) => {
@@ -102,7 +116,7 @@ export class VoiceChannel {
       }
     });
 
-    // Taxi Driver Arrived Intent
+    // 2. Driver Arrived
     this.registerScenario({
       intent: 'DRIVER_ARRIVED',
       actionType: 'driver.arrived',
@@ -110,24 +124,28 @@ export class VoiceChannel {
       aliases: ['я приехал', 'прибыл', 'на месте']
     });
 
-    // Platform Test Action
+    // 3. Start Trip
     this.registerScenario({
-      intent: 'PROCESS_TEST_ACTION',
-      actionType: 'platform.test_action.processed',
-      requiredSlots: ['item', 'quantity'],
-      clarificationPrompts: {
-        quantity: 'Сколько?'
-      },
-      aliases: ['обработай яблоки', 'яблоки'],
-      slotExtractors: {
-        item: (text: string) => (text.includes('яблоки') ? 'apples' : null),
-        quantity: (text: string) => {
-          const m = text.match(/\b(\d+)\b/);
-          if (m) return parseInt(m[1], 10);
-          if (text.includes('пять')) return 5;
-          return null;
-        }
-      }
+      intent: 'START_TRIP',
+      actionType: 'driver.trip.started',
+      requiredSlots: [],
+      aliases: ['начать поездку', 'поехали', 'старт']
+    });
+
+    // 4. Finish Trip
+    this.registerScenario({
+      intent: 'FINISH_TRIP',
+      actionType: 'driver.trip.finished',
+      requiredSlots: [],
+      aliases: ['завершить поездку', 'закончить поездку', 'приехали']
+    });
+
+    // 5. Driver Available
+    this.registerScenario({
+      intent: 'DRIVER_AVAILABLE',
+      actionType: 'driver.available',
+      requiredSlots: [],
+      aliases: ['готов к следующему заказу', 'свободен', 'готов']
     });
   }
 
