@@ -16,13 +16,22 @@ export interface ScenarioDefinition {
   requiredSlots: string[];
   clarificationPrompts?: Record<string, string>;
   actionType: string;
+  aliases?: string[];
+  slotExtractors?: Record<string, (text: string) => any>;
+}
+
+export interface ExecutedAction {
+  intent: string;
+  type: string;
+  payload: Record<string, any>;
+  timestamp: number;
 }
 
 export class DialogueStateManager {
   private activeState: DialogueState | null = null;
   private timeoutTimer: any = null;
   private readonly timeoutMs: number;
-  private readonly executedActions: Array<{ intent: string; payload: any; timestamp: number }> = [];
+  private readonly executedActions: ExecutedAction[] = [];
 
   constructor(timeoutMs = 15000) {
     this.timeoutMs = timeoutMs;
@@ -32,7 +41,7 @@ export class DialogueStateManager {
     return this.activeState;
   }
 
-  public getExecutionLogs() {
+  public getExecutionLogs(): ExecutedAction[] {
     return this.executedActions;
   }
 
@@ -40,13 +49,14 @@ export class DialogueStateManager {
     phrase: string,
     resolvedIntent?: { intent: string; slots: Record<string, any> },
     scenarioDef?: ScenarioDefinition
-  ): { status: DialogueStatus; prompt?: string; executedAction?: any } {
+  ): { status: DialogueStatus; prompt?: string; executedAction?: ExecutedAction } {
     const text = phrase.trim().toLowerCase();
 
     // 1. Cancellation check
     if (text === 'отмена' || text === 'отменить' || text === 'cancel') {
       if (this.activeState) {
         this.activeState.status = 'CANCELLED';
+        this.activeState.updatedAt = Date.now();
         this.clearTimeout();
         return { status: 'CANCELLED' };
       }
@@ -62,9 +72,9 @@ export class DialogueStateManager {
     // 3. Handle Slot Filling when in WAITING_FOR_SLOT
     if (this.activeState && this.activeState.status === 'WAITING_FOR_SLOT') {
       const targetSlot = this.activeState.missingSlots[0];
-      const parsedValue = this.parseSlotValue(targetSlot, text);
+      const parsedValue = this.parseSlotValue(targetSlot, text, scenarioDef);
 
-      if (parsedValue !== null) {
+      if (parsedValue !== null && parsedValue !== undefined) {
         this.activeState.slots[targetSlot] = parsedValue;
         this.activeState.missingSlots.shift();
         this.activeState.updatedAt = Date.now();
@@ -73,9 +83,13 @@ export class DialogueStateManager {
           this.activeState.status = 'COMPLETED';
           this.clearTimeout();
 
-          const finalAction = {
+          if (!scenarioDef) {
+            throw new Error(`ScenarioDefinition missing for completed intent: ${this.activeState.intent}`);
+          }
+
+          const finalAction: ExecutedAction = {
             intent: this.activeState.intent,
-            type: scenarioDef?.actionType || 'platform.test_action.processed',
+            type: scenarioDef.actionType,
             payload: { ...this.activeState.slots },
             timestamp: Date.now()
           };
@@ -96,7 +110,7 @@ export class DialogueStateManager {
           };
         }
       } else {
-        // Invalid answer preserves context and re-prompts
+        // Invalid answer preserves context and returns existing prompt
         return {
           status: 'WAITING_FOR_SLOT',
           prompt: this.activeState.clarificationPrompt
@@ -104,7 +118,7 @@ export class DialogueStateManager {
       }
     }
 
-    // 4. Initial Incomplete Command Handling
+    // 4. Initial Incomplete / Complete Command Handling
     if (resolvedIntent && scenarioDef) {
       const required = scenarioDef.requiredSlots || [];
       const providedSlots = resolvedIntent.slots || {};
@@ -112,7 +126,7 @@ export class DialogueStateManager {
 
       if (missing.length > 0) {
         const firstMissing = missing[0];
-        const prompt = scenarioDef.clarificationPrompts?.[firstMissing] || 'Сколько?';
+        const prompt = scenarioDef.clarificationPrompts?.[firstMissing] || 'Уточните значение';
 
         this.activeState = {
           dialogueStateId: `ds-${Date.now()}`,
@@ -131,8 +145,7 @@ export class DialogueStateManager {
           prompt
         };
       } else {
-        // All slots present initially
-        const action = {
+        const action: ExecutedAction = {
           intent: resolvedIntent.intent,
           type: scenarioDef.actionType,
           payload: providedSlots,
@@ -146,14 +159,18 @@ export class DialogueStateManager {
     return { status: this.activeState?.status || 'IDLE' };
   }
 
-  public triggerTimeout() {
+  public triggerTimeout(): void {
     if (this.activeState && this.activeState.status === 'WAITING_FOR_SLOT') {
       this.activeState.status = 'EXPIRED';
       this.activeState.updatedAt = Date.now();
     }
   }
 
-  private parseSlotValue(slotName: string, text: string): any {
+  private parseSlotValue(slotName: string, text: string, scenarioDef?: ScenarioDefinition): any {
+    if (scenarioDef?.slotExtractors && scenarioDef.slotExtractors[slotName]) {
+      return scenarioDef.slotExtractors[slotName](text);
+    }
+
     if (slotName === 'quantity') {
       if (text.includes('пять') || text.includes('5')) return 5;
       if (text.includes('два') || text.includes('2')) return 2;
@@ -161,17 +178,18 @@ export class DialogueStateManager {
       const num = parseInt(text, 10);
       return isNaN(num) ? null : num;
     }
+
     return text.length > 0 ? text : null;
   }
 
-  private resetTimeout() {
+  private resetTimeout(): void {
     this.clearTimeout();
     this.timeoutTimer = setTimeout(() => {
       this.triggerTimeout();
     }, this.timeoutMs);
   }
 
-  private clearTimeout() {
+  private clearTimeout(): void {
     if (this.timeoutTimer) {
       clearTimeout(this.timeoutTimer);
       this.timeoutTimer = null;
