@@ -19,13 +19,16 @@ test.describe('CONTRACT: Dialogue State & Slot-Filling Schema Suite (ТЗ-VOICE-
     expect(sc.clarificationPrompts.quantity).toBe('Сколько?');
   });
 
-  test('CONTRACT-DS-02: Dialogue State Schema & Lifecycle Transitions', async () => {
-    const allowedStatuses = ['IDLE', 'WAITING_FOR_SLOT', 'COMPLETED', 'CANCELLED', 'EXPIRED'];
-    expect(allowedStatuses).toHaveLength(5);
-    expect(allowedStatuses).toContain('WAITING_FOR_SLOT');
-    expect(allowedStatuses).toContain('COMPLETED');
-    expect(allowedStatuses).toContain('CANCELLED');
-    expect(allowedStatuses).toContain('EXPIRED');
+  test('CONTRACT-DS-02: Scenario Payload & Slot Interpolation Schema Contract', async () => {
+    const sc = scenarioSet.scenarios[0];
+    const emitStep = sc.steps.find((s: any) => s.kind === 'emit');
+    expect(emitStep).toBeDefined();
+    expect(emitStep.event.type).toBe('platform.test_action.processed');
+    expect(emitStep.event.payload.item).toBe('{{slots.item}}');
+    expect(emitStep.event.payload.quantity).toBe('{{slots.quantity}}');
+    
+    const endStep = sc.steps[sc.steps.length - 1];
+    expect(endStep.kind).toBe('end');
   });
 
 });
