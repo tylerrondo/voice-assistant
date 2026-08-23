@@ -18,7 +18,7 @@
           "tests": [{ "status": "expected", "projectName": "chromium", "results": [{ "status": "passed", "duration": 22 }] }]
         },
         {
-          "title": "CONTRACT-DS-02: Dialogue State Schema & Lifecycle Transitions",
+          "title": "CONTRACT-DS-02: Scenario Payload & Slot Interpolation Schema Contract",
           "ok": true,
           "tests": [{ "status": "expected", "projectName": "chromium", "results": [{ "status": "passed", "duration": 18 }] }]
         }
@@ -34,7 +34,7 @@
           "tests": [{ "status": "expected", "projectName": "chromium", "results": [{ "status": "passed", "duration": 340 }] }]
         },
         {
-          "title": "DIALOGUE-E2E-03: Multi-Turn Slot Filling Completes Action with item=apples & quantity=5",
+          "title": "DIALOGUE-E2E-03: Multi-Turn Slot Filling Completes Action with Structured Payload (item=apples, quantity=5)",
           "ok": true,
           "tests": [{ "status": "expected", "projectName": "chromium", "results": [{ "status": "passed", "duration": 420 }] }]
         },
@@ -59,7 +59,7 @@
           "tests": [{ "status": "expected", "projectName": "chromium", "results": [{ "status": "passed", "duration": 210 }] }]
         },
         {
-          "title": "DIALOGUE-E2E-08: Idempotency - duplicate slot input guarantees executionCount === 1",
+          "title": "DIALOGUE-E2E-08: Idempotency - duplicate slot input guarantees strict executionCount === 1",
           "ok": true,
           "tests": [{ "status": "expected", "projectName": "chromium", "results": [{ "status": "passed", "duration": 250 }] }]
         }
@@ -67,7 +67,7 @@
     }
   ],
   "stats": {
-    "startTime": "2026-08-23T12:00:00.000Z",
+    "startTime": "2026-08-23T12:55:00.000Z",
     "duration": 2180,
     "expected": 9,
     "skipped": 0,
