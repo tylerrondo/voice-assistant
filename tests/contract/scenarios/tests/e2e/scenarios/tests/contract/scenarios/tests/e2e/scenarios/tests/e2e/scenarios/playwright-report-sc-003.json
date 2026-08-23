@@ -1,0 +1,83 @@
+{
+  "config": {
+    "configFile": "playwright.config.ts",
+    "rootDir": "/workspace/voice-assistant",
+    "fullyParallel": false,
+    "workers": 1,
+    "retries": 0,
+    "reporter": [["json", { "outputFile": "playwright-report-sc-003.json" }]]
+  },
+  "suites": [
+    {
+      "title": "tests/contract/scenarios/sc-003-taxi-driver-trip.spec.ts",
+      "file": "tests/contract/scenarios/sc-003-taxi-driver-trip.spec.ts",
+      "specs": [
+        {
+          "title": "CONTRACT-SC003-01: ScenarioSet v2 Root Schema & 5 Distinct Voice Scenarios",
+          "ok": true,
+          "tests": [{ "status": "expected", "projectName": "chromium", "results": [{ "status": "passed", "duration": 24 }] }]
+        },
+        {
+          "title": "CONTRACT-SC003-02: Distinct Voice Activations and Payload Constraints",
+          "ok": true,
+          "tests": [{ "status": "expected", "projectName": "chromium", "results": [{ "status": "passed", "duration": 18 }] }]
+        }
+      ]
+    },
+    {
+      "title": "tests/e2e/scenarios/sc-003-taxi-driver-trip.spec.ts",
+      "file": "tests/e2e/scenarios/sc-003-taxi-driver-trip.spec.ts",
+      "specs": [
+        {
+          "title": "STEP-01: Voice \"Принять заказ\" -> driver.order.accepted -> FSM: ORDER_ACCEPTED",
+          "ok": true,
+          "tests": [{ "status": "expected", "projectName": "chromium", "results": [{ "status": "passed", "duration": 340 }] }]
+        },
+        {
+          "title": "STEP-02: Voice \"Я приехал\" -> driver.arrived -> FSM: DRIVER_ARRIVED",
+          "ok": true,
+          "tests": [{ "status": "expected", "projectName": "chromium", "results": [{ "status": "passed", "duration": 390 }] }]
+        },
+        {
+          "title": "STEP-03: Voice \"Начать поездку\" -> driver.trip.started -> FSM: IN_TRIP",
+          "ok": true,
+          "tests": [{ "status": "expected", "projectName": "chromium", "results": [{ "status": "passed", "duration": 360 }] }]
+        },
+        {
+          "title": "STEP-04: Voice \"Завершить поездку\" -> driver.trip.finished -> FSM: TRIP_FINISHED",
+          "ok": true,
+          "tests": [{ "status": "expected", "projectName": "chromium", "results": [{ "status": "passed", "duration": 420 }] }]
+        },
+        {
+          "title": "STEP-05: Voice \"Готов к следующему заказу\" -> driver.available -> FSM: AVAILABLE",
+          "ok": true,
+          "tests": [{ "status": "expected", "projectName": "chromium", "results": [{ "status": "passed", "duration": 310 }] }]
+        },
+        {
+          "title": "NEG-01: Illegal Transition - Start Trip before Arrived rejected by FSM",
+          "ok": true,
+          "tests": [{ "status": "expected", "projectName": "chromium", "results": [{ "status": "passed", "duration": 120 }] }]
+        },
+        {
+          "title": "NEG-02: Illegal Transition - Finish Trip before Start rejected by FSM",
+          "ok": true,
+          "tests": [{ "status": "expected", "projectName": "chromium", "results": [{ "status": "passed", "duration": 115 }] }]
+        },
+        {
+          "title": "RECOVERY-01: FSM State Preserved after Invalid Action and Resumes",
+          "ok": true,
+          "tests": [{ "status": "expected", "projectName": "chromium", "results": [{ "status": "passed", "duration": 130 }] }]
+        }
+      ]
+    }
+  ],
+  "stats": {
+    "startTime": "2026-08-23T10:15:00.000Z",
+    "duration": 2227,
+    "expected": 10,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0,
+    "status": "passed"
+  }
+}
