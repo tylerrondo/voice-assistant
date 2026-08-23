@@ -1,0 +1,35 @@
+{
+  "version": 2,
+  "id": "scenario-set-sc-004-taxi-driver-dialogue",
+  "name": "Taxi Driver Multi-Turn Dialogue & Slot-Filling Workflow",
+  "description": "Многошаговый голосовой сценарий водителя такси с дозапросом номера заказа (orderId) через Dialogue State и переводом рабочего FSM в ORDER_ACCEPTED.",
+  "scenarios": [
+    {
+      "id": "sc004-accept-order-dialogue",
+      "name": "Принятие заказа с уточнением номера",
+      "activation": {
+        "type": "voice",
+        "value": "voice.accept-order"
+      },
+      "intent": "ACCEPT_ORDER",
+      "requiredSlots": ["orderId"],
+      "clarificationPrompts": {
+        "orderId": "Какой заказ?"
+      },
+      "steps": [
+        {
+          "kind": "emit",
+          "event": {
+            "type": "driver.order.accepted",
+            "payload": {
+              "orderId": "{{slots.orderId}}"
+            }
+          }
+        },
+        {
+          "kind": "end"
+        }
+      ]
+    }
+  ]
+}
