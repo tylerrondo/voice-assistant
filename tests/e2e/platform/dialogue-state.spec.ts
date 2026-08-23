@@ -16,34 +16,25 @@ test.describe('E2E: Strict Platform Dialogue State & Multi-Turn Slot-Filling Sui
   }
 
   async function emitVoicePhrase(page: any, phrase: string) {
-    const voiceInput = page.locator('[data-testid="voice-input"], input[placeholder*="голос"], input[name="voiceText"]').first();
-    if (await voiceInput.isVisible()) {
-      await voiceInput.fill(phrase);
-      await voiceInput.press('Enter');
-    } else {
-      await page.evaluate((text: string) => {
-        if ((window as any).__VOICE_CHANNEL__) {
-          (window as any).__VOICE_CHANNEL__.handleIncomingVoice(text);
-        } else if ((window as any).__DISPATCH_VOICE_COMMAND__) {
-          (window as any).__DISPATCH_VOICE_COMMAND__(text);
-        } else {
-          window.dispatchEvent(new CustomEvent('voice:command', { detail: { phrase: text } }));
-        }
-      }, phrase);
-    }
+    await page.evaluate(async (text: string) => {
+      const channel = (window as any).__VOICE_CHANNEL__;
+      if (!channel) {
+        throw new Error('VoiceChannel production instance is not initialized on window.__VOICE_CHANNEL__');
+      }
+      return channel.handleIncomingVoice(text);
+    }, phrase);
   }
 
   test('DIALOGUE-E2E-01 & 02: Incomplete Voice Command -> WAITING_FOR_SLOT, missing quantity & Clarification Prompt', async ({ page }) => {
     await setupApp(page);
     await emitVoicePhrase(page, 'Обработай яблоки');
 
-    // 1. Check Dialogue State is WAITING_FOR_SLOT directly from DialogueStateManager runtime
     const state = await page.evaluate(() => {
       const dm = (window as any).__DIALOGUE_MANAGER__;
       return dm ? dm.getActiveState() : null;
     });
 
-    expect(state).toBeDefined();
+    expect(state).not.toBeNull();
     expect(state.status).toBe('WAITING_FOR_SLOT');
     expect(state.intent).toBe('PROCESS_TEST_ACTION');
     expect(state.slots).toEqual({ item: 'apples' });
@@ -56,7 +47,6 @@ test.describe('E2E: Strict Platform Dialogue State & Multi-Turn Slot-Filling Sui
     await emitVoicePhrase(page, 'Обработай яблоки');
     await emitVoicePhrase(page, 'Пять');
 
-    // 1. Dialogue State transitions to COMPLETED in DialogueStateManager
     const state = await page.evaluate(() => {
       const dm = (window as any).__DIALOGUE_MANAGER__;
       return dm ? dm.getActiveState() : null;
@@ -65,7 +55,6 @@ test.describe('E2E: Strict Platform Dialogue State & Multi-Turn Slot-Filling Sui
     expect(state.status).toBe('COMPLETED');
     expect(state.slots).toEqual({ item: 'apples', quantity: 5 });
 
-    // 2. Action executed through DialogueStateManager execution logs
     const executedPayload = await page.evaluate(() => {
       const dm = (window as any).__DIALOGUE_MANAGER__;
       const logs = dm ? dm.getExecutionLogs() : [];
@@ -136,6 +125,7 @@ test.describe('E2E: Strict Platform Dialogue State & Multi-Turn Slot-Filling Sui
 
     expect(state.intent).toBe('PROCESS_SALE');
     expect(state.slots).toEqual({ item: 'tomatoes' });
+    expect(state.status).toBe('WAITING_FOR_SLOT');
   });
 
   test('DIALOGUE-E2E-07: Inactivity Timeout triggers EXPIRED Dialogue State in DialogueStateManager', async ({ page }) => {
