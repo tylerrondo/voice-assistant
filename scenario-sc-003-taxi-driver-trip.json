@@ -1,0 +1,88 @@
+{
+  "version": 2,
+  "id": "scenario-set-sc-003-taxi-driver-trip",
+  "name": "Taxi Driver End-to-End Trip Workflow",
+  "description": "Сквозной рабочий сценарий выполнения поездки водителем такси (orderId: 1001) с контролем FSM состояний, негативных переходов и recovery.",
+  "scenarios": [
+    {
+      "id": "sc-003-taxi-driver-trip-workflow",
+      "name": "Сквозной цикл выполнения заказа #1001",
+      "activation": {
+        "type": "voice",
+        "value": "voice.taxi.driver"
+      },
+      "steps": [
+        {
+          "kind": "emit",
+          "event": {
+            "type": "driver.order.accepted",
+            "payload": {
+              "orderId": 1001,
+              "targetState": "ORDER_ACCEPTED"
+            }
+          }
+        },
+        {
+          "kind": "delay",
+          "ms": 500
+        },
+        {
+          "kind": "emit",
+          "event": {
+            "type": "driver.arrived",
+            "payload": {
+              "orderId": 1001,
+              "targetState": "DRIVER_ARRIVED"
+            }
+          }
+        },
+        {
+          "kind": "delay",
+          "ms": 500
+        },
+        {
+          "kind": "emit",
+          "event": {
+            "type": "driver.trip.started",
+            "payload": {
+              "orderId": 1001,
+              "targetState": "IN_TRIP"
+            }
+          }
+        },
+        {
+          "kind": "delay",
+          "ms": 500
+        },
+        {
+          "kind": "emit",
+          "event": {
+            "type": "driver.trip.finished",
+            "payload": {
+              "orderId": 1001,
+              "payment": "cash",
+              "targetState": "TRIP_FINISHED"
+            }
+          }
+        },
+        {
+          "kind": "delay",
+          "ms": 500
+        },
+        {
+          "kind": "emit",
+          "event": {
+            "type": "driver.available",
+            "payload": {
+              "driverStatus": "available",
+              "targetState": "AVAILABLE"
+            }
+          }
+        },
+        {
+          "kind": "end"
+        }
+      ]
+    }
+  ]
+}
