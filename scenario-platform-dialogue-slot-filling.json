@@ -1,0 +1,36 @@
+{
+  "version": 2,
+  "id": "scenario-set-platform-dialogue-slot-filling",
+  "name": "Platform Dialogue State & Slot-Filling Workflow",
+  "description": "Универсальный платформенный сценарий проверки Multi-Turn Dialogue State и Slot-Filling для неполных команд (PROCESS_TEST_ACTION: item + quantity).",
+  "scenarios": [
+    {
+      "id": "sc-dialogue-process-test-action",
+      "name": "Обработка тестового действия со слот-филлингом",
+      "activation": {
+        "type": "voice",
+        "value": "voice.process-test-action"
+      },
+      "intent": "PROCESS_TEST_ACTION",
+      "requiredSlots": ["item", "quantity"],
+      "clarificationPrompts": {
+        "quantity": "Сколько?"
+      },
+      "steps": [
+        {
+          "kind": "emit",
+          "event": {
+            "type": "platform.test_action.processed",
+            "payload": {
+              "item": "{{slots.item}}",
+              "quantity": "{{slots.quantity}}"
+            }
+          }
+        },
+        {
+          "kind": "end"
+        }
+      ]
+    }
+  ]
+}
