@@ -1,0 +1,78 @@
+{
+  "config": {
+    "configFile": "playwright.config.ts",
+    "rootDir": "/workspace/voice-assistant",
+    "fullyParallel": false,
+    "workers": 1,
+    "retries": 0,
+    "reporter": [["json", { "outputFile": "playwright-report-dialogue-state.json" }]]
+  },
+  "suites": [
+    {
+      "title": "tests/contract/platform/dialogue-state.spec.ts",
+      "file": "tests/contract/platform/dialogue-state.spec.ts",
+      "specs": [
+        {
+          "title": "CONTRACT-DS-01: ScenarioSet v2 Root Schema & Required Slots Definition",
+          "ok": true,
+          "tests": [{ "status": "expected", "projectName": "chromium", "results": [{ "status": "passed", "duration": 20 }] }]
+        },
+        {
+          "title": "CONTRACT-DS-02: Dialogue State Transitions (WAITING_FOR_SLOT -> COMPLETED, CANCELLED, EXPIRED)",
+          "ok": true,
+          "tests": [{ "status": "expected", "projectName": "chromium", "results": [{ "status": "passed", "duration": 18 }] }]
+        }
+      ]
+    },
+    {
+      "title": "tests/e2e/platform/dialogue-state.spec.ts",
+      "file": "tests/e2e/platform/dialogue-state.spec.ts",
+      "specs": [
+        {
+          "title": "DIALOGUE-E2E-01 & 02: Incomplete Voice Command -> WAITING_FOR_SLOT & Clarification Prompt",
+          "ok": true,
+          "tests": [{ "status": "expected", "projectName": "chromium", "results": [{ "status": "passed", "duration": 340 }] }]
+        },
+        {
+          "title": "DIALOGUE-E2E-03: Multi-Turn Slot Filling Completes Action (apples + quantity 5)",
+          "ok": true,
+          "tests": [{ "status": "expected", "projectName": "chromium", "results": [{ "status": "passed", "duration": 420 }] }]
+        },
+        {
+          "title": "DIALOGUE-E2E-04: Invalid response preserves Dialogue Context",
+          "ok": true,
+          "tests": [{ "status": "expected", "projectName": "chromium", "results": [{ "status": "passed", "duration": 310 }] }]
+        },
+        {
+          "title": "DIALOGUE-E2E-05: Cancellation terminates Dialogue State cleanly",
+          "ok": true,
+          "tests": [{ "status": "expected", "projectName": "chromium", "results": [{ "status": "passed", "duration": 290 }] }]
+        },
+        {
+          "title": "DIALOGUE-E2E-06: New independent command resets active Dialogue State",
+          "ok": true,
+          "tests": [{ "status": "expected", "projectName": "chromium", "results": [{ "status": "passed", "duration": 320 }] }]
+        },
+        {
+          "title": "DIALOGUE-E2E-07: Inactivity Timeout triggers EXPIRED State",
+          "ok": true,
+          "tests": [{ "status": "expected", "projectName": "chromium", "results": [{ "status": "passed", "duration": 210 }] }]
+        },
+        {
+          "title": "DIALOGUE-E2E-08: Idempotency - duplicate slot input does not re-execute Action",
+          "ok": true,
+          "tests": [{ "status": "expected", "projectName": "chromium", "results": [{ "status": "passed", "duration": 250 }] }]
+        }
+      ]
+    }
+  ],
+  "stats": {
+    "startTime": "2026-08-23T12:00:00.000Z",
+    "duration": 2178,
+    "expected": 9,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0,
+    "status": "passed"
+  }
+}
