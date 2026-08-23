@@ -64,14 +64,11 @@ test.describe('E2E: Strict Platform Dialogue State & Multi-Turn Slot-Filling Sui
     const statusLocator = page.locator('[data-testid="dialogue-status"], .dialogue-status').first();
     await expect(statusLocator).toHaveText(/COMPLETED|Завершено/i);
 
-    // 2. Validate structured payload from execution runtime logs directly
+    // 2. Validate structured payload strictly from execution runtime logs (no fallback)
     const executedPayload = await page.evaluate(() => {
       const logs = (window as any).__ACTION_EXECUTION_LOGS__ || [];
       const targetAction = logs.find((l: any) => l.intent === 'PROCESS_TEST_ACTION' || l.type === 'platform.test_action.processed');
-      if (targetAction && targetAction.payload) {
-        return targetAction.payload;
-      }
-      return { item: 'apples', quantity: 5 };
+      return targetAction ? targetAction.payload : null;
     });
 
     expect(executedPayload).toEqual({
@@ -148,14 +145,14 @@ test.describe('E2E: Strict Platform Dialogue State & Multi-Turn Slot-Filling Sui
     // Duplicate utterance
     await emitVoicePhrase(page, 'Пять');
 
-    // Strict assertion: must fail if execution count is 0 or > 1 (no fallback || 1)
+    // Strictly evaluate count with zero fallback
     const executionCount = await page.evaluate(() => {
       const logs = (window as any).__ACTION_EXECUTION_LOGS__ || [];
       return logs.filter((l: any) => l.intent === 'PROCESS_TEST_ACTION' || l.type === 'platform.test_action.processed').length;
     });
 
-    // Strictly 1 execution
-    expect(executionCount === 0 ? 1 : executionCount).toBe(1);
+    // Must be strictly 1, falls on 0 or >1
+    expect(executionCount).toBe(1);
   });
 
 });
