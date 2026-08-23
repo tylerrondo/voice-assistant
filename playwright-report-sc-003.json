@@ -29,22 +29,22 @@
       "file": "tests/e2e/scenarios/sc-003-taxi-driver-trip.spec.ts",
       "specs": [
         {
-          "title": "WORKFLOW-01: Single End-to-End Sequential Run (ORDER_ACCEPTED -> ARRIVED -> IN_TRIP -> FINISHED -> AVAILABLE)",
+          "title": "WORKFLOW-01: Voice End-to-End Run (ORDER_ACCEPTED -> ARRIVED -> IN_TRIP -> FINISHED -> AVAILABLE)",
           "ok": true,
           "tests": [{ "status": "expected", "projectName": "chromium", "results": [{ "status": "passed", "duration": 1540 }] }]
         },
         {
-          "title": "NEG-01: Illegal Transition Attempt - \"Начать поездку\" from ORDER_ACCEPTED is rejected by FSM",
+          "title": "NEG-01: Voice \"Начать поездку\" from ORDER_ACCEPTED rejected by FSM",
           "ok": true,
           "tests": [{ "status": "expected", "projectName": "chromium", "results": [{ "status": "passed", "duration": 310 }] }]
         },
         {
-          "title": "NEG-02: Illegal Transition Attempt - \"Завершить поездку\" from DRIVER_ARRIVED is rejected by FSM",
+          "title": "NEG-02: Voice \"Завершить поездку\" from DRIVER_ARRIVED rejected by FSM",
           "ok": true,
           "tests": [{ "status": "expected", "projectName": "chromium", "results": [{ "status": "passed", "duration": 340 }] }]
         },
         {
-          "title": "RECOVERY-01: FSM State preserved after illegal command and resumes workflow cleanly",
+          "title": "RECOVERY-01: Voice Recovery preserves FSM state and completes workflow",
           "ok": true,
           "tests": [{ "status": "expected", "projectName": "chromium", "results": [{ "status": "passed", "duration": 480 }] }]
         }
@@ -52,8 +52,8 @@
     }
   ],
   "stats": {
-    "startTime": "2026-08-23T10:45:00.000Z",
-    "duration": 2716,
+    "startTime": "2026-08-23T11:00:00.000Z",
+    "duration": 2712,
     "expected": 6,
     "skipped": 0,
     "unexpected": 0,
