@@ -1,0 +1,37 @@
+{
+  "version": 2,
+  "id": "scenario-set-platform-010-multi-context",
+  "name": "Platform Multi-Context Session Manager Scenario",
+  "description": "Платформенный сценарий для валидации удержания нескольких одновременных Dialogue Contexts, маршрутизации и изолированного исполнения.",
+  "scenarios": [
+    {
+      "id": "platform010-accept-order",
+      "name": "Принятие заказа в многоконтекстной сессии",
+      "activation": {
+        "type": "voice",
+        "value": "voice.accept-order"
+      },
+      "intent": "ACCEPT_ORDER",
+      "requiredSlots": ["orderId", "payment"],
+      "clarificationPrompts": {
+        "orderId": "Какой заказ?",
+        "payment": "Какой способ оплаты?"
+      },
+      "steps": [
+        {
+          "kind": "emit",
+          "event": {
+            "type": "driver.order.accepted",
+            "payload": {
+              "orderId": "{{slots.orderId}}",
+              "payment": "{{slots.payment}}"
+            }
+          }
+        },
+        {
+          "kind": "end"
+        }
+      ]
+    }
+  ]
+}
