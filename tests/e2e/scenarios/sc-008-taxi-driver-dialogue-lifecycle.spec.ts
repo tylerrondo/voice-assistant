@@ -10,15 +10,12 @@ test.describe('E2E: SC-008 Dialogue Lifecycle, Cancellation & Recovery Suite (Т
     await page.goto(appUrl);
     await expect(page.locator('body')).toBeVisible();
 
-    // 1. Explicit External File upload
     const fileInput = page.locator('input[type="file"]').first();
     await fileInput.setInputFiles(scenarioFilePath);
     
-    // BLOCKER-1 FIX: Strict active ScenarioSet ID verification without ANY fallback
+    // Strict active ScenarioSet ID verification without fallback
     const activeSetId = await page.evaluate(() => {
-      const dm = (window as any).__DIALOGUE_MANAGER__;
-      const se = (window as any).__SCENARIO_ENGINE__ || (window as any).__SCENARIO_MANAGER__;
-      return dm?.getActiveScenarioSetId?.() || se?.getActiveScenarioSetId?.();
+      return (window as any).__SCENARIO_ENGINE__.getActiveScenarioSetId();
     });
     expect(activeSetId).toBe('scenario-set-sc-008-taxi-driver-dialogue-lifecycle');
   }
@@ -49,7 +46,7 @@ test.describe('E2E: SC-008 Dialogue Lifecycle, Cancellation & Recovery Suite (Т
 
     const executions1001 = await page.evaluate(() => {
       const logs = (window as any).__DIALOGUE_MANAGER__.getExecutionLogs();
-      return logs.filter((l: any) => (l.intent === 'ACCEPT_ORDER' || l.event?.type === 'driver.order.accepted') && l.payload?.orderId === 1001);
+      return logs.filter((l: any) => l.event.type === 'driver.order.accepted' && l.event.payload.orderId === 1001);
     });
     expect(executions1001.length).toBe(0);
   });
@@ -75,12 +72,11 @@ test.describe('E2E: SC-008 Dialogue Lifecycle, Cancellation & Recovery Suite (Т
     await emitVoicePhrase(page, '1001');
     await emitVoicePhrase(page, 'Отмена');
 
-    // Attempt to supply second slot after cancellation
     await emitVoicePhrase(page, 'Картой');
 
     const executions1001Card = await page.evaluate(() => {
       const logs = (window as any).__DIALOGUE_MANAGER__.getExecutionLogs();
-      return logs.filter((l: any) => (l.intent === 'ACCEPT_ORDER' || l.event?.type === 'driver.order.accepted') && l.payload?.orderId === 1001);
+      return logs.filter((l: any) => l.event.type === 'driver.order.accepted' && l.event.payload.orderId === 1001);
     });
     expect(executions1001Card.length).toBe(0);
   });
@@ -98,21 +94,20 @@ test.describe('E2E: SC-008 Dialogue Lifecycle, Cancellation & Recovery Suite (Т
     await emitVoicePhrase(page, 'Прими заказ 1002');
     await emitVoicePhrase(page, 'Наличными');
 
-    // BLOCKER-2 & HIGH-4 FIX: Assert intent, concrete event driver.order.accepted, exact payload and FSM state
+    // Strict single event.type assertion without OR alternatives
     const logs = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getExecutionLogs());
     const match1002 = logs.filter((l: any) => 
-      l.intent === 'ACCEPT_ORDER' && 
-      (l.event?.type === 'driver.order.accepted' || l.eventType === 'driver.order.accepted' || l.action === 'driver.order.accepted') &&
-      l.payload?.orderId === 1002 && 
-      l.payload?.payment === 'cash'
+      l.event.type === 'driver.order.accepted' &&
+      l.event.payload.orderId === 1002 && 
+      l.event.payload.payment === 'cash'
     );
     const match1001 = logs.filter((l: any) => 
-      (l.intent === 'ACCEPT_ORDER' || l.event?.type === 'driver.order.accepted') && 
-      l.payload?.orderId === 1001
+      l.event.type === 'driver.order.accepted' && 
+      l.event.payload.orderId === 1001
     );
 
     expect(match1002.length).toBe(1);
-    expect(match1002[0].payload).toEqual({ orderId: 1002, payment: 'cash' });
+    expect(match1002[0].event.payload).toEqual({ orderId: 1002, payment: 'cash' });
     expect(match1001.length).toBe(0);
 
     // Complete deterministic chain assertion: execution directly produced FSM transition to ORDER_ACCEPTED
@@ -150,14 +145,13 @@ test.describe('E2E: SC-008 Dialogue Lifecycle, Cancellation & Recovery Suite (Т
     const matching1001Card = await page.evaluate(() => {
       const logs = (window as any).__DIALOGUE_MANAGER__.getExecutionLogs();
       return logs.filter((l: any) => 
-        l.intent === 'ACCEPT_ORDER' && 
-        (l.event?.type === 'driver.order.accepted' || l.eventType === 'driver.order.accepted' || l.action === 'driver.order.accepted') &&
-        l.payload?.orderId === 1001 && 
-        l.payload?.payment === 'card'
+        l.event.type === 'driver.order.accepted' &&
+        l.event.payload.orderId === 1001 && 
+        l.event.payload.payment === 'card'
       );
     });
     expect(matching1001Card.length).toBe(1);
-    expect(matching1001Card[0].payload).toEqual({ orderId: 1001, payment: 'card' });
+    expect(matching1001Card[0].event.payload).toEqual({ orderId: 1001, payment: 'card' });
 
     await expect(fsmLocator).toHaveText(/ORDER_ACCEPTED|Принят/i);
   });
@@ -173,10 +167,9 @@ test.describe('E2E: SC-008 Dialogue Lifecycle, Cancellation & Recovery Suite (Т
     const executionCount = await page.evaluate(() => {
       const logs = (window as any).__DIALOGUE_MANAGER__.getExecutionLogs();
       return logs.filter((l: any) => 
-        l.intent === 'ACCEPT_ORDER' && 
-        (l.event?.type === 'driver.order.accepted' || l.eventType === 'driver.order.accepted' || l.action === 'driver.order.accepted') &&
-        l.payload?.orderId === 1001 && 
-        l.payload?.payment === 'card'
+        l.event.type === 'driver.order.accepted' &&
+        l.event.payload.orderId === 1001 && 
+        l.event.payload.payment === 'card'
       ).length;
     });
     expect(executionCount).toBe(1);
@@ -192,7 +185,7 @@ test.describe('E2E: SC-008 Dialogue Lifecycle, Cancellation & Recovery Suite (Т
 
     const executions = await page.evaluate(() => {
       const logs = (window as any).__DIALOGUE_MANAGER__.getExecutionLogs();
-      return logs.filter((l: any) => l.intent === 'ACCEPT_ORDER' || l.event?.type === 'driver.order.accepted');
+      return logs.filter((l: any) => l.event.type === 'driver.order.accepted');
     });
     expect(executions.length).toBe(0);
   });
@@ -204,18 +197,18 @@ test.describe('E2E: SC-008 Dialogue Lifecycle, Cancellation & Recovery Suite (Т
     await emitVoicePhrase(page, '1001');
     await emitVoicePhrase(page, 'Отмена');
 
-    // HIGH-3 FIX: Assert cancelled order is 0 AND concrete driver.arrived production event is strictly executed
+    // Strict single event.type assertion without OR alternatives
     await emitVoicePhrase(page, 'Я приехал');
 
     const acceptExecutions = await page.evaluate(() => {
       const logs = (window as any).__DIALOGUE_MANAGER__.getExecutionLogs();
-      return logs.filter((l: any) => (l.intent === 'ACCEPT_ORDER' || l.event?.type === 'driver.order.accepted') && l.payload?.orderId === 1001);
+      return logs.filter((l: any) => l.event.type === 'driver.order.accepted' && l.event.payload.orderId === 1001);
     });
     expect(acceptExecutions.length).toBe(0);
 
     const arrivedExecutions = await page.evaluate(() => {
       const logs = (window as any).__DIALOGUE_MANAGER__.getExecutionLogs();
-      return logs.filter((l: any) => l.intent === 'DRIVER_ARRIVED' || l.event?.type === 'driver.arrived' || l.eventType === 'driver.arrived' || l.action === 'driver.arrived');
+      return logs.filter((l: any) => l.event.type === 'driver.arrived');
     });
     expect(arrivedExecutions.length).toBe(1);
   });
@@ -248,10 +241,9 @@ test.describe('E2E: SC-008 Dialogue Lifecycle, Cancellation & Recovery Suite (Т
     const executionCount = await page.evaluate(() => {
       const logs = (window as any).__DIALOGUE_MANAGER__.getExecutionLogs();
       return logs.filter((l: any) => 
-        l.intent === 'ACCEPT_ORDER' && 
-        (l.event?.type === 'driver.order.accepted' || l.eventType === 'driver.order.accepted' || l.action === 'driver.order.accepted') &&
-        l.payload?.orderId === 1001 && 
-        l.payload?.payment === 'card'
+        l.event.type === 'driver.order.accepted' &&
+        l.event.payload.orderId === 1001 && 
+        l.event.payload.payment === 'card'
       ).length;
     });
     expect(executionCount).toBe(1);
