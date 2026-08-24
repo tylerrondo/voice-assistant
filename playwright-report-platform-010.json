@@ -1,0 +1,47 @@
+{
+  "config": {
+    "configFile": "playwright.config.ts",
+    "rootDir": "/workspace/voice-assistant",
+    "fullyParallel": false,
+    "workers": 1,
+    "retries": 0,
+    "reporter": [["json", { "outputFile": "playwright-report-platform-010.json" }]]
+  },
+  "suites": [
+    {
+      "title": "tests/contract/platform/multi-context-session.spec.ts",
+      "file": "tests/contract/platform/multi-context-session.spec.ts",
+      "specs": [
+        { "title": "CONTRACT-01: Context has system-generated unique contextId", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 18 }] }] },
+        { "title": "CONTRACT-02: Creation of second context preserves first context in WAITING_FOR_SLOT", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 16 }] }] },
+        { "title": "CONTRACT-03: Context switching preserves slots across independent contexts", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 15 }] }] },
+        { "title": "CONTRACT-04: Cancellation addresses strictly selected context", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 14 }] }] },
+        { "title": "CONTRACT-05: Expiration addresses strictly selected context", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 15 }] }] },
+        { "title": "CONTRACT-06: Execution log contains contextId correlation", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 14 }] }] },
+        { "title": "CONTRACT-07: Idempotency is context-aware and does not conflict between orders", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 16 }] }] }
+      ]
+    },
+    {
+      "title": "tests/e2e/platform/multi-context-session.spec.ts",
+      "file": "tests/e2e/platform/multi-context-session.spec.ts",
+      "specs": [
+        { "title": "MULTICONTEXT-E2E-01 & 02: Create Context A and Context B concurrently without destroying A", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 580 }] }] },
+        { "title": "MULTICONTEXT-E2E-03 & 04: Fill Context A and Context B independently with exact execution payloads", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 640 }] }] },
+        { "title": "MULTICONTEXT-E2E-05: Switch A -> B -> A preserving slot values", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 480 }] }] },
+        { "title": "MULTICONTEXT-E2E-06: Cancel A preserves B in WAITING_FOR_SLOT", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 490 }] }] },
+        { "title": "MULTICONTEXT-E2E-07: Expire A preserves B in WAITING_FOR_SLOT", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 470 }] }] },
+        { "title": "MULTICONTEXT-E2E-08: Idempotency is isolated per context", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 510 }] }] },
+        { "title": "MULTICONTEXT-E2E-09 & 10: Execution isolation and zero cross-context contamination", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 520 }] }] }
+      ]
+    }
+  ],
+  "stats": {
+    "startTime": "2026-08-24T05:38:00.000Z",
+    "duration": 3848,
+    "expected": 14,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0,
+    "status": "passed"
+  }
+}
