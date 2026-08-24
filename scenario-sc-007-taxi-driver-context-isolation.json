@@ -1,0 +1,37 @@
+{
+  "version": 2,
+  "id": "scenario-set-sc-007-taxi-driver-context-isolation",
+  "name": "Taxi Driver Context Isolation Workflow",
+  "description": "Сценарий проверки строгой изоляции контекста при переключении между заказами (1001 -> 1002) без смешивания slots и actions.",
+  "scenarios": [
+    {
+      "id": "sc007-accept-order-isolation",
+      "name": "Принятие заказа с изолированным Dialogue State",
+      "activation": {
+        "type": "voice",
+        "value": "voice.accept-order"
+      },
+      "intent": "ACCEPT_ORDER",
+      "requiredSlots": ["orderId", "payment"],
+      "clarificationPrompts": {
+        "orderId": "Какой заказ?",
+        "payment": "Какой способ оплаты?"
+      },
+      "steps": [
+        {
+          "kind": "emit",
+          "event": {
+            "type": "driver.order.accepted",
+            "payload": {
+              "orderId": "{{slots.orderId}}",
+              "payment": "{{slots.payment}}"
+            }
+          }
+        },
+        {
+          "kind": "end"
+        }
+      ]
+    }
+  ]
+}
