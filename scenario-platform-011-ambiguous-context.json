@@ -1,0 +1,50 @@
+{
+  "version": 2,
+  "id": "scenario-set-platform-011-ambiguous-context",
+  "name": "Platform Ambiguous Voice Input Policy Scenario",
+  "description": "Сценарий платформенного разрешения неоднозначности (Ambiguous Context) при наличии нескольких активных контекстов без явной адресации.",
+  "scenarios": [
+    {
+      "id": "platform011-accept-order",
+      "name": "Обработка заказов с политикой разрешения неоднозначности",
+      "activation": {
+        "type": "voice",
+        "value": "voice.accept-order"
+      },
+      "intent": "ACCEPT_ORDER",
+      "requiredSlots": ["orderId", "payment"],
+      "slotExtractors": {
+        "orderId": {
+          "type": "integer",
+          "pattern": "\\b\\d+\\b"
+        },
+        "payment": {
+          "type": "enum",
+          "mapping": {
+            "card": ["картой", "карта", "безнал", "card"],
+            "cash": ["наличными", "наличка", "cash"]
+          }
+        }
+      },
+      "clarificationPrompts": {
+        "orderId": "Какой заказ?",
+        "payment": "Какой способ оплаты?"
+      },
+      "steps": [
+        {
+          "kind": "emit",
+          "event": {
+            "type": "driver.order.accepted",
+            "payload": {
+              "orderId": "{{slots.orderId}}",
+              "payment": "{{slots.payment}}"
+            }
+          }
+        },
+        {
+          "kind": "end"
+        }
+      ]
+    }
+  ]
+}
