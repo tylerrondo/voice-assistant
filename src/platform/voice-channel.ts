@@ -78,10 +78,12 @@ export class VoiceChannel {
 
   public async handleIncomingVoice(phrase: string): Promise<any> {
     const text = phrase.trim().toLowerCase();
+    const tokens = text.split(/\s+/);
 
-    // 1. Ambiguity-Safe Cancellation Flow
-    if (text === 'отмена' || text === 'cancel' || text.includes('отмена') || text.includes('cancel')) {
-      const isPureCancel = text === 'отмена' || text === 'cancel';
+    // 1. Strict Cancellation Intent Resolution
+    const isCancelToken = tokens.includes('отмена') || tokens.includes('отменить') || tokens.includes('cancel');
+    if (isCancelToken) {
+      const isPureCancel = text === 'отмена' || text === 'отменить' || text === 'cancel';
       const activeWaiting = this.dialogueManager.listContexts().filter(c => c.status === 'WAITING_FOR_SLOT');
 
       if (isPureCancel) {
@@ -96,8 +98,11 @@ export class VoiceChannel {
 
           const candidateIntent = activeWaiting[0]?.intent;
           const matchingScenario = this.scenarioRegistry.find(sc => sc.intent === candidateIntent);
-          const template = matchingScenario?.ambiguityPrompt?.template || 'Уточните заказ: {candidateEntities}';
-          const promptText = template.replace('{candidateEntities}', candidateEntities);
+          if (!matchingScenario?.ambiguityPrompt?.template) {
+            throw new Error('CONTRACT_VIOLATION: ambiguityPrompt template is missing in ScenarioDefinition for intent: ' + candidateIntent);
+          }
+
+          const promptText = matchingScenario.ambiguityPrompt.template.replace('{candidateEntities}', candidateEntities);
 
           return {
             status: 'AMBIGUOUS_CONTEXT',
@@ -113,6 +118,7 @@ export class VoiceChannel {
       if (routeResult.status === 'RESOLVED') {
         return this.dialogueManager.cancelContext(routeResult.contextId);
       }
+      return { status: 'NO_MATCH' };
     }
 
     // 2. Intent Resolution (New Context Initiation)
@@ -169,8 +175,11 @@ export class VoiceChannel {
 
       const candidateIntent = candidateContexts[0]?.intent;
       const matchingScenario = this.scenarioRegistry.find(sc => sc.intent === candidateIntent);
-      const template = matchingScenario?.ambiguityPrompt?.template || 'Уточните заказ: {candidateEntities}';
-      const promptText = template.replace('{candidateEntities}', candidateEntities);
+      if (!matchingScenario?.ambiguityPrompt?.template) {
+        throw new Error('CONTRACT_VIOLATION: ambiguityPrompt template is missing in ScenarioDefinition for intent: ' + candidateIntent);
+      }
+
+      const promptText = matchingScenario.ambiguityPrompt.template.replace('{candidateEntities}', candidateEntities);
 
       return {
         status: 'AMBIGUOUS_CONTEXT',
@@ -183,7 +192,7 @@ export class VoiceChannel {
       return { status: 'NO_MATCH' };
     }
 
-    // 5. Single Resolved Context: Fill slots and execute if complete
+    // 5. Single Resolved Context: Fill slots and execute deterministically
     const targetCtx = this.dialogueManager.getContext(routingResult.contextId);
     if (!targetCtx || targetCtx.status !== 'WAITING_FOR_SLOT') {
       return routingResult;
@@ -196,6 +205,6 @@ export class VoiceChannel {
       }
     }
 
-    return updatedCtx || routingResult;
+    return updatedCtx;
   }
 }
