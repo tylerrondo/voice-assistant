@@ -1,4 +1,4 @@
-import { DialogueStateManager, RoutingResult } from './dialogue-manager';
+import { DialogueStateManager, RoutingResult, ActionDispatchHandler } from './dialogue-manager';
 
 export interface SlotExtractorDefinition {
   type: 'integer' | 'enum' | 'string';
@@ -41,6 +41,7 @@ export interface ScenarioSet {
 export class VoiceChannel {
   private dialogueManager: DialogueStateManager;
   private scenarioRegistry: ScenarioDefinition[] = [];
+  private activeScenarioSetId: string = '';
 
   constructor(dialogueManager: DialogueStateManager) {
     this.dialogueManager = dialogueManager;
@@ -49,7 +50,16 @@ export class VoiceChannel {
   public registerScenarioSet(scenarioSet: ScenarioSet): void {
     if (scenarioSet && Array.isArray(scenarioSet.scenarios)) {
       this.scenarioRegistry = [...scenarioSet.scenarios];
+      this.activeScenarioSetId = scenarioSet.id;
     }
+  }
+
+  public getActiveScenarioSetId(): string {
+    return this.activeScenarioSetId;
+  }
+
+  public setActionDispatchHandler(handler: ActionDispatchHandler): void {
+    this.dialogueManager.setActionDispatchHandler(handler);
   }
 
   private extractSlotsFromText(text: string, extractors?: Record<string, SlotExtractorDefinition>): Record<string, any> {
