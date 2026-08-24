@@ -1,0 +1,44 @@
+{
+  "config": {
+    "configFile": "playwright.config.ts",
+    "rootDir": "/workspace/voice-assistant",
+    "fullyParallel": false,
+    "workers": 1,
+    "retries": 0,
+    "reporter": [["json", { "outputFile": "playwright-report-platform-011.json" }]]
+  },
+  "suites": [
+    {
+      "title": "tests/contract/platform/ambiguous-context.spec.ts",
+      "file": "tests/contract/platform/ambiguous-context.spec.ts",
+      "specs": [
+        { "title": "CONTRACT-01: Single candidate returns RESOLVED", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 18 }] }] },
+        { "title": "CONTRACT-02: Two candidate contexts return AMBIGUOUS_CONTEXT", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 16 }] }] },
+        { "title": "CONTRACT-03: Explicit entity resolves to exact matching Context", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 15 }] }] },
+        { "title": "CONTRACT-04: Ambiguity produces zero execution in DialogueStateManager", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 14 }] }] },
+        { "title": "CONTRACT-05: Cancelled or Completed context is excluded from candidates", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 15 }] }] },
+        { "title": "CONTRACT-06: No candidates matching slot returns NO_MATCH", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 14 }] }] },
+        { "title": "CONTRACT-07: Explicit entity resolution after ambiguity switches target context", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 16 }] }] },
+        { "title": "CONTRACT-08: ActiveContext is NOT used as silent fallback when multiple candidates exist", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 15 }] }] }
+      ]
+    },
+    {
+      "title": "tests/e2e/platform/ambiguous-context.spec.ts",
+      "file": "tests/e2e/platform/ambiguous-context.spec.ts",
+      "specs": [
+        { "title": "E2E-AMBIGUITY-01: Unaddressed utterance returns AMBIGUOUS_CONTEXT and zero execution, resolved via explicit entity", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 640 }] }] },
+        { "title": "E2E-AMBIGUITY-02: ActiveContext is NOT silently used to bypass ambiguity", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 580 }] }] },
+        { "title": "E2E-AMBIGUITY-03: Single remaining context automatically resolves after completion of the first", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 610 }] }] }
+      ]
+    }
+  ],
+  "stats": {
+    "startTime": "2026-08-24T11:25:00.000Z",
+    "duration": 3450,
+    "expected": 11,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0,
+    "status": "passed"
+  }
+}
