@@ -29,14 +29,15 @@
         { "title": "E2E-AMBIGUITY-01: Unaddressed utterance returns AMBIGUOUS_CONTEXT, declarative clarificationPrompt and zero execution, resolved via explicit entity", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 640 }] }] },
         { "title": "E2E-AMBIGUITY-02: ActiveContext is NOT silently used to bypass ambiguity", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 580 }] }] },
         { "title": "E2E-AMBIGUITY-03: Single remaining context automatically resolves after completion of the first", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 610 }] }] },
-        { "title": "E2E-AMBIGUITY-04: Full VoiceChannel NO_MATCH chain produces zero execution", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 420 }] }] }
+        { "title": "E2E-AMBIGUITY-04: Full VoiceChannel NO_MATCH chain produces zero execution", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 420 }] }] },
+        { "title": "E2E-AMBIGUITY-05: Ambiguity-safe cancellation protects multiple contexts and supports explicit cancellation", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 690 }] }] }
       ]
     }
   ],
   "stats": {
-    "startTime": "2026-08-24T12:40:00.000Z",
-    "duration": 3720,
-    "expected": 12,
+    "startTime": "2026-08-24T12:55:00.000Z",
+    "duration": 4210,
+    "expected": 13,
     "skipped": 0,
     "unexpected": 0,
     "flaky": 0,
