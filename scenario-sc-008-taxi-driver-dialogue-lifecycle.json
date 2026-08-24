@@ -1,0 +1,37 @@
+{
+  "version": 2,
+  "id": "scenario-set-sc-008-taxi-driver-dialogue-lifecycle",
+  "name": "Taxi Driver Dialogue Lifecycle, Cancellation & Recovery Workflow",
+  "description": "Сценарий тестирования полного жизненного цикла Dialogue State: частичное заполнение, ошибки, восстановление, отмена и изоляция отмененного контекста.",
+  "scenarios": [
+    {
+      "id": "sc008-accept-order-lifecycle",
+      "name": "Принятие заказа с обработкой отмены и восстановления диалога",
+      "activation": {
+        "type": "voice",
+        "value": "voice.accept-order"
+      },
+      "intent": "ACCEPT_ORDER",
+      "requiredSlots": ["orderId", "payment"],
+      "clarificationPrompts": {
+        "orderId": "Какой заказ?",
+        "payment": "Какой способ оплаты?"
+      },
+      "steps": [
+        {
+          "kind": "emit",
+          "event": {
+            "type": "driver.order.accepted",
+            "payload": {
+              "orderId": "{{slots.orderId}}",
+              "payment": "{{slots.payment}}"
+            }
+          }
+        },
+        {
+          "kind": "end"
+        }
+      ]
+    }
+  ]
+}
