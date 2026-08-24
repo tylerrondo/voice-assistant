@@ -6,7 +6,7 @@ const scenarioPath = path.resolve(__dirname, '../../../scenario-sc-009-taxi-driv
 const rawContent = fs.readFileSync(scenarioPath, 'utf-8');
 const scenarioSet = JSON.parse(rawContent);
 
-test.describe('CONTRACT: SC-009 Dialogue Concurrency Audit Suite (ТЗ-VOICE-SC-009)', () => {
+test.describe('CONTRACT: SC-009 Concurrent Multi-Context Suite (ТЗ-VOICE-SC-009)', () => {
 
   test('CONTRACT-01: ScenarioSet v2 Root Schema & ID Compliance', async () => {
     expect(scenarioSet.version).toBe(2);
@@ -20,17 +20,15 @@ test.describe('CONTRACT: SC-009 Dialogue Concurrency Audit Suite (ТЗ-VOICE-SC-
     expect(sc.requiredSlots).toEqual(['orderId', 'payment']);
   });
 
-  test('CONTRACT-03: orderId Slot Clarification Prompt Contract', async () => {
+  test('CONTRACT-03: Declarative slotExtractors defined for orderId and payment', async () => {
     const sc = scenarioSet.scenarios[0];
-    expect(sc.clarificationPrompts.orderId).toBe('Какой заказ?');
+    expect(sc.slotExtractors.orderId.type).toBe('integer');
+    expect(sc.slotExtractors.payment.type).toBe('enum');
+    expect(sc.slotExtractors.payment.mapping.card).toContain('картой');
+    expect(sc.slotExtractors.payment.mapping.cash).toContain('наличными');
   });
 
-  test('CONTRACT-04: payment Slot Clarification Prompt Contract', async () => {
-    const sc = scenarioSet.scenarios[0];
-    expect(sc.clarificationPrompts.payment).toBe('Какой способ оплаты?');
-  });
-
-  test('CONTRACT-05: Action Payload template interpolation for orderId and payment', async () => {
+  test('CONTRACT-04: Action Payload template interpolation for orderId and payment', async () => {
     const sc = scenarioSet.scenarios[0];
     const emitStep = sc.steps.find((st: any) => st.kind === 'emit');
     expect(emitStep.event.type).toBe('driver.order.accepted');
@@ -38,14 +36,14 @@ test.describe('CONTRACT: SC-009 Dialogue Concurrency Audit Suite (ТЗ-VOICE-SC-
     expect(emitStep.event.payload.payment).toBe('{{slots.payment}}');
   });
 
-  test('CONTRACT-06: Terminal kind="end" is enforced for every scenario', async () => {
+  test('CONTRACT-05: Terminal kind="end" is enforced for every scenario', async () => {
     for (const sc of scenarioSet.scenarios) {
       const last = sc.steps[sc.steps.length - 1];
       expect(last.kind).toBe('end');
     }
   });
 
-  test('CONTRACT-07: Schema contains zero targetState hints', async () => {
+  test('CONTRACT-06: Schema contains zero targetState hints', async () => {
     const jsonString = JSON.stringify(scenarioSet);
     expect(jsonString).not.toContain('targetState');
   });
