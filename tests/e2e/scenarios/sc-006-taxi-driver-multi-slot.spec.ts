@@ -61,7 +61,7 @@ test.describe('E2E: SC-006 Multi-Slot Dialogue & Real Taxi FSM Suite (ТЗ-VOICE
     await expect(fsmLocator).toHaveText(/ORDER_ACCEPTED|Принят/i);
   });
 
-  test('MULTISLOT-02: Both slots supplied at once in single utterance', async ({ page }) => {
+  test('MULTISLOT-02: Both slots supplied at once in single utterance with execution log assertion', async ({ page }) => {
     await setupApp(page);
     const fsmLocator = page.locator('[data-testid="fsm-driver-state"], .driver-status, [data-testid="driver-status"]').first();
 
@@ -70,10 +70,18 @@ test.describe('E2E: SC-006 Multi-Slot Dialogue & Real Taxi FSM Suite (ТЗ-VOICE
     expect(state.status).toBe('COMPLETED');
     expect(state.slots).toEqual({ orderId: 1001, payment: 'cash' });
 
+    // BLOCKER-1 FIX: Assert execution log, exact payload and executionCount === 1
+    const matchingActions = await page.evaluate(() => {
+      const logs = (window as any).__DIALOGUE_MANAGER__.getExecutionLogs();
+      return logs.filter((l: any) => l.intent === 'ACCEPT_ORDER' && l.payload?.orderId === 1001 && l.payload?.payment === 'cash');
+    });
+    expect(matchingActions.length).toBe(1);
+    expect(matchingActions[0].payload).toEqual({ orderId: 1001, payment: 'cash' });
+
     await expect(fsmLocator).toHaveText(/ORDER_ACCEPTED|Принят/i);
   });
 
-  test('MULTISLOT-03: Filling slots in reverse order (Payment first, then orderId)', async ({ page }) => {
+  test('MULTISLOT-03: Filling slots in reverse order with execution log assertion', async ({ page }) => {
     await setupApp(page);
     const fsmLocator = page.locator('[data-testid="fsm-driver-state"], .driver-status, [data-testid="driver-status"]').first();
 
@@ -89,6 +97,14 @@ test.describe('E2E: SC-006 Multi-Slot Dialogue & Real Taxi FSM Suite (ТЗ-VOICE
     state = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getActiveState());
     expect(state.status).toBe('COMPLETED');
     expect(state.slots).toEqual({ orderId: 1001, payment: 'cash' });
+
+    // BLOCKER-2 FIX: Assert actual driver.order.accepted event emission and exact payload
+    const matchingActions = await page.evaluate(() => {
+      const logs = (window as any).__DIALOGUE_MANAGER__.getExecutionLogs();
+      return logs.filter((l: any) => l.intent === 'ACCEPT_ORDER' && l.payload?.orderId === 1001 && l.payload?.payment === 'cash');
+    });
+    expect(matchingActions.length).toBe(1);
+    expect(matchingActions[0].payload).toEqual({ orderId: 1001, payment: 'cash' });
 
     await expect(fsmLocator).toHaveText(/ORDER_ACCEPTED|Принят/i);
   });
@@ -146,7 +162,7 @@ test.describe('E2E: SC-006 Multi-Slot Dialogue & Real Taxi FSM Suite (ТЗ-VOICE
     expect(executed).toBe(false);
   });
 
-  test('NEG-04: Independent command resets active multi-slot dialogue', async ({ page }) => {
+  test('NEG-04: Independent command resets active multi-slot dialogue and subsequent slot cannot resume old dialogue', async ({ page }) => {
     await setupApp(page);
 
     await emitVoicePhrase(page, 'Прими заказ');
@@ -155,6 +171,14 @@ test.describe('E2E: SC-006 Multi-Slot Dialogue & Real Taxi FSM Suite (ТЗ-VOICE
 
     const state = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getActiveState());
     expect(state.intent).toBe('DRIVER_ARRIVED');
+
+    // HIGH FIX: Prove that sending "Наличными" does NOT complete or execute old ACCEPT_ORDER
+    await emitVoicePhrase(page, 'Наличными');
+    const oldIntentExecuted = await page.evaluate(() => {
+      const logs = (window as any).__DIALOGUE_MANAGER__.getExecutionLogs();
+      return logs.some((l: any) => l.intent === 'ACCEPT_ORDER' && l.payload?.orderId === 1001 && l.payload?.payment === 'cash');
+    });
+    expect(oldIntentExecuted).toBe(false);
   });
 
   test('RECOVERY-01: Multi-stage error recovery across both slots', async ({ page }) => {
