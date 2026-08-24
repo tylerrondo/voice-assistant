@@ -1,18 +1,31 @@
 {
   "version": 2,
   "id": "scenario-set-sc-009-taxi-driver-dialogue-concurrency",
-  "name": "Taxi Driver Dialogue Concurrency & Single Active Context Audit",
-  "description": "Спецификация для аудита параллельности и доказательства поведения SINGLE_ACTIVE_CONTEXT при переключении заказов.",
+  "name": "Taxi Driver Concurrent Multi-Context Dialogue Scenario",
+  "description": "Сценарий одновременного удержания и независимого заполнения двух заказов (1001 и 1002) в параллельных контекстах диалога.",
   "scenarios": [
     {
-      "id": "sc009-accept-order-concurrency",
-      "name": "Принятие заказа с проверкой изоляции активного контекста",
+      "id": "sc009-accept-order-concurrent",
+      "name": "Принятие заказов в параллельных контекстах",
       "activation": {
         "type": "voice",
         "value": "voice.accept-order"
       },
       "intent": "ACCEPT_ORDER",
       "requiredSlots": ["orderId", "payment"],
+      "slotExtractors": {
+        "orderId": {
+          "type": "integer",
+          "pattern": "\\b\\d+\\b"
+        },
+        "payment": {
+          "type": "enum",
+          "mapping": {
+            "card": ["картой", "карта", "безнал", "card"],
+            "cash": ["наличными", "наличка", "cash"]
+          }
+        }
+      },
       "clarificationPrompts": {
         "orderId": "Какой заказ?",
         "payment": "Какой способ оплаты?"
