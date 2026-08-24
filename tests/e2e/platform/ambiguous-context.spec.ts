@@ -134,4 +134,44 @@ test.describe('E2E: PLATFORM-011 Ambiguous Input & Context Selection Suite', () 
     expect(logs.length).toBe(0);
   });
 
+  test('E2E-AMBIGUITY-05: Ambiguity-safe cancellation protects multiple contexts and supports explicit cancellation', async ({ page }) => {
+    await setupApp(page);
+
+    // 1. Create two contexts
+    await emitVoicePhrase(page, 'Прими заказ 1001');
+    await emitVoicePhrase(page, 'Прими заказ 1002');
+
+    const contexts = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.listContexts());
+    const idA = contexts.find((c: any) => c.slots.orderId === 1001).contextId;
+    const idB = contexts.find((c: any) => c.slots.orderId === 1002).contextId;
+
+    // 2. Unaddressed cancellation with 2 active contexts
+    const cancelAmbRes = await emitVoicePhrase(page, 'Отмена');
+    expect(cancelAmbRes.status).toBe('AMBIGUOUS_CONTEXT');
+    expect(cancelAmbRes.candidateContextIds).toContain(idA);
+    expect(cancelAmbRes.candidateContextIds).toContain(idB);
+
+    // Verify 0 contexts cancelled
+    let activeWaiting = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.listContexts().filter((c: any) => c.status === 'WAITING_FOR_SLOT'));
+    expect(activeWaiting.length).toBe(2);
+
+    // 3. Explicit cancellation of 1002
+    await emitVoicePhrase(page, 'Заказ 1002 отмена');
+
+    const ctxB = await page.evaluate((id: string) => (window as any).__DIALOGUE_MANAGER__.getContext(id), idB);
+    const ctxA = await page.evaluate((id: string) => (window as any).__DIALOGUE_MANAGER__.getContext(id), idA);
+
+    expect(ctxB.status).toBe('CANCELLED');
+    expect(ctxA.status).toBe('WAITING_FOR_SLOT');
+
+    // 4. Complete remaining 1001
+    await emitVoicePhrase(page, 'Картой'); // Now single candidate (1001), resolves automatically
+
+    const logs = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getExecutionLogs());
+    expect(logs.length).toBe(1);
+    expect(logs[0].contextId).toBe(idA);
+    expect(logs[0].event.payload.orderId).toBe(1001);
+    expect(logs[0].event.payload.payment).toBe('card');
+  });
+
 });
