@@ -1,14 +1,15 @@
 # Исследование архитектурной возможности: Параллельные контексты диалога (PLATFORM-CAPABILITY-01)
 
 ## 1. Предмет исследования
-Анализ архитектурной способности `DialogueStateManager` и `VoiceChannel` удерживать одновременно >1 активных/незавершённых Dialogue Context (`WAITING_FOR_SLOT`) для разных сущностей (например, заказ 1001 и заказ 1002).
+Анализ архитектурной способности `DialogueStateManager` и `VoiceChannel` удерживать одновременно >1 активных/незавершённых Dialogue Context (`WAITING_FOR_SLOT`).
 
-## 2. Результаты анализа production-архитектуры
-- **Идентификация контекста:** Контекст хранится в виде единственного объекта `activeState` на уровне менеджера диалогов.
-- **Session / Context Pooling:** Отсутствует реестр сессий (`Map<ContextId, State>`). Механизма явной адресации конкретного контекста по `contextId` во входном речевом потоке нет.
-- **Реакция на новый Intent:** Поступление нового Intent (`ACCEPT_ORDER` с `orderId: 1002`) атомарно перезаписывает текущий `activeState`, отправляя предыдущий незавершённый контекст (`1001`) в сброс (`DISCARDED`).
+## 2. Результаты внедрения PLATFORM-010
+- **Идентификация контекста:** `contextId` хранится в коллекции `contexts: Map<string, DialogueContext>`.
+- **Session / Context Pooling:** Реализован полнофункциональный пул сессий с детерминированной маршрутизацией по номеру заказа (`entity-based routing`) и `activeContextId`.
+- **Конфигурируемость емкости:** Лимит активных контекстов задаётся параметром конфигурации `DialogueManagerConfig.maxActiveContexts` (runtime policy).
+- **Реакция на новый Intent:** Поступление нового Intent (`ACCEPT_ORDER 1002`) создаёт независимый контекст **без уничтожения предыдущего** (`1001`). Оба удерживают статус `WAITING_FOR_SLOT`.
+- **Correlation:** Каждое событие исполнения в `getExecutionLogs()` содержит прямую привязку `contextId`.
 
-## 3. Вердикт
-- **CAPABILITY:** `SINGLE_ACTIVE_CONTEXT`
-- **АРХИТЕКТУРНЫЙ СТАТУС:** `GAP-SC009-CONCURRENCY = OPEN`
-- **ВЫВОД:** В рамках SC-009 платформенный код не модифицируется. Поддержка Concurrent Multi-Context требует отдельного платформенного ТЗ на Multi-Session Dialogue Manager.
+## 3. Итоговый архитектурный вердикт
+- **CAPABILITY:** `MULTI_CONTEXT_SUPPORTED`
+- **АРХИТЕКТУРНЫЙ СТАТУС:** `GAP-SC009-CONCURRENCY = CLOSED`
