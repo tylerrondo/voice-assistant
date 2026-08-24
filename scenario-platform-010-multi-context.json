@@ -13,6 +13,19 @@
       },
       "intent": "ACCEPT_ORDER",
       "requiredSlots": ["orderId", "payment"],
+      "slotExtractors": {
+        "orderId": {
+          "type": "integer",
+          "pattern": "\\b\\d+\\b"
+        },
+        "payment": {
+          "type": "enum",
+          "mapping": {
+            "card": ["картой", "карта", "безнал", "card"],
+            "cash": ["наличными", "наличка", "cash"]
+          }
+        }
+      },
       "clarificationPrompts": {
         "orderId": "Какой заказ?",
         "payment": "Какой способ оплаты?"
