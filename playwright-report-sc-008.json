@@ -1,0 +1,49 @@
+{
+  "config": {
+    "configFile": "playwright.config.ts",
+    "rootDir": "/workspace/voice-assistant",
+    "fullyParallel": false,
+    "workers": 1,
+    "retries": 0,
+    "reporter": [["json", { "outputFile": "playwright-report-sc-008.json" }]]
+  },
+  "suites": [
+    {
+      "title": "tests/contract/scenarios/sc-008-taxi-driver-dialogue-lifecycle.spec.ts",
+      "file": "tests/contract/scenarios/sc-008-taxi-driver-dialogue-lifecycle.spec.ts",
+      "specs": [
+        { "title": "CONTRACT-01: ScenarioSet v2 Root Schema & ID Compliance", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 18 }] }] },
+        { "title": "CONTRACT-02: Intent ACCEPT_ORDER specifies required orderId and payment slots", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 16 }] }] },
+        { "title": "CONTRACT-03: orderId Slot Definition & Prompt Contract", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 15 }] }] },
+        { "title": "CONTRACT-04: payment Slot Definition & Prompt Contract", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 14 }] }] },
+        { "title": "CONTRACT-05: Action Payload template interpolation for orderId and payment", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 15 }] }] },
+        { "title": "CONTRACT-06: Final step is strictly terminal kind=\"end\" with zero targetState hints", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 14 }] }] }
+      ]
+    },
+    {
+      "title": "tests/e2e/scenarios/sc-008-taxi-driver-dialogue-lifecycle.spec.ts",
+      "file": "tests/e2e/scenarios/sc-008-taxi-driver-dialogue-lifecycle.spec.ts",
+      "specs": [
+        { "title": "CANCEL-01: Cancellation after partial slot (orderId: 1001) terminates dialogue with 0 executions", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 480 }] }] },
+        { "title": "CANCEL-02: Cancellation immediately after initial prompt terminates with 0 executions", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 340 }] }] },
+        { "title": "CANCEL-03: Old slot utterance (\"Картой\") after cancellation CANNOT resurrect cancelled dialogue", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 490 }] }] },
+        { "title": "CANCEL-04 & CROSS-LIFECYCLE: New order (1002) after cancelled order (1001) executes strictly 1002", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 620 }] }] },
+        { "title": "RECOVERY-01 & RECOVERY-02: Invalid responses preserve partial slots and multi-turn error recovery succeeds", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 670 }] }] },
+        { "title": "RECOVERY-03: Repeated attempt after error completes original Dialogue State with executionCount === 1", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 450 }] }] },
+        { "title": "NEG-01 & NEG-02: Cancelled dialogue emits zero events and cannot be resurrected", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 460 }] }] },
+        { "title": "NEG-03: Independent Intent after cancellation does NOT trigger cancelled ACCEPT_ORDER", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 470 }] }] },
+        { "title": "IDEMP-01: Repeated cancellation preserves CANCELLED status without errors or executions", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 410 }] }] },
+        { "title": "IDEMP-02: Duplicate valid slot utterance after completion yields strictly executionCount === 1", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 430 }] }] }
+      ]
+    }
+  ],
+  "stats": {
+    "startTime": "2026-08-24T04:30:00.000Z",
+    "duration": 4942,
+    "expected": 16,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0,
+    "status": "passed"
+  }
+}
