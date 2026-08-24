@@ -30,6 +30,9 @@
         "orderId": "Какой заказ?",
         "payment": "Какой способ оплаты?"
       },
+      "ambiguityPrompt": {
+        "template": "Уточните заказ: {candidateEntities}"
+      },
       "steps": [
         {
           "kind": "emit",
