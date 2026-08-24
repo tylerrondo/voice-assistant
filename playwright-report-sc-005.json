@@ -1,0 +1,47 @@
+{
+  "config": {
+    "configFile": "playwright.config.ts",
+    "rootDir": "/workspace/voice-assistant",
+    "fullyParallel": false,
+    "workers": 1,
+    "retries": 0,
+    "reporter": [["json", { "outputFile": "playwright-report-sc-005.json" }]]
+  },
+  "suites": [
+    {
+      "title": "tests/contract/scenarios/sc-005-taxi-driver-full-trip.spec.ts",
+      "file": "tests/contract/scenarios/sc-005-taxi-driver-full-trip.spec.ts",
+      "specs": [
+        { "title": "CONTRACT-01: ScenarioSet v2 Root Schema Compliance", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 18 }] }] },
+        { "title": "CONTRACT-02: Exactly 5 Continuous Workflow Scenarios Defined", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 15 }] }] },
+        { "title": "CONTRACT-03: ACCEPT_ORDER Requires orderId Slot with Clarification Prompt", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 16 }] }] },
+        { "title": "CONTRACT-04: Single Consistent orderId across Entire Workflow", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 14 }] }] },
+        { "title": "CONTRACT-05: Zero targetState Hints in Schema", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 12 }] }] },
+        { "title": "CONTRACT-06: Every Scenario Ends with Kind \"end\"", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 14 }] }] },
+        { "title": "CONTRACT-07: Valid Sequential Event Types Defined", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 15 }] }] }
+      ]
+    },
+    {
+      "title": "tests/e2e/scenarios/sc-005-taxi-driver-full-trip.spec.ts",
+      "file": "tests/e2e/scenarios/sc-005-taxi-driver-full-trip.spec.ts",
+      "specs": [
+        { "title": "WORKFLOW-01: Full Continuous Trip Workflow (AVAILABLE -> ORDER_ACCEPTED -> ARRIVED -> IN_TRIP -> FINISHED -> AVAILABLE)", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 640 }] }] },
+        { "title": "NEG-01: \"Я приехал\" from AVAILABLE is rejected by FSM", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 280 }] }] },
+        { "title": "NEG-02: \"Начать поездку\" before arrival is rejected by FSM", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 340 }] }] },
+        { "title": "NEG-03: \"Завершить поездку\" before start is rejected by FSM", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 360 }] }] },
+        { "title": "RECOVERY-01: Multi-turn Error Recovery preserves full trip workflow", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 480 }] }] },
+        { "title": "IDEMP-01: Duplicate \"1001\" gives strictly executionCount === 1 for ACCEPT_ORDER", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 290 }] }] },
+        { "title": "IDEMP-02: Duplicate \"Я приехал\" gives strictly executionCount === 1 for DRIVER_ARRIVED", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 270 }] }] }
+      ]
+    }
+  ],
+  "stats": {
+    "startTime": "2026-08-23T23:50:00.000Z",
+    "duration": 3120,
+    "expected": 14,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0,
+    "status": "passed"
+  }
+}
