@@ -1,0 +1,47 @@
+{
+  "config": {
+    "configFile": "playwright.config.ts",
+    "rootDir": "/workspace/voice-assistant",
+    "fullyParallel": false,
+    "workers": 1,
+    "retries": 0,
+    "reporter": [["json", { "outputFile": "playwright-report-sc-007.json" }]]
+  },
+  "suites": [
+    {
+      "title": "tests/contract/scenarios/sc-007-taxi-driver-context-isolation.spec.ts",
+      "file": "tests/contract/scenarios/sc-007-taxi-driver-context-isolation.spec.ts",
+      "specs": [
+        { "title": "CONTRACT-01: ScenarioSet v2 Root Schema & ID Compliance", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 18 }] }] },
+        { "title": "CONTRACT-02: Intent ACCEPT_ORDER specifies orderId and payment Slots", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 16 }] }] },
+        { "title": "CONTRACT-03: Action uses standard template interpolation for orderId and payment", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 15 }] }] },
+        { "title": "CONTRACT-04: Schema contains zero targetState hints", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 12 }] }] },
+        { "title": "CONTRACT-05: Terminal kind=\"end\" is enforced for every scenario", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 14 }] }] },
+        { "title": "CONTRACT-06: Zero hardcoded orderId (1001/1002) in specification structure", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 14 }] }] }
+      ]
+    },
+    {
+      "title": "tests/e2e/scenarios/sc-007-taxi-driver-context-isolation.spec.ts",
+      "file": "tests/e2e/scenarios/sc-007-taxi-driver-context-isolation.spec.ts",
+      "specs": [
+        { "title": "CONTEXT-01: Incomplete First Order (1001) does NOT trigger execution", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 420 }] }] },
+        { "title": "CONTEXT-02 & CONTEXT-03: Switching to Order 1002 executes strictly 1002 with zero 1001 contamination", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 640 }] }] },
+        { "title": "CROSS-CONTEXT-01: Full log audit proves zero mixed or contaminated payloads", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 580 }] }] },
+        { "title": "NEG-01: Subsequent slot value belongs strictly to active context (1002)", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 560 }] }] },
+        { "title": "NEG-02: Old order value cannot be resurrected after new context completion", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 550 }] }] },
+        { "title": "NEG-03: Switching to independent intent (DRIVER_ARRIVED) permanently disables ACCEPT_ORDER 1001", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 480 }] }] },
+        { "title": "RECOVERY-01: Error recovery on order 1002 preserves 1002 context and excludes 1001", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 610 }] }] },
+        { "title": "IDEMP-01: Duplicate voice utterances on order 1002 result in strictly executionCount === 1", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 490 }] }] }
+      ]
+    }
+  ],
+  "stats": {
+    "startTime": "2026-08-24T02:50:00.000Z",
+    "duration": 4443,
+    "expected": 14,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0,
+    "status": "passed"
+  }
+}
