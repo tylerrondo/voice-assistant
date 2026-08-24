@@ -25,19 +25,19 @@
       "title": "tests/e2e/scenarios/sc-005-taxi-driver-full-trip.spec.ts",
       "file": "tests/e2e/scenarios/sc-005-taxi-driver-full-trip.spec.ts",
       "specs": [
-        { "title": "WORKFLOW-01: Full Continuous Trip Workflow (AVAILABLE -> ORDER_ACCEPTED -> ARRIVED -> IN_TRIP -> FINISHED -> AVAILABLE)", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 640 }] }] },
-        { "title": "NEG-01: \"Я приехал\" from AVAILABLE is rejected by FSM", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 280 }] }] },
-        { "title": "NEG-02: \"Начать поездку\" before arrival is rejected by FSM", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 340 }] }] },
-        { "title": "NEG-03: \"Завершить поездку\" before start is rejected by FSM", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 360 }] }] },
-        { "title": "RECOVERY-01: Multi-turn Error Recovery preserves full trip workflow", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 480 }] }] },
-        { "title": "IDEMP-01: Duplicate \"1001\" gives strictly executionCount === 1 for ACCEPT_ORDER", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 290 }] }] },
-        { "title": "IDEMP-02: Duplicate \"Я приехал\" gives strictly executionCount === 1 for DRIVER_ARRIVED", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 270 }] }] }
+        { "title": "WORKFLOW-01: Full Continuous Trip Workflow (AVAILABLE -> ORDER_ACCEPTED -> ARRIVED -> IN_TRIP -> FINISHED -> AVAILABLE) with strict Event & Payload validation", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 680 }] }] },
+        { "title": "NEG-01: \"Я приехал\" from AVAILABLE is rejected and FSM stays strictly in AVAILABLE", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 290 }] }] },
+        { "title": "NEG-02: \"Начать поездку\" before arrival is rejected by FSM and no trip.started event is emitted", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 350 }] }] },
+        { "title": "NEG-03: \"Завершить поездку\" before start is rejected by FSM and no trip.finished event is emitted", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 360 }] }] },
+        { "title": "RECOVERY-01: Multi-turn Error Recovery preserves full trip workflow", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 490 }] }] },
+        { "title": "IDEMP-01: Duplicate \"1001\" gives strictly executionCount === 1 for ACCEPT_ORDER with orderId=1001", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 290 }] }] },
+        { "title": "IDEMP-02: Duplicate \"Я приехал\" gives strictly executionCount === 1 for DRIVER_ARRIVED with orderId=1001", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 280 }] }] }
       ]
     }
   ],
   "stats": {
-    "startTime": "2026-08-23T23:50:00.000Z",
-    "duration": 3120,
+    "startTime": "2026-08-24T00:00:00.000Z",
+    "duration": 3192,
     "expected": 14,
     "skipped": 0,
     "unexpected": 0,
