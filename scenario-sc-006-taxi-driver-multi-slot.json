@@ -1,0 +1,37 @@
+{
+  "version": 2,
+  "id": "scenario-set-sc-006-taxi-driver-multi-slot",
+  "name": "Taxi Driver Multi-Slot Dialogue Workflow",
+  "description": "Многошаговая голосовая операция водителя такси с двумя обязательными слотами (orderId и payment) в рамках одного Intent ACCEPT_ORDER.",
+  "scenarios": [
+    {
+      "id": "sc006-accept-order-multi-slot",
+      "name": "Принятие заказа с последовательным заполнением orderId и payment",
+      "activation": {
+        "type": "voice",
+        "value": "voice.accept-order"
+      },
+      "intent": "ACCEPT_ORDER",
+      "requiredSlots": ["orderId", "payment"],
+      "clarificationPrompts": {
+        "orderId": "Какой заказ?",
+        "payment": "Какой способ оплаты?"
+      },
+      "steps": [
+        {
+          "kind": "emit",
+          "event": {
+            "type": "driver.order.accepted",
+            "payload": {
+              "orderId": "{{slots.orderId}}",
+              "payment": "{{slots.payment}}"
+            }
+          }
+        },
+        {
+          "kind": "end"
+        }
+      ]
+    }
+  ]
+}
