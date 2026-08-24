@@ -29,7 +29,7 @@ test.describe('E2E: PLATFORM-011 Ambiguous Input & Context Selection Suite', () 
     }, phrase);
   }
 
-  test('E2E-AMBIGUITY-01: Unaddressed utterance returns AMBIGUOUS_CONTEXT and zero execution, resolved via explicit entity', async ({ page }) => {
+  test('E2E-AMBIGUITY-01: Unaddressed utterance returns AMBIGUOUS_CONTEXT, declarative clarificationPrompt and zero execution, resolved via explicit entity', async ({ page }) => {
     await setupApp(page);
 
     // 1. Create two contexts waiting for payment
@@ -46,6 +46,8 @@ test.describe('E2E: PLATFORM-011 Ambiguous Input & Context Selection Suite', () 
     expect(ambResult.status).toBe('AMBIGUOUS_CONTEXT');
     expect(ambResult.candidateContextIds).toContain(idA);
     expect(ambResult.candidateContextIds).toContain(idB);
+    expect(ambResult.clarificationPrompt).toContain('1001');
+    expect(ambResult.clarificationPrompt).toContain('1002');
 
     // 3. Verify zero execution
     let logs = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getExecutionLogs());
@@ -119,6 +121,17 @@ test.describe('E2E: PLATFORM-011 Ambiguous Input & Context Selection Suite', () 
 
     expect(matchA.length).toBe(1);
     expect(matchB.length).toBe(1);
+  });
+
+  test('E2E-AMBIGUITY-04: Full VoiceChannel NO_MATCH chain produces zero execution', async ({ page }) => {
+    await setupApp(page);
+
+    // No active contexts created
+    const res = await emitVoicePhrase(page, 'Неизвестная фраза без совпадения');
+    expect(res.status).toBe('NO_MATCH');
+
+    const logs = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getExecutionLogs());
+    expect(logs.length).toBe(0);
   });
 
 });
