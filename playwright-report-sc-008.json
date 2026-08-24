@@ -31,14 +31,14 @@
         { "title": "RECOVERY-01 & RECOVERY-02: Invalid responses preserve partial slots and multi-turn error recovery succeeds", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 670 }] }] },
         { "title": "RECOVERY-03: Repeated attempt after error completes original Dialogue State with executionCount === 1", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 450 }] }] },
         { "title": "NEG-01 & NEG-02: Cancelled dialogue emits zero events and cannot be resurrected", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 460 }] }] },
-        { "title": "NEG-03: Independent Intent after cancellation does NOT trigger cancelled ACCEPT_ORDER and executes DRIVER_ARRIVED", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 480 }] }] },
+        { "title": "NEG-03: Independent Intent after cancellation does NOT trigger cancelled ACCEPT_ORDER and executes concrete driver.arrived event", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 480 }] }] },
         { "title": "IDEMP-01: Repeated cancellation preserves CANCELLED status without errors or executions", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 410 }] }] },
         { "title": "IDEMP-02: Duplicate valid slot utterance after completion yields strictly executionCount === 1", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 430 }] }] }
       ]
     }
   ],
   "stats": {
-    "startTime": "2026-08-24T05:00:00.000Z",
+    "startTime": "2026-08-24T05:06:00.000Z",
     "duration": 4952,
     "expected": 16,
     "skipped": 0,
