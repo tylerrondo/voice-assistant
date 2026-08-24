@@ -3,7 +3,7 @@ import * as path from 'path';
 
 const scenarioFilePath = path.resolve(__dirname, '../../../scenario-sc-009-taxi-driver-dialogue-concurrency.json');
 
-test.describe('E2E: SC-009 Single Active Context Proof & Concurrency Audit (ТЗ-VOICE-SC-009)', () => {
+test.describe('E2E: SC-009 Concurrent Multi-Context Regression Suite (ТЗ-VOICE-SC-009)', () => {
 
   async function setupApp(page: any) {
     const appUrl = process.env.APP_URL || 'https://voice-assistant-two-olive.vercel.app';
@@ -29,71 +29,112 @@ test.describe('E2E: SC-009 Single Active Context Proof & Concurrency Audit (ТЗ
     }, phrase);
   }
 
-  test('CONCURRENCY-AUDIT-01: Proves SINGLE_ACTIVE_CONTEXT replacing 1001 with 1002 without contamination', async ({ page }) => {
+  test('CONTEXT-01 & 02: Creating 1001 and 1002 concurrently preserves both contexts in WAITING_FOR_SLOT', async ({ page }) => {
     await setupApp(page);
-    const fsmLocator = page.locator('[data-testid="fsm-driver-state"], .driver-status, [data-testid="driver-status"]').first();
 
-    // 1. Start order 1001
-    await emitVoicePhrase(page, 'Прими заказ');
-    await emitVoicePhrase(page, '1001');
-
-    let state = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getActiveState());
-    expect(state.status).toBe('WAITING_FOR_SLOT');
-    expect(state.slots.orderId).toBe(1001);
-
-    // 2. Start order 1002 (Proves Single Active Context Architecture replaces 1001)
+    await emitVoicePhrase(page, 'Прими заказ 1001');
     await emitVoicePhrase(page, 'Прими заказ 1002');
-    state = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getActiveState());
-    expect(state.status).toBe('WAITING_FOR_SLOT');
-    expect(state.slots.orderId).toBe(1002);
-    expect(state.missingSlots).toEqual(['payment']);
 
-    // 3. Complete order 1002
-    await emitVoicePhrase(page, 'Картой');
-    state = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getActiveState());
-    expect(state.status).toBe('COMPLETED');
-    expect(state.slots).toEqual({ orderId: 1002, payment: 'card' });
+    const contexts = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.listContexts());
+    expect(contexts.length).toBe(2);
 
-    // 4. Execution log proves strictly 1002 + card and ZERO 1001 executions
-    const logs = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getExecutionLogs());
-    const match1002 = logs.filter((l: any) => l.event.type === 'driver.order.accepted' && l.event.payload.orderId === 1002 && l.event.payload.payment === 'card');
-    const match1001 = logs.filter((l: any) => l.event.type === 'driver.order.accepted' && l.event.payload.orderId === 1001);
+    const ctxA = contexts.find((c: any) => c.slots.orderId === 1001);
+    const ctxB = contexts.find((c: any) => c.slots.orderId === 1002);
 
-    expect(match1002.length).toBe(1);
-    expect(match1002[0].event.payload).toEqual({ orderId: 1002, payment: 'card' });
-    expect(match1001.length).toBe(0);
-
-    await expect(fsmLocator).toHaveText(/ORDER_ACCEPTED|Принят/i);
+    expect(ctxA.status).toBe('WAITING_FOR_SLOT');
+    expect(ctxB.status).toBe('WAITING_FOR_SLOT');
+    expect(ctxA.contextId).not.toBe(ctxB.contextId);
   });
 
-  test('CONCURRENCY-AUDIT-02: Cancellation of active context does NOT affect prior history and emits 0 events', async ({ page }) => {
+  test('CONTEXT-03 & 04 & CROSS-CONTEXT-01: Independent slot filling produces exact separate executions', async ({ page }) => {
     await setupApp(page);
 
-    await emitVoicePhrase(page, 'Прими заказ');
-    await emitVoicePhrase(page, '1001');
+    // 1. Create two contexts
+    await emitVoicePhrase(page, 'Прими заказ 1001');
     await emitVoicePhrase(page, 'Прими заказ 1002');
+
+    const contexts = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.listContexts());
+    const idA = contexts.find((c: any) => c.slots.orderId === 1001).contextId;
+    const idB = contexts.find((c: any) => c.slots.orderId === 1002).contextId;
+
+    // 2. Fill Context A (1001)
+    await emitVoicePhrase(page, 'Заказ 1001');
+    await emitVoicePhrase(page, 'Картой');
+
+    // 3. Fill Context B (1002)
+    await emitVoicePhrase(page, 'Заказ 1002');
+    await emitVoicePhrase(page, 'Наличными');
+
+    // 4. Verify exact isolated executions
+    const logs = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getExecutionLogs());
+    const matchA = logs.filter((l: any) => l.contextId === idA && l.event.payload.orderId === 1001 && l.event.payload.payment === 'card');
+    const matchB = logs.filter((l: any) => l.contextId === idB && l.event.payload.orderId === 1002 && l.event.payload.payment === 'cash');
+
+    expect(matchA.length).toBe(1);
+    expect(matchB.length).toBe(1);
+  });
+
+  test('CROSS-CONTEXT-02: Zero slot or payload contamination between 1001 and 1002', async ({ page }) => {
+    await setupApp(page);
+
+    await emitVoicePhrase(page, 'Прими заказ 1001');
+    await emitVoicePhrase(page, 'Прими заказ 1002');
+
+    await emitVoicePhrase(page, 'Заказ 1001');
+    await emitVoicePhrase(page, 'Картой');
+
+    await emitVoicePhrase(page, 'Заказ 1002');
+    await emitVoicePhrase(page, 'Наличными');
+
+    const logs = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getExecutionLogs());
+    const contaminated1001Cash = logs.filter((l: any) => l.event.payload.orderId === 1001 && l.event.payload.payment === 'cash');
+    const contaminated1002Card = logs.filter((l: any) => l.event.payload.orderId === 1002 && l.event.payload.payment === 'card');
+
+    expect(contaminated1001Cash.length).toBe(0);
+    expect(contaminated1002Card.length).toBe(0);
+  });
+
+  test('CROSS-CONTEXT-03 & NEG-01: Independent cancellation of 1001 preserves 1002 completion', async ({ page }) => {
+    await setupApp(page);
+
+    await emitVoicePhrase(page, 'Прими заказ 1001');
+    await emitVoicePhrase(page, 'Прими заказ 1002');
+
+    // Cancel 1001 only
+    await emitVoicePhrase(page, 'Заказ 1001');
     await emitVoicePhrase(page, 'Отмена');
 
-    const state = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getActiveState());
-    expect(state.status).toBe('CANCELLED');
+    // Complete 1002
+    await emitVoicePhrase(page, 'Заказ 1002');
+    await emitVoicePhrase(page, 'Наличными');
 
     const logs = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getExecutionLogs());
-    expect(logs.length).toBe(0);
+    const match1001 = logs.filter((l: any) => l.event.payload.orderId === 1001);
+    const match1002 = logs.filter((l: any) => l.event.payload.orderId === 1002 && l.event.payload.payment === 'cash');
+
+    expect(match1001.length).toBe(0);
+    expect(match1002.length).toBe(1);
   });
 
-  test('CONCURRENCY-AUDIT-03: Duplicate utterance on single active context preserves executionCount === 1', async ({ page }) => {
+  test('IDEMP-01 & IDEMP-02: Idempotency per context does not leak across dialogues', async ({ page }) => {
     await setupApp(page);
 
+    await emitVoicePhrase(page, 'Прими заказ 1001');
     await emitVoicePhrase(page, 'Прими заказ 1002');
-    await emitVoicePhrase(page, 'Наличными');
-    await emitVoicePhrase(page, 'Наличными');
 
-    const count1002 = await page.evaluate(() => {
-      const logs = (window as any).__DIALOGUE_MANAGER__.getExecutionLogs();
-      return logs.filter((l: any) => l.event.type === 'driver.order.accepted' && l.event.payload.orderId === 1002 && l.event.payload.payment === 'cash').length;
-    });
+    await emitVoicePhrase(page, 'Заказ 1001');
+    await emitVoicePhrase(page, 'Картой');
+    await emitVoicePhrase(page, 'Картой'); // Duplicate on 1001
 
-    expect(count1002).toBe(1);
+    await emitVoicePhrase(page, 'Заказ 1002');
+    await emitVoicePhrase(page, 'Картой'); // Same payment on 1002
+
+    const logs = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getExecutionLogs());
+    const match1001 = logs.filter((l: any) => l.event.payload.orderId === 1001 && l.event.payload.payment === 'card');
+    const match1002 = logs.filter((l: any) => l.event.payload.orderId === 1002 && l.event.payload.payment === 'card');
+
+    expect(match1001.length).toBe(1);
+    expect(match1002.length).toBe(1);
   });
 
 });
