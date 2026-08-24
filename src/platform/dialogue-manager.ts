@@ -27,6 +27,11 @@ export interface DialogueManagerConfig {
   defaultTtlMs?: number;
 }
 
+export type RoutingResult =
+  | { status: 'RESOLVED'; contextId: string }
+  | { status: 'AMBIGUOUS_CONTEXT'; candidateContextIds: string[] }
+  | { status: 'NO_MATCH' };
+
 export class DialogueStateManager {
   private contexts: Map<string, DialogueContext> = new Map();
   private activeContextId: string | null = null;
@@ -135,11 +140,11 @@ export class DialogueStateManager {
     return newContext;
   }
 
-  public routeUtterance(phrase: string): DialogueContext | null {
+  public resolveRouting(phrase: string, extractedSlotKeys: string[]): RoutingResult {
     const text = phrase.toLowerCase();
     const tokens = text.split(/\s+/);
 
-    // 1. Universal Entity / Slot-value matching across all active contexts in the pool
+    // 1. Explicit Entity / Slot-value matching has highest priority
     for (const ctx of this.contexts.values()) {
       if (ctx.status !== 'WAITING_FOR_SLOT') continue;
 
@@ -147,7 +152,47 @@ export class DialogueStateManager {
         if (slotVal === undefined || slotVal === null) continue;
         const valStr = String(slotVal).toLowerCase();
 
-        // Exact match or token match with slot value
+        if (tokens.includes(valStr) || text.includes(valStr)) {
+          this.activeContextId = ctx.contextId;
+          return { status: 'RESOLVED', contextId: ctx.contextId };
+        }
+      }
+    }
+
+    // 2. Candidate Resolution: Filter contexts in WAITING_FOR_SLOT that are missing any extracted slot
+    const candidates = Array.from(this.contexts.values()).filter(ctx => {
+      if (ctx.status !== 'WAITING_FOR_SLOT') return false;
+      return extractedSlotKeys.some(key => ctx.missingSlots.includes(key));
+    });
+
+    if (candidates.length === 1) {
+      this.activeContextId = candidates[0].contextId;
+      return { status: 'RESOLVED', contextId: candidates[0].contextId };
+    }
+
+    if (candidates.length > 1) {
+      // Ambiguous input: no arbitrary selection, no silent activeContext fallback
+      return {
+        status: 'AMBIGUOUS_CONTEXT',
+        candidateContextIds: candidates.map(c => c.contextId)
+      };
+    }
+
+    return { status: 'NO_MATCH' };
+  }
+
+  public routeUtterance(phrase: string): DialogueContext | null {
+    const text = phrase.toLowerCase();
+    const tokens = text.split(/\s+/);
+
+    // 1. Entity match across active contexts
+    for (const ctx of this.contexts.values()) {
+      if (ctx.status !== 'WAITING_FOR_SLOT') continue;
+
+      for (const [slotKey, slotVal] of Object.entries(ctx.slots)) {
+        if (slotVal === undefined || slotVal === null) continue;
+        const valStr = String(slotVal).toLowerCase();
+
         if (tokens.includes(valStr) || text.includes(valStr)) {
           this.activeContextId = ctx.contextId;
           return ctx;
@@ -155,7 +200,7 @@ export class DialogueStateManager {
       }
     }
 
-    // 2. Fall back to current active context
+    // 2. Active state
     return this.getActiveState();
   }
 
