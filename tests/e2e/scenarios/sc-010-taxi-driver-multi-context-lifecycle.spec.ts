@@ -52,7 +52,7 @@ test.describe('E2E: SC-010 Multi-Context Complete Lifecycle Suite (ТЗ-VOICE-SC
     expect(ctxB.contextId).not.toBe(ctxC.contextId);
   });
 
-  test('WORKFLOW-02: Diverse completion of 3 contexts (1001->Card, 1002->Cancel, 1003->Cash)', async ({ page }) => {
+  test('WORKFLOW-02: Diverse completion of 3 contexts (1001->Card, 1002->Cancel, 1003->Cash) with exact contextId correlation', async ({ page }) => {
     await setupApp(page);
 
     // 1. Create 3 contexts
@@ -83,60 +83,74 @@ test.describe('E2E: SC-010 Multi-Context Complete Lifecycle Suite (ТЗ-VOICE-SC
     expect(contextsAfter.find((c: any) => c.contextId === idB).status).toBe('CANCELLED');
     expect(contextsAfter.find((c: any) => c.contextId === idC).status).toBe('COMPLETED');
 
-    // Verify executions in structured log
+    // Verify executions correlated to contextId
     const logs = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getExecutionLogs());
     const match1001 = logs.filter((l: any) => l.contextId === idA && l.event.payload.orderId === 1001 && l.event.payload.payment === 'card');
     const match1002 = logs.filter((l: any) => l.contextId === idB);
     const match1003 = logs.filter((l: any) => l.contextId === idC && l.event.payload.orderId === 1003 && l.event.payload.payment === 'cash');
 
     expect(match1001.length).toBe(1);
+    expect(match1001[0].contextId).toBe(idA);
     expect(match1002.length).toBe(0); // 0 executions for cancelled
     expect(match1003.length).toBe(1);
+    expect(match1003[0].contextId).toBe(idC);
     expect(logs.length).toBe(2);
   });
 
-  test('WORKFLOW-03: Switching after completion and cancelled resurrection protection', async ({ page }) => {
+  test('WORKFLOW-03: Context switching after completion and cancelled context resurrection protection', async ({ page }) => {
     await setupApp(page);
 
     await emitVoicePhrase(page, 'Прими заказ 1001');
     await emitVoicePhrase(page, 'Прими заказ 1002');
     await emitVoicePhrase(page, 'Прими заказ 1003');
 
+    const contextsBefore = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.listContexts());
+    const idA = contextsBefore.find((c: any) => c.slots.orderId === 1001).contextId;
+    const idB = contextsBefore.find((c: any) => c.slots.orderId === 1002).contextId;
+    const idC = contextsBefore.find((c: any) => c.slots.orderId === 1003).contextId;
+
+    // 1. Complete 1001
     await emitVoicePhrase(page, 'Заказ 1001');
     await emitVoicePhrase(page, 'Картой');
 
-    await emitVoicePhrase(page, 'Заказ 1002');
-    await emitVoicePhrase(page, 'Отмена');
-
+    // 2. Switch to 1003 and complete it with cash
     await emitVoicePhrase(page, 'Заказ 1003');
     await emitVoicePhrase(page, 'Наличными');
 
-    // Attempt to mutate completed 1001 with 1003 switch
-    await emitVoicePhrase(page, 'Заказ 1003');
-    await emitVoicePhrase(page, 'Картой');
+    // 3. Verify 1001 remains COMPLETED with strictly 1 execution after switching
+    const contextsMid = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.listContexts());
+    expect(contextsMid.find((c: any) => c.contextId === idA).status).toBe('COMPLETED');
+    expect(contextsMid.find((c: any) => c.contextId === idC).status).toBe('COMPLETED');
 
-    // Attempt to resurrect cancelled 1002
+    // 4. Cancel 1002
+    await emitVoicePhrase(page, 'Заказ 1002');
+    await emitVoicePhrase(page, 'Отмена');
+
+    // 5. Attempt to resurrect cancelled 1002
     await emitVoicePhrase(page, 'Заказ 1002');
     await emitVoicePhrase(page, 'Наличными');
 
     const logs = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getExecutionLogs());
-    const count1001 = logs.filter((l: any) => l.event.payload.orderId === 1001).length;
-    const count1002 = logs.filter((l: any) => l.event.payload.orderId === 1002).length;
-    const count1003 = logs.filter((l: any) => l.event.payload.orderId === 1003 && l.event.payload.payment === 'cash').length;
-    const count1003Card = logs.filter((l: any) => l.event.payload.orderId === 1003 && l.event.payload.payment === 'card').length;
+    const countA = logs.filter((l: any) => l.contextId === idA).length;
+    const countB = logs.filter((l: any) => l.contextId === idB).length;
+    const countC = logs.filter((l: any) => l.contextId === idC).length;
 
-    expect(count1001).toBe(1);
-    expect(count1002).toBe(0);
-    expect(count1003).toBe(1);
-    expect(count1003Card).toBe(0);
+    expect(countA).toBe(1);
+    expect(countB).toBe(0); // Cancelled context did NOT resurrect
+    expect(countC).toBe(1);
   });
 
-  test('CROSS-CONTEXT-NEGATIVE: Zero invalid combinations or payload contamination', async ({ page }) => {
+  test('CROSS-CONTEXT-NEGATIVE: Zero invalid combinations with exact contextId and payload correlation', async ({ page }) => {
     await setupApp(page);
 
     await emitVoicePhrase(page, 'Прими заказ 1001');
     await emitVoicePhrase(page, 'Прими заказ 1002');
     await emitVoicePhrase(page, 'Прими заказ 1003');
+
+    const contexts = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.listContexts());
+    const idA = contexts.find((c: any) => c.slots.orderId === 1001).contextId;
+    const idB = contexts.find((c: any) => c.slots.orderId === 1002).contextId;
+    const idC = contexts.find((c: any) => c.slots.orderId === 1003).contextId;
 
     await emitVoicePhrase(page, 'Заказ 1001');
     await emitVoicePhrase(page, 'Картой');
@@ -149,21 +163,20 @@ test.describe('E2E: SC-010 Multi-Context Complete Lifecycle Suite (ТЗ-VOICE-SC
 
     const logs = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getExecutionLogs());
 
-    const c1001Cash = logs.filter((l: any) => l.event.payload.orderId === 1001 && l.event.payload.payment === 'cash');
-    const c1002Card = logs.filter((l: any) => l.event.payload.orderId === 1002 && l.event.payload.payment === 'card');
-    const c1002Cash = logs.filter((l: any) => l.event.payload.orderId === 1002 && l.event.payload.payment === 'cash');
-    const c1003Card = logs.filter((l: any) => l.event.payload.orderId === 1003 && l.event.payload.payment === 'card');
+    // Strict cross-context negative checks including contextId correlation
+    const cA_cash = logs.filter((l: any) => l.contextId === idA && l.event.payload.payment === 'cash');
+    const cB_any = logs.filter((l: any) => l.contextId === idB);
+    const cC_card = logs.filter((l: any) => l.contextId === idC && l.event.payload.payment === 'card');
 
-    expect(c1001Cash.length).toBe(0);
-    expect(c1002Card.length).toBe(0);
-    expect(c1002Cash.length).toBe(0);
-    expect(c1003Card.length).toBe(0);
+    expect(cA_cash.length).toBe(0);
+    expect(cB_any.length).toBe(0);
+    expect(cC_card.length).toBe(0);
   });
 
-  test('RECOVERY-04: Fourth context (1004) error recovery preserves states and executions of 1001-1003', async ({ page }) => {
+  test('RECOVERY-04: Fourth context (1004) error recovery preserves states, contextIds, and executions of 1001-1003', async ({ page }) => {
     await setupApp(page);
 
-    // Initial 3 contexts
+    // 1. Initial 3 contexts setup
     await emitVoicePhrase(page, 'Прими заказ 1001');
     await emitVoicePhrase(page, 'Прими заказ 1002');
     await emitVoicePhrase(page, 'Прими заказ 1003');
@@ -177,7 +190,19 @@ test.describe('E2E: SC-010 Multi-Context Complete Lifecycle Suite (ТЗ-VOICE-SC
     await emitVoicePhrase(page, 'Заказ 1003');
     await emitVoicePhrase(page, 'Наличными');
 
-    // Create 4th context with invalid turn recovery
+    // 2. Snapshot of contexts 1001-1003 BEFORE 1004
+    const snapshotBefore = await page.evaluate(() => {
+      const dm = (window as any).__DIALOGUE_MANAGER__;
+      return dm.listContexts().map((c: any) => ({
+        contextId: c.contextId,
+        orderId: c.slots.orderId,
+        status: c.status,
+        slots: { ...c.slots }
+      }));
+    });
+    expect(snapshotBefore.length).toBe(3);
+
+    // 3. Create 4th context with invalid turn recovery
     await emitVoicePhrase(page, 'Прими заказ 1004');
     await emitVoicePhrase(page, 'Не знаю'); // invalid turn
 
@@ -188,15 +213,29 @@ test.describe('E2E: SC-010 Multi-Context Complete Lifecycle Suite (ТЗ-VOICE-SC
     await emitVoicePhrase(page, 'Наличными'); // recovery turn
     state1004 = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getActiveState());
     expect(state1004.status).toBe('COMPLETED');
+    const id1004 = state1004.contextId;
 
+    // 4. Verify snapshot of contexts 1001-1003 AFTER 1004 (Strict immutability proof)
+    const contextsAfter = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.listContexts());
+    expect(contextsAfter.length).toBe(4);
+
+    for (const snap of snapshotBefore) {
+      const current = contextsAfter.find((c: any) => c.contextId === snap.contextId);
+      expect(current).toBeDefined();
+      expect(current.slots.orderId).toBe(snap.orderId);
+      expect(current.status).toBe(snap.status);
+      expect(current.slots).toEqual(snap.slots);
+    }
+
+    // 5. Verify executions
     const logs = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getExecutionLogs());
-    const match1004 = logs.filter((l: any) => l.event.payload.orderId === 1004 && l.event.payload.payment === 'cash');
+    const match1004 = logs.filter((l: any) => l.contextId === id1004 && l.event.payload.orderId === 1004 && l.event.payload.payment === 'cash');
 
     expect(match1004.length).toBe(1);
-    expect(logs.length).toBe(3); // 1001, 1003, 1004
+    expect(logs.length).toBe(3); // strictly 1001, 1003, 1004
   });
 
-  test('IDEMP-03: Repeated slot filling on all completed contexts preserves executionCount === 1', async ({ page }) => {
+  test('IDEMP-03: Repeated slot filling on completed contexts preserves executionCount === 1 with contextId correlation', async ({ page }) => {
     await setupApp(page);
 
     await emitVoicePhrase(page, 'Прими заказ 1001');
@@ -209,12 +248,16 @@ test.describe('E2E: SC-010 Multi-Context Complete Lifecycle Suite (ТЗ-VOICE-SC
     await emitVoicePhrase(page, 'Наличными');
     await emitVoicePhrase(page, 'Наличными'); // duplicate
 
-    const logs = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getExecutionLogs());
-    const count1001 = logs.filter((l: any) => l.event.payload.orderId === 1001 && l.event.payload.payment === 'card').length;
-    const count1003 = logs.filter((l: any) => l.event.payload.orderId === 1003 && l.event.payload.payment === 'cash').length;
+    const contexts = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.listContexts());
+    const idA = contexts.find((c: any) => c.slots.orderId === 1001).contextId;
+    const idC = contexts.find((c: any) => c.slots.orderId === 1003).contextId;
 
-    expect(count1001).toBe(1);
-    expect(count1003).toBe(1);
+    const logs = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getExecutionLogs());
+    const countA = logs.filter((l: any) => l.contextId === idA && l.event.payload.orderId === 1001 && l.event.payload.payment === 'card').length;
+    const countC = logs.filter((l: any) => l.contextId === idC && l.event.payload.orderId === 1003 && l.event.payload.payment === 'cash').length;
+
+    expect(countA).toBe(1);
+    expect(countC).toBe(1);
   });
 
 });
