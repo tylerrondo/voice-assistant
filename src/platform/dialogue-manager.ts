@@ -7,6 +7,7 @@ export interface DialogueContext {
   createdAt: number;
   updatedAt: number;
   expiresAt: number;
+  actionType?: string;
   clarificationPrompt?: string;
 }
 
@@ -32,9 +33,14 @@ export class DialogueStateManager {
   private maxActiveContexts: number;
   private defaultTtlMs: number;
 
-  constructor(config: DialogueManagerConfig = {}) {
-    this.maxActiveContexts = config.maxActiveContexts ?? 50; // Configurable runtime policy, default 50
-    this.defaultTtlMs = config.defaultTtlMs ?? 300000;
+  constructor(configOrTimeout: DialogueManagerConfig | number = {}) {
+    if (typeof configOrTimeout === 'number') {
+      this.defaultTtlMs = configOrTimeout;
+      this.maxActiveContexts = 50;
+    } else {
+      this.maxActiveContexts = configOrTimeout.maxActiveContexts ?? 50;
+      this.defaultTtlMs = configOrTimeout.defaultTtlMs ?? 300000;
+    }
     this.reset();
   }
 
@@ -69,10 +75,18 @@ export class DialogueStateManager {
     return false;
   }
 
-  public createContext(intent: string, initialSlots: Record<string, any> = {}, requiredSlots: string[] = ['orderId', 'payment']): DialogueContext {
-    if (initialSlots.orderId) {
+  public createContext(
+    intent: string,
+    initialSlots: Record<string, any> = {},
+    requiredSlots: string[] = ['orderId', 'payment'],
+    actionType: string = 'driver.order.accepted',
+    clarificationPrompts: Record<string, string> = { orderId: 'Какой заказ?', payment: 'Какой способ оплаты?' }
+  ): DialogueContext {
+    // If context with exact entity already exists and is waiting for slot, switch to it
+    const entityKey = Object.keys(initialSlots)[0];
+    if (entityKey && initialSlots[entityKey] !== undefined) {
       const existing = Array.from(this.contexts.values()).find(
-        c => c.intent === intent && c.slots.orderId === initialSlots.orderId && c.status === 'WAITING_FOR_SLOT'
+        c => c.intent === intent && c.slots[entityKey] === initialSlots[entityKey] && c.status === 'WAITING_FOR_SLOT'
       );
       if (existing) {
         this.activeContextId = existing.contextId;
@@ -90,6 +104,7 @@ export class DialogueStateManager {
     const missingSlots = requiredSlots.filter(s => slots[s] === undefined);
     const now = Date.now();
 
+    const firstMissing = missingSlots[0];
     const newContext: DialogueContext = {
       contextId,
       intent,
@@ -99,7 +114,8 @@ export class DialogueStateManager {
       createdAt: now,
       updatedAt: now,
       expiresAt: now + this.defaultTtlMs,
-      clarificationPrompt: missingSlots.includes('orderId') ? 'Какой заказ?' : (missingSlots.includes('payment') ? 'Какой способ оплаты?' : undefined)
+      actionType,
+      clarificationPrompt: firstMissing ? clarificationPrompts[firstMissing] : undefined
     };
 
     this.contexts.set(contextId, newContext);
@@ -113,18 +129,22 @@ export class DialogueStateManager {
   }
 
   public routeUtterance(phrase: string): DialogueContext | null {
-    const orderMatch = phrase.match(/100\d/);
-    if (orderMatch) {
-      const targetOrderId = parseInt(orderMatch[0], 10);
-      const targetCtx = Array.from(this.contexts.values()).find(
-        c => c.slots.orderId === targetOrderId && c.status === 'WAITING_FOR_SLOT'
-      );
-      if (targetCtx) {
-        this.activeContextId = targetCtx.contextId;
-        return targetCtx;
+    // Universal Entity-Based Routing: extract numeric entity or match against any slot value in pool
+    const numberMatches = phrase.match(/\b\d+\b/g);
+    if (numberMatches) {
+      for (const numStr of numberMatches) {
+        const numVal = parseInt(numStr, 10);
+        const matchingCtx = Array.from(this.contexts.values()).find(
+          c => c.status === 'WAITING_FOR_SLOT' && Object.values(c.slots).includes(numVal)
+        );
+        if (matchingCtx) {
+          this.activeContextId = matchingCtx.contextId;
+          return matchingCtx;
+        }
       }
     }
 
+    // Default to active context
     return this.getActiveState();
   }
 
@@ -144,7 +164,8 @@ export class DialogueStateManager {
       ctx.clarificationPrompt = undefined;
       this.recordExecution(ctx);
     } else {
-      ctx.clarificationPrompt = ctx.missingSlots.includes('orderId') ? 'Какой заказ?' : 'Какой способ оплаты?';
+      const nextMissing = ctx.missingSlots[0];
+      ctx.clarificationPrompt = nextMissing === 'orderId' ? 'Какой заказ?' : 'Какой способ оплаты?';
     }
 
     return ctx;
@@ -175,8 +196,8 @@ export class DialogueStateManager {
     const exists = this.executionLogs.some(l => l.contextId === ctx.contextId);
     if (exists) return;
 
-    let eventType = 'driver.order.accepted';
-    if (ctx.intent === 'DRIVER_ARRIVED') eventType = 'driver.arrived';
+    // Universal Action Type from ScenarioDefinition
+    const eventType = ctx.actionType || (ctx.intent === 'DRIVER_ARRIVED' ? 'driver.arrived' : 'driver.order.accepted');
 
     this.executionLogs.push({
       contextId: ctx.contextId,
