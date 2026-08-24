@@ -13,10 +13,11 @@
 | **SC-007** | Taxi Driver Context Isolation & Cross-Protection | `ACCEPTED` | [JSON](../../scenario-sc-007-taxi-driver-context-isolation.json) | [Contract](../../tests/contract/scenarios/sc-007-taxi-driver-context-isolation.spec.ts) | [E2E](../../tests/e2e/scenarios/sc-007-taxi-driver-context-isolation.spec.ts) | [Report](../../playwright-report-sc-007.json) |
 | **SC-008** | Taxi Driver Dialogue Lifecycle, Cancellation & Recovery | `ACCEPTED` | [JSON](../../scenario-sc-008-taxi-driver-dialogue-lifecycle.json) | [Contract](../../tests/contract/scenarios/sc-008-taxi-driver-dialogue-lifecycle.spec.ts) | [E2E](../../tests/e2e/scenarios/sc-008-taxi-driver-dialogue-lifecycle.spec.ts) | [Report](../../playwright-report-sc-008.json) |
 | **SC-009** | Taxi Driver Concurrent Multi-Context Dialogue | `ACCEPTED` | [JSON](../../scenario-sc-009-taxi-driver-dialogue-concurrency.json) | [Contract](../../tests/contract/scenarios/sc-009-taxi-driver-dialogue-concurrency.spec.ts) | [E2E](../../tests/e2e/scenarios/sc-009-taxi-driver-dialogue-concurrency.spec.ts) | [Report](../../playwright-report-sc-009.json) |
+| **SC-010** | Taxi Driver Multi-Context Lifecycle & Routing | `ACCEPTED` | [JSON](../../scenario-sc-010-taxi-driver-multi-context-lifecycle.json) | [Contract](../../tests/contract/scenarios/sc-010-taxi-driver-multi-context-lifecycle.spec.ts) | [E2E](../../tests/e2e/scenarios/sc-010-taxi-driver-multi-context-lifecycle.spec.ts) | [Report](../../playwright-report-sc-010.json) |
 
 ---
 
 ### Архитектурные инварианты реестра:
-1. **Единая схема спецификации:** Все сценарии соответствуют `ScenarioSet v2.0` без использования устаревших `targetState`.
+1. **Единая схема спецификации:** Все сценарии соответствуют `ScenarioSet v2.0` с декларативными `slotExtractors` без устаревших `targetState`.
 2. **Изоляция каналов:** Все голосовые события подаются исключительно через `window.__VOICE_CHANNEL__.handleIncomingVoice(...)`.
 3. **Строгая валидация:** Все тесты проверяют каноническую структуру `event.type` и структурированный `event.payload` с уникальным `contextId` без использования fallback-конструкций (`||`) и моков.
