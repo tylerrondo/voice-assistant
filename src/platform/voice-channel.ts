@@ -79,9 +79,40 @@ export class VoiceChannel {
   public async handleIncomingVoice(phrase: string): Promise<any> {
     const text = phrase.trim().toLowerCase();
 
-    // 1. Global Cancellation
-    if (text === 'отмена' || text === 'cancel') {
-      return this.dialogueManager.cancelContext();
+    // 1. Ambiguity-Safe Cancellation Flow
+    if (text === 'отмена' || text === 'cancel' || text.includes('отмена') || text.includes('cancel')) {
+      const isPureCancel = text === 'отмена' || text === 'cancel';
+      const activeWaiting = this.dialogueManager.listContexts().filter(c => c.status === 'WAITING_FOR_SLOT');
+
+      if (isPureCancel) {
+        if (activeWaiting.length === 1) {
+          return this.dialogueManager.cancelContext(activeWaiting[0].contextId);
+        }
+        if (activeWaiting.length > 1) {
+          const candidateEntities = activeWaiting
+            .map(c => Object.values(c.slots)[0])
+            .filter(v => v !== undefined)
+            .join(', ');
+
+          const candidateIntent = activeWaiting[0]?.intent;
+          const matchingScenario = this.scenarioRegistry.find(sc => sc.intent === candidateIntent);
+          const template = matchingScenario?.ambiguityPrompt?.template || 'Уточните заказ: {candidateEntities}';
+          const promptText = template.replace('{candidateEntities}', candidateEntities);
+
+          return {
+            status: 'AMBIGUOUS_CONTEXT',
+            candidateContextIds: activeWaiting.map(c => c.contextId),
+            clarificationPrompt: promptText
+          };
+        }
+        return { status: 'NO_MATCH' };
+      }
+
+      // Explicit cancellation (e.g. "Заказ 1002 отмена")
+      const routeResult = this.dialogueManager.resolveRouting(text, []);
+      if (routeResult.status === 'RESOLVED') {
+        return this.dialogueManager.cancelContext(routeResult.contextId);
+      }
     }
 
     // 2. Intent Resolution (New Context Initiation)
@@ -127,7 +158,6 @@ export class VoiceChannel {
     const routingResult: RoutingResult = this.dialogueManager.resolveRouting(text, extractedSlotKeys);
 
     if (routingResult.status === 'AMBIGUOUS_CONTEXT') {
-      // Determinate correlation: bind strictly to candidate context's scenario intent (no scenarioRegistry[0])
       const candidateContexts = routingResult.candidateContextIds
         .map(id => this.dialogueManager.getContext(id))
         .filter(Boolean);
