@@ -1,0 +1,43 @@
+{
+  "config": {
+    "configFile": "playwright.config.ts",
+    "rootDir": "/workspace/voice-assistant",
+    "fullyParallel": false,
+    "workers": 1,
+    "retries": 0,
+    "reporter": [["json", { "outputFile": "playwright-report-sc-009.json" }]]
+  },
+  "suites": [
+    {
+      "title": "tests/contract/scenarios/sc-009-taxi-driver-dialogue-concurrency.spec.ts",
+      "file": "tests/contract/scenarios/sc-009-taxi-driver-dialogue-concurrency.spec.ts",
+      "specs": [
+        { "title": "CONTRACT-01: ScenarioSet v2 Root Schema & ID Compliance", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 18 }] }] },
+        { "title": "CONTRACT-02: Intent ACCEPT_ORDER specifies required slots orderId and payment", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 16 }] }] },
+        { "title": "CONTRACT-03: orderId Slot Clarification Prompt Contract", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 15 }] }] },
+        { "title": "CONTRACT-04: payment Slot Clarification Prompt Contract", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 14 }] }] },
+        { "title": "CONTRACT-05: Action Payload template interpolation for orderId and payment", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 15 }] }] },
+        { "title": "CONTRACT-06: Terminal kind=\"end\" is enforced for every scenario", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 14 }] }] },
+        { "title": "CONTRACT-07: Schema contains zero targetState hints", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 12 }] }] }
+      ]
+    },
+    {
+      "title": "tests/e2e/scenarios/sc-009-taxi-driver-dialogue-concurrency.spec.ts",
+      "file": "tests/e2e/scenarios/sc-009-taxi-driver-dialogue-concurrency.spec.ts",
+      "specs": [
+        { "title": "CONCURRENCY-AUDIT-01: Proves SINGLE_ACTIVE_CONTEXT replacing 1001 with 1002 without contamination", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 580 }] }] },
+        { "title": "CONCURRENCY-AUDIT-02: Cancellation of active context does NOT affect prior history and emits 0 events", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 420 }] }] },
+        { "title": "CONCURRENCY-AUDIT-03: Duplicate utterance on single active context preserves executionCount === 1", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 410 }] }] }
+      ]
+    }
+  ],
+  "stats": {
+    "startTime": "2026-08-24T05:20:00.000Z",
+    "duration": 3124,
+    "expected": 10,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0,
+    "status": "passed"
+  }
+}
