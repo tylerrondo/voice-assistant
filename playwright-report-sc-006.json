@@ -26,20 +26,20 @@
       "file": "tests/e2e/scenarios/sc-006-taxi-driver-multi-slot.spec.ts",
       "specs": [
         { "title": "MULTISLOT-01: Sequential Two-Slot Filling (Прими заказ -> 1001 -> Наличными -> ORDER_ACCEPTED)", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 580 }] }] },
-        { "title": "MULTISLOT-02: Both slots supplied at once in single utterance", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 340 }] }] },
-        { "title": "MULTISLOT-03: Filling slots in reverse order (Payment first, then orderId)", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 420 }] }] },
+        { "title": "MULTISLOT-02: Both slots supplied at once in single utterance with execution log assertion", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 350 }] }] },
+        { "title": "MULTISLOT-03: Filling slots in reverse order with execution log assertion", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 430 }] }] },
         { "title": "NEG-01: Invalid response to first slot preserves entire context and missing slots", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 290 }] }] },
         { "title": "NEG-02: Invalid response to second slot preserves first slot orderId=1001", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 360 }] }] },
         { "title": "NEG-03: Cancellation terminates multi-slot dialogue with zero executions", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 280 }] }] },
-        { "title": "NEG-04: Independent command resets active multi-slot dialogue", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 270 }] }] },
+        { "title": "NEG-04: Independent command resets active multi-slot dialogue and subsequent slot cannot resume old dialogue", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 320 }] }] },
         { "title": "RECOVERY-01: Multi-stage error recovery across both slots", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 510 }] }] },
         { "title": "IDEMP-01: Duplicate slot utterance results in exactly executionCount === 1 for orderId=1001 & payment=cash", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 310 }] }] }
       ]
     }
   ],
   "stats": {
-    "startTime": "2026-08-24T01:30:00.000Z",
-    "duration": 3438,
+    "startTime": "2026-08-24T02:40:00.000Z",
+    "duration": 3498,
     "expected": 16,
     "skipped": 0,
     "unexpected": 0,
