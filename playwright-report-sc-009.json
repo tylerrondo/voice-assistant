@@ -14,27 +14,28 @@
       "specs": [
         { "title": "CONTRACT-01: ScenarioSet v2 Root Schema & ID Compliance", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 18 }] }] },
         { "title": "CONTRACT-02: Intent ACCEPT_ORDER specifies required slots orderId and payment", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 16 }] }] },
-        { "title": "CONTRACT-03: orderId Slot Clarification Prompt Contract", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 15 }] }] },
-        { "title": "CONTRACT-04: payment Slot Clarification Prompt Contract", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 14 }] }] },
-        { "title": "CONTRACT-05: Action Payload template interpolation for orderId and payment", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 15 }] }] },
-        { "title": "CONTRACT-06: Terminal kind=\"end\" is enforced for every scenario", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 14 }] }] },
-        { "title": "CONTRACT-07: Schema contains zero targetState hints", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 12 }] }] }
+        { "title": "CONTRACT-03: Declarative slotExtractors defined for orderId and payment", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 15 }] }] },
+        { "title": "CONTRACT-04: Action Payload template interpolation for orderId and payment", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 14 }] }] },
+        { "title": "CONTRACT-05: Terminal kind=\"end\" is enforced for every scenario", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 14 }] }] },
+        { "title": "CONTRACT-06: Schema contains zero targetState hints", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 12 }] }] }
       ]
     },
     {
       "title": "tests/e2e/scenarios/sc-009-taxi-driver-dialogue-concurrency.spec.ts",
       "file": "tests/e2e/scenarios/sc-009-taxi-driver-dialogue-concurrency.spec.ts",
       "specs": [
-        { "title": "CONCURRENCY-AUDIT-01: Proves SINGLE_ACTIVE_CONTEXT replacing 1001 with 1002 without contamination", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 580 }] }] },
-        { "title": "CONCURRENCY-AUDIT-02: Cancellation of active context does NOT affect prior history and emits 0 events", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 420 }] }] },
-        { "title": "CONCURRENCY-AUDIT-03: Duplicate utterance on single active context preserves executionCount === 1", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 410 }] }] }
+        { "title": "CONTEXT-01 & 02: Creating 1001 and 1002 concurrently preserves both contexts in WAITING_FOR_SLOT", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 580 }] }] },
+        { "title": "CONTEXT-03 & 04 & CROSS-CONTEXT-01: Independent slot filling produces exact separate executions", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 640 }] }] },
+        { "title": "CROSS-CONTEXT-02: Zero slot or payload contamination between 1001 and 1002", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 480 }] }] },
+        { "title": "CROSS-CONTEXT-03 & NEG-01: Independent cancellation of 1001 preserves 1002 completion", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 490 }] }] },
+        { "title": "IDEMP-01 & IDEMP-02: Idempotency per context does not leak across dialogues", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 470 }] }] }
       ]
     }
   ],
   "stats": {
-    "startTime": "2026-08-24T05:20:00.000Z",
-    "duration": 3124,
-    "expected": 10,
+    "startTime": "2026-08-24T10:05:00.000Z",
+    "duration": 2980,
+    "expected": 11,
     "skipped": 0,
     "unexpected": 0,
     "flaky": 0,
