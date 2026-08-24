@@ -109,7 +109,7 @@ export class VoiceChannel {
       );
     }
 
-    // 3. Extract slots scoped to active contexts in WAITING_FOR_SLOT
+    // 3. Extract slots strictly scoped to active contexts in WAITING_FOR_SLOT
     const activeContexts = this.dialogueManager.listContexts().filter(c => c.status === 'WAITING_FOR_SLOT');
     let extractedSlots: Record<string, any> = {};
 
@@ -127,7 +127,7 @@ export class VoiceChannel {
     const routingResult: RoutingResult = this.dialogueManager.resolveRouting(text, extractedSlotKeys);
 
     if (routingResult.status === 'AMBIGUOUS_CONTEXT') {
-      // Determinate correlation: bind directly to the candidate context's scenario
+      // Determinate correlation: bind strictly to candidate context's scenario intent (no scenarioRegistry[0])
       const candidateContexts = routingResult.candidateContextIds
         .map(id => this.dialogueManager.getContext(id))
         .filter(Boolean);
