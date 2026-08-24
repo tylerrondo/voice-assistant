@@ -30,7 +30,7 @@ test.describe('CONTRACT: SC-010 Multi-Context Lifecycle Suite (ТЗ-VOICE-SC-010
     expect(sc.slotExtractors.payment.mapping.cash).toContain('наличными');
   });
 
-  test('CONTRACT-04: Action payload template interpolation without domain hardcode', async () => {
+  test('CONTRACT-04: Action payload template interpolation with canonical event type', async () => {
     const sc = scenarioSet.scenarios[0];
     const emitStep = sc.steps.find((st: any) => st.kind === 'emit');
     expect(emitStep.event.type).toBe('driver.order.accepted');
