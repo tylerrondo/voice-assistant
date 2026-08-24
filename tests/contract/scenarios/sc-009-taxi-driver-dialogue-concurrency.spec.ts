@@ -1,0 +1,53 @@
+import { test, expect } from '@playwright/test';
+import * as fs from 'fs';
+import * as path from 'path';
+
+const scenarioPath = path.resolve(__dirname, '../../../scenario-sc-009-taxi-driver-dialogue-concurrency.json');
+const rawContent = fs.readFileSync(scenarioPath, 'utf-8');
+const scenarioSet = JSON.parse(rawContent);
+
+test.describe('CONTRACT: SC-009 Dialogue Concurrency Audit Suite (ТЗ-VOICE-SC-009)', () => {
+
+  test('CONTRACT-01: ScenarioSet v2 Root Schema & ID Compliance', async () => {
+    expect(scenarioSet.version).toBe(2);
+    expect(scenarioSet.id).toBe('scenario-set-sc-009-taxi-driver-dialogue-concurrency');
+    expect(Array.isArray(scenarioSet.scenarios)).toBe(true);
+  });
+
+  test('CONTRACT-02: Intent ACCEPT_ORDER specifies required slots orderId and payment', async () => {
+    const sc = scenarioSet.scenarios.find((s: any) => s.intent === 'ACCEPT_ORDER');
+    expect(sc).toBeDefined();
+    expect(sc.requiredSlots).toEqual(['orderId', 'payment']);
+  });
+
+  test('CONTRACT-03: orderId Slot Clarification Prompt Contract', async () => {
+    const sc = scenarioSet.scenarios[0];
+    expect(sc.clarificationPrompts.orderId).toBe('Какой заказ?');
+  });
+
+  test('CONTRACT-04: payment Slot Clarification Prompt Contract', async () => {
+    const sc = scenarioSet.scenarios[0];
+    expect(sc.clarificationPrompts.payment).toBe('Какой способ оплаты?');
+  });
+
+  test('CONTRACT-05: Action Payload template interpolation for orderId and payment', async () => {
+    const sc = scenarioSet.scenarios[0];
+    const emitStep = sc.steps.find((st: any) => st.kind === 'emit');
+    expect(emitStep.event.type).toBe('driver.order.accepted');
+    expect(emitStep.event.payload.orderId).toBe('{{slots.orderId}}');
+    expect(emitStep.event.payload.payment).toBe('{{slots.payment}}');
+  });
+
+  test('CONTRACT-06: Terminal kind="end" is enforced for every scenario', async () => {
+    for (const sc of scenarioSet.scenarios) {
+      const last = sc.steps[sc.steps.length - 1];
+      expect(last.kind).toBe('end');
+    }
+  });
+
+  test('CONTRACT-07: Schema contains zero targetState hints', async () => {
+    const jsonString = JSON.stringify(scenarioSet);
+    expect(jsonString).not.toContain('targetState');
+  });
+
+});
