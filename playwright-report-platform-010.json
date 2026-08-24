@@ -17,7 +17,7 @@
         { "title": "CONTRACT-03: Context switching preserves slots across independent contexts", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 15 }] }] },
         { "title": "CONTRACT-04: Cancellation addresses strictly selected context", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 14 }] }] },
         { "title": "CONTRACT-05: Expiration addresses strictly selected context", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 15 }] }] },
-        { "title": "CONTRACT-06: Execution log contains contextId correlation", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 14 }] }] },
+        { "title": "CONTRACT-06: Execution log contains contextId and strict actionType without fallback", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 14 }] }] },
         { "title": "CONTRACT-07: Idempotency is context-aware and does not conflict between orders", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 16 }] }] },
         { "title": "CONTRACT-08: Runtime capacity policy rejects new context when maxActiveContexts is reached", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 15 }] }] }
       ]
@@ -37,7 +37,7 @@
     }
   ],
   "stats": {
-    "startTime": "2026-08-24T09:25:00.000Z",
+    "startTime": "2026-08-24T09:30:00.000Z",
     "duration": 3950,
     "expected": 15,
     "skipped": 0,
