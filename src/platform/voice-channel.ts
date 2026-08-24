@@ -25,6 +25,9 @@ export interface ScenarioDefinition {
   requiredSlots?: string[];
   slotExtractors?: Record<string, SlotExtractorDefinition>;
   clarificationPrompts?: Record<string, string>;
+  ambiguityPrompt?: {
+    template: string;
+  };
   steps: ScenarioStep[];
 }
 
@@ -119,10 +122,21 @@ export class VoiceChannel {
     const routingResult: RoutingResult = this.dialogueManager.resolveRouting(text, extractedSlotKeys);
 
     if (routingResult.status === 'AMBIGUOUS_CONTEXT') {
-      // Ambiguous input: strictly NO domain execution
+      // Find candidate entities to format clarification prompt
+      const candidateContexts = routingResult.candidateContextIds.map(id => this.dialogueManager.getContext(id)).filter(Boolean);
+      const candidateEntities = candidateContexts
+        .map(c => Object.values(c!.slots)[0])
+        .filter(v => v !== undefined)
+        .join(', ');
+
+      const activeSc = this.scenarioRegistry[0];
+      const template = activeSc?.ambiguityPrompt?.template || 'Уточните заказ: {candidateEntities}';
+      const promptText = template.replace('{candidateEntities}', candidateEntities);
+
       return {
         status: 'AMBIGUOUS_CONTEXT',
-        candidateContextIds: routingResult.candidateContextIds
+        candidateContextIds: routingResult.candidateContextIds,
+        clarificationPrompt: promptText
       };
     }
 
