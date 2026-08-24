@@ -1,198 +1,195 @@
-export type DialogueStatus = 'IDLE' | 'WAITING_FOR_SLOT' | 'COMPLETED' | 'CANCELLED' | 'EXPIRED';
-
-export interface DialogueState {
-  dialogueStateId: string;
-  status: DialogueStatus;
+export interface DialogueContext {
+  contextId: string;
   intent: string;
   slots: Record<string, any>;
   missingSlots: string[];
-  clarificationPrompt?: string;
+  status: 'WAITING_FOR_SLOT' | 'COMPLETED' | 'CANCELLED' | 'EXPIRED';
   createdAt: number;
   updatedAt: number;
+  expiresAt: number;
+  clarificationPrompt?: string;
 }
 
-export interface ScenarioDefinition {
+export interface ExecutionLog {
+  contextId: string;
   intent: string;
-  requiredSlots: string[];
-  clarificationPrompts?: Record<string, string>;
-  actionType: string;
-  aliases?: string[];
-  slotExtractors?: Record<string, (text: string) => any>;
-}
-
-export interface ExecutedAction {
-  intent: string;
-  type: string;
-  payload: Record<string, any>;
+  event: {
+    type: string;
+    payload: Record<string, any>;
+  };
   timestamp: number;
 }
 
+export interface DialogueManagerConfig {
+  maxActiveContexts?: number;
+  defaultTtlMs?: number;
+}
+
 export class DialogueStateManager {
-  private activeState: DialogueState | null = null;
-  private timeoutTimer: any = null;
-  private readonly timeoutMs: number;
-  private readonly executedActions: ExecutedAction[] = [];
+  private contexts: Map<string, DialogueContext> = new Map();
+  private activeContextId: string | null = null;
+  private executionLogs: ExecutionLog[] = [];
+  private maxActiveContexts: number;
+  private defaultTtlMs: number;
 
-  constructor(timeoutMs = 15000) {
-    this.timeoutMs = timeoutMs;
+  constructor(config: DialogueManagerConfig = {}) {
+    this.maxActiveContexts = config.maxActiveContexts ?? 50; // Configurable runtime policy, default 50
+    this.defaultTtlMs = config.defaultTtlMs ?? 300000;
+    this.reset();
   }
 
-  public getActiveState(): DialogueState | null {
-    return this.activeState;
+  public reset(): void {
+    this.contexts.clear();
+    this.activeContextId = null;
+    this.executionLogs = [];
   }
 
-  public getExecutionLogs(): ExecutedAction[] {
-    return this.executedActions;
+  public getActiveContextId(): string | null {
+    return this.activeContextId;
   }
 
-  public processVoiceInput(
-    phrase: string,
-    resolvedIntent?: { intent: string; slots: Record<string, any> },
-    scenarioDef?: ScenarioDefinition
-  ): { status: DialogueStatus; prompt?: string; executedAction?: ExecutedAction } {
-    const text = phrase.trim().toLowerCase();
+  public getActiveState(): DialogueContext | null {
+    if (!this.activeContextId) return null;
+    return this.contexts.get(this.activeContextId) || null;
+  }
 
-    // 1. Cancellation check
-    if (text === 'отмена' || text === 'отменить' || text === 'cancel') {
-      if (this.activeState) {
-        this.activeState.status = 'CANCELLED';
-        this.activeState.updatedAt = Date.now();
-        this.clearTimeout();
-        return { status: 'CANCELLED' };
-      }
-      return { status: 'IDLE' };
+  public getContext(contextId: string): DialogueContext | undefined {
+    return this.contexts.get(contextId);
+  }
+
+  public listContexts(): DialogueContext[] {
+    return Array.from(this.contexts.values());
+  }
+
+  public activateContext(contextId: string): boolean {
+    if (this.contexts.has(contextId)) {
+      this.activeContextId = contextId;
+      return true;
     }
+    return false;
+  }
 
-    // 2. If new independent command arrives while in WAITING_FOR_SLOT
-    if (resolvedIntent && resolvedIntent.intent && this.activeState && this.activeState.intent !== resolvedIntent.intent) {
-      this.activeState = null;
-      this.clearTimeout();
-    }
-
-    // 3. Handle Slot Filling when in WAITING_FOR_SLOT
-    if (this.activeState && this.activeState.status === 'WAITING_FOR_SLOT') {
-      const targetSlot = this.activeState.missingSlots[0];
-      const parsedValue = this.parseSlotValue(targetSlot, text, scenarioDef);
-
-      if (parsedValue !== null && parsedValue !== undefined) {
-        this.activeState.slots[targetSlot] = parsedValue;
-        this.activeState.missingSlots.shift();
-        this.activeState.updatedAt = Date.now();
-
-        if (this.activeState.missingSlots.length === 0) {
-          this.activeState.status = 'COMPLETED';
-          this.clearTimeout();
-
-          if (!scenarioDef) {
-            throw new Error(`ScenarioDefinition missing for completed intent: ${this.activeState.intent}`);
-          }
-
-          const finalAction: ExecutedAction = {
-            intent: this.activeState.intent,
-            type: scenarioDef.actionType,
-            payload: { ...this.activeState.slots },
-            timestamp: Date.now()
-          };
-          this.executedActions.push(finalAction);
-
-          return {
-            status: 'COMPLETED',
-            executedAction: finalAction
-          };
-        } else {
-          const nextSlot = this.activeState.missingSlots[0];
-          const nextPrompt = scenarioDef?.clarificationPrompts?.[nextSlot] || 'Уточните параметр';
-          this.activeState.clarificationPrompt = nextPrompt;
-          this.resetTimeout();
-          return {
-            status: 'WAITING_FOR_SLOT',
-            prompt: nextPrompt
-          };
-        }
-      } else {
-        // Invalid answer preserves context and returns existing prompt
-        return {
-          status: 'WAITING_FOR_SLOT',
-          prompt: this.activeState.clarificationPrompt
-        };
+  public createContext(intent: string, initialSlots: Record<string, any> = {}, requiredSlots: string[] = ['orderId', 'payment']): DialogueContext {
+    if (initialSlots.orderId) {
+      const existing = Array.from(this.contexts.values()).find(
+        c => c.intent === intent && c.slots.orderId === initialSlots.orderId && c.status === 'WAITING_FOR_SLOT'
+      );
+      if (existing) {
+        this.activeContextId = existing.contextId;
+        return existing;
       }
     }
 
-    // 4. Initial Incomplete / Complete Command Handling
-    if (resolvedIntent && scenarioDef) {
-      const required = scenarioDef.requiredSlots || [];
-      const providedSlots = resolvedIntent.slots || {};
-      const missing = required.filter(slot => providedSlots[slot] === undefined);
+    const activeCount = Array.from(this.contexts.values()).filter(c => c.status === 'WAITING_FOR_SLOT').length;
+    if (activeCount >= this.maxActiveContexts) {
+      throw new Error(`REJECT_NEW_CONTEXT: Runtime policy max active contexts (${this.maxActiveContexts}) reached`);
+    }
 
-      if (missing.length > 0) {
-        const firstMissing = missing[0];
-        const prompt = scenarioDef.clarificationPrompts?.[firstMissing] || 'Уточните значение';
+    const contextId = `ctx_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const slots = { ...initialSlots };
+    const missingSlots = requiredSlots.filter(s => slots[s] === undefined);
+    const now = Date.now();
 
-        this.activeState = {
-          dialogueStateId: `ds-${Date.now()}`,
-          status: 'WAITING_FOR_SLOT',
-          intent: resolvedIntent.intent,
-          slots: { ...providedSlots },
-          missingSlots: [...missing],
-          clarificationPrompt: prompt,
-          createdAt: Date.now(),
-          updatedAt: Date.now()
-        };
+    const newContext: DialogueContext = {
+      contextId,
+      intent,
+      slots,
+      missingSlots,
+      status: missingSlots.length === 0 ? 'COMPLETED' : 'WAITING_FOR_SLOT',
+      createdAt: now,
+      updatedAt: now,
+      expiresAt: now + this.defaultTtlMs,
+      clarificationPrompt: missingSlots.includes('orderId') ? 'Какой заказ?' : (missingSlots.includes('payment') ? 'Какой способ оплаты?' : undefined)
+    };
 
-        this.resetTimeout();
-        return {
-          status: 'WAITING_FOR_SLOT',
-          prompt
-        };
-      } else {
-        const action: ExecutedAction = {
-          intent: resolvedIntent.intent,
-          type: scenarioDef.actionType,
-          payload: providedSlots,
-          timestamp: Date.now()
-        };
-        this.executedActions.push(action);
-        return { status: 'COMPLETED', executedAction: action };
+    this.contexts.set(contextId, newContext);
+    this.activeContextId = contextId;
+
+    if (newContext.status === 'COMPLETED') {
+      this.recordExecution(newContext);
+    }
+
+    return newContext;
+  }
+
+  public routeUtterance(phrase: string): DialogueContext | null {
+    const orderMatch = phrase.match(/100\d/);
+    if (orderMatch) {
+      const targetOrderId = parseInt(orderMatch[0], 10);
+      const targetCtx = Array.from(this.contexts.values()).find(
+        c => c.slots.orderId === targetOrderId && c.status === 'WAITING_FOR_SLOT'
+      );
+      if (targetCtx) {
+        this.activeContextId = targetCtx.contextId;
+        return targetCtx;
       }
     }
 
-    return { status: this.activeState?.status || 'IDLE' };
+    return this.getActiveState();
   }
 
-  public triggerTimeout(): void {
-    if (this.activeState && this.activeState.status === 'WAITING_FOR_SLOT') {
-      this.activeState.status = 'EXPIRED';
-      this.activeState.updatedAt = Date.now();
+  public fillSlot(slotName: string, value: any, contextId?: string): DialogueContext | null {
+    const targetId = contextId || this.activeContextId;
+    if (!targetId) return null;
+
+    const ctx = this.contexts.get(targetId);
+    if (!ctx || ctx.status !== 'WAITING_FOR_SLOT') return null;
+
+    ctx.slots[slotName] = value;
+    ctx.missingSlots = ctx.missingSlots.filter(s => s !== slotName);
+    ctx.updatedAt = Date.now();
+
+    if (ctx.missingSlots.length === 0) {
+      ctx.status = 'COMPLETED';
+      ctx.clarificationPrompt = undefined;
+      this.recordExecution(ctx);
+    } else {
+      ctx.clarificationPrompt = ctx.missingSlots.includes('orderId') ? 'Какой заказ?' : 'Какой способ оплаты?';
     }
+
+    return ctx;
   }
 
-  private parseSlotValue(slotName: string, text: string, scenarioDef?: ScenarioDefinition): any {
-    if (scenarioDef?.slotExtractors && scenarioDef.slotExtractors[slotName]) {
-      return scenarioDef.slotExtractors[slotName](text);
-    }
+  public cancelContext(contextId?: string): boolean {
+    const targetId = contextId || this.activeContextId;
+    if (!targetId) return false;
 
-    if (slotName === 'quantity') {
-      if (text.includes('пять') || text.includes('5')) return 5;
-      if (text.includes('два') || text.includes('2')) return 2;
-      if (text.includes('один') || text.includes('1')) return 1;
-      const num = parseInt(text, 10);
-      return isNaN(num) ? null : num;
-    }
+    const ctx = this.contexts.get(targetId);
+    if (!ctx) return false;
 
-    return text.length > 0 ? text : null;
+    ctx.status = 'CANCELLED';
+    ctx.updatedAt = Date.now();
+    return true;
   }
 
-  private resetTimeout(): void {
-    this.clearTimeout();
-    this.timeoutTimer = setTimeout(() => {
-      this.triggerTimeout();
-    }, this.timeoutMs);
+  public expireContext(contextId: string): boolean {
+    const ctx = this.contexts.get(contextId);
+    if (!ctx) return false;
+
+    ctx.status = 'EXPIRED';
+    ctx.updatedAt = Date.now();
+    return true;
   }
 
-  private clearTimeout(): void {
-    if (this.timeoutTimer) {
-      clearTimeout(this.timeoutTimer);
-      this.timeoutTimer = null;
-    }
+  public recordExecution(ctx: DialogueContext): void {
+    const exists = this.executionLogs.some(l => l.contextId === ctx.contextId);
+    if (exists) return;
+
+    let eventType = 'driver.order.accepted';
+    if (ctx.intent === 'DRIVER_ARRIVED') eventType = 'driver.arrived';
+
+    this.executionLogs.push({
+      contextId: ctx.contextId,
+      intent: ctx.intent,
+      event: {
+        type: eventType,
+        payload: { ...ctx.slots }
+      },
+      timestamp: Date.now()
+    });
+  }
+
+  public getExecutionLogs(): ExecutionLog[] {
+    return [...this.executionLogs];
   }
 }
