@@ -1,0 +1,75 @@
+{
+  "version": 2,
+  "id": "scenario-set-platform-012-production-pipeline",
+  "name": "Platform Production Voice Pipeline Scenario",
+  "description": "Сквозной production-сценарий для валидации интеграции VoiceChannel -> DialogueStateManager -> Action Dispatch -> FSM Emulator.",
+  "scenarios": [
+    {
+      "id": "platform012-accept-order",
+      "name": "Принятие заказа через production pipeline",
+      "activation": {
+        "type": "voice",
+        "value": "voice.accept-order"
+      },
+      "intent": "ACCEPT_ORDER",
+      "requiredSlots": ["orderId", "payment"],
+      "slotExtractors": {
+        "orderId": {
+          "type": "integer",
+          "pattern": "\\b\\d+\\b"
+        },
+        "payment": {
+          "type": "enum",
+          "mapping": {
+            "card": ["картой", "карта", "безнал", "card"],
+            "cash": ["наличными", "наличка", "cash"]
+          }
+        }
+      },
+      "clarificationPrompts": {
+        "orderId": "Какой заказ?",
+        "payment": "Какой способ оплаты?"
+      },
+      "ambiguityPrompt": {
+        "template": "Уточните заказ: {candidateEntities}"
+      },
+      "steps": [
+        {
+          "kind": "emit",
+          "event": {
+            "type": "driver.order.accepted",
+            "payload": {
+              "orderId": "{{slots.orderId}}",
+              "payment": "{{slots.payment}}"
+            }
+          }
+        },
+        {
+          "kind": "end"
+        }
+      ]
+    },
+    {
+      "id": "platform012-driver-arrived",
+      "name": "Прибытие на точку через production pipeline",
+      "activation": {
+        "type": "voice",
+        "value": "voice.arrived"
+      },
+      "intent": "DRIVER_ARRIVED",
+      "requiredSlots": [],
+      "steps": [
+        {
+          "kind": "emit",
+          "event": {
+            "type": "driver.arrived",
+            "payload": {}
+          }
+        },
+        {
+          "kind": "end"
+        }
+      ]
+    }
+  ]
+}
