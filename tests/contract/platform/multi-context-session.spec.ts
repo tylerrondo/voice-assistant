@@ -57,7 +57,7 @@ test.describe('CONTRACT: PLATFORM-010 Multi-Context Session Manager Suite', () =
 
   test('CONTRACT-06: Execution log contains contextId correlation', async () => {
     const dm = new DialogueStateManager();
-    const ctxA = dm.createContext('ACCEPT_ORDER', { orderId: 1001 });
+    const ctxA = dm.createContext('ACCEPT_ORDER', { orderId: 1001 }, ['orderId', 'payment'], 'driver.order.accepted');
     dm.fillSlot('payment', 'card', ctxA.contextId);
 
     const logs = dm.getExecutionLogs();
@@ -83,6 +83,17 @@ test.describe('CONTRACT: PLATFORM-010 Multi-Context Session Manager Suite', () =
 
     expect(matchA.length).toBe(1);
     expect(matchB.length).toBe(1);
+  });
+
+  test('CONTRACT-08: Runtime capacity policy rejects new context when maxActiveContexts is reached', async () => {
+    // HIGH-5 FIX: Prove configurable capacity policy
+    const dm = new DialogueStateManager({ maxActiveContexts: 2 });
+    dm.createContext('ACCEPT_ORDER', { orderId: 1001 });
+    dm.createContext('ACCEPT_ORDER', { orderId: 1002 });
+
+    expect(() => {
+      dm.createContext('ACCEPT_ORDER', { orderId: 1003 });
+    }).toThrow(/REJECT_NEW_CONTEXT/);
   });
 
 });
