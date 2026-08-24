@@ -78,11 +78,9 @@ test.describe('CONTRACT: PLATFORM-011 Ambiguous Input Policy Suite', () => {
     const ctxA = dm.createContext('ACCEPT_ORDER', { orderId: 1001 }, ['orderId', 'payment'], 'driver.order.accepted');
     const ctxB = dm.createContext('ACCEPT_ORDER', { orderId: 1002 }, ['orderId', 'payment'], 'driver.order.accepted');
 
-    // Ambiguity step
     const r1 = dm.resolveRouting('картой', ['payment']);
     expect(r1.status).toBe('AMBIGUOUS_CONTEXT');
 
-    // Explicit entity step
     const r2 = dm.resolveRouting('заказ 1002', []);
     expect(r2.status).toBe('RESOLVED');
     if (r2.status === 'RESOLVED') {
@@ -95,12 +93,11 @@ test.describe('CONTRACT: PLATFORM-011 Ambiguous Input Policy Suite', () => {
     const ctxA = dm.createContext('ACCEPT_ORDER', { orderId: 1001 }, ['orderId', 'payment'], 'driver.order.accepted');
     const ctxB = dm.createContext('ACCEPT_ORDER', { orderId: 1002 }, ['orderId', 'payment'], 'driver.order.accepted');
 
-    // Force active context to ctxA
     dm.activateContext(ctxA.contextId);
     expect(dm.getActiveContextId()).toBe(ctxA.contextId);
 
     const result = dm.resolveRouting('картой', ['payment']);
-    expect(result.status).toBe('AMBIGUOUS_CONTEXT'); // Must NOT return ctxA
+    expect(result.status).toBe('AMBIGUOUS_CONTEXT');
   });
 
 });
