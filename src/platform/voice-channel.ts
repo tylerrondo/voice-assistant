@@ -109,11 +109,16 @@ export class VoiceChannel {
       );
     }
 
-    // 3. Extract slots across registered scenarios
+    // 3. Extract slots scoped to active contexts in WAITING_FOR_SLOT
+    const activeContexts = this.dialogueManager.listContexts().filter(c => c.status === 'WAITING_FOR_SLOT');
     let extractedSlots: Record<string, any> = {};
-    for (const sc of this.scenarioRegistry) {
-      const slots = this.extractSlotsFromText(text, sc.slotExtractors);
-      extractedSlots = { ...extractedSlots, ...slots };
+
+    for (const ctx of activeContexts) {
+      const scenario = this.scenarioRegistry.find(sc => sc.intent === ctx.intent);
+      if (scenario && scenario.slotExtractors) {
+        const slots = this.extractSlotsFromText(text, scenario.slotExtractors);
+        extractedSlots = { ...extractedSlots, ...slots };
+      }
     }
 
     const extractedSlotKeys = Object.keys(extractedSlots);
@@ -122,15 +127,19 @@ export class VoiceChannel {
     const routingResult: RoutingResult = this.dialogueManager.resolveRouting(text, extractedSlotKeys);
 
     if (routingResult.status === 'AMBIGUOUS_CONTEXT') {
-      // Find candidate entities to format clarification prompt
-      const candidateContexts = routingResult.candidateContextIds.map(id => this.dialogueManager.getContext(id)).filter(Boolean);
+      // Determinate correlation: bind directly to the candidate context's scenario
+      const candidateContexts = routingResult.candidateContextIds
+        .map(id => this.dialogueManager.getContext(id))
+        .filter(Boolean);
+
       const candidateEntities = candidateContexts
         .map(c => Object.values(c!.slots)[0])
         .filter(v => v !== undefined)
         .join(', ');
 
-      const activeSc = this.scenarioRegistry[0];
-      const template = activeSc?.ambiguityPrompt?.template || 'Уточните заказ: {candidateEntities}';
+      const candidateIntent = candidateContexts[0]?.intent;
+      const matchingScenario = this.scenarioRegistry.find(sc => sc.intent === candidateIntent);
+      const template = matchingScenario?.ambiguityPrompt?.template || 'Уточните заказ: {candidateEntities}';
       const promptText = template.replace('{candidateEntities}', candidateEntities);
 
       return {
