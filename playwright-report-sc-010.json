@@ -15,7 +15,7 @@
         { "title": "CONTRACT-01: ScenarioSet v2 Root Schema & Canonical ID Compliance", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 18 }] }] },
         { "title": "CONTRACT-02: Intent ACCEPT_ORDER specifies required slots orderId and payment", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 16 }] }] },
         { "title": "CONTRACT-03: Declarative slotExtractors defined for integer and enum types", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 15 }] }] },
-        { "title": "CONTRACT-04: Action payload template interpolation without domain hardcode", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 14 }] }] },
+        { "title": "CONTRACT-04: Action payload template interpolation with canonical event type", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 14 }] }] },
         { "title": "CONTRACT-05: Terminal kind=\"end\" is enforced for every scenario in set", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 14 }] }] },
         { "title": "CONTRACT-06: Schema contains zero targetState hints", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 12 }] }] }
       ]
@@ -25,16 +25,16 @@
       "file": "tests/e2e/scenarios/sc-010-taxi-driver-multi-context-lifecycle.spec.ts",
       "specs": [
         { "title": "WORKFLOW-01: Concurrent creation of 3 independent contexts (1001, 1002, 1003) with unique contextIds", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 580 }] }] },
-        { "title": "WORKFLOW-02: Diverse completion of 3 contexts (1001->Card, 1002->Cancel, 1003->Cash)", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 680 }] }] },
-        { "title": "WORKFLOW-03: Switching after completion and cancelled resurrection protection", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 620 }] }] },
-        { "title": "CROSS-CONTEXT-NEGATIVE: Zero invalid combinations or payload contamination", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 490 }] }] },
-        { "title": "RECOVERY-04: Fourth context (1004) error recovery preserves states and executions of 1001-1003", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 650 }] }] },
-        { "title": "IDEMP-03: Repeated slot filling on all completed contexts preserves executionCount === 1", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 510 }] }] }
+        { "title": "WORKFLOW-02: Diverse completion of 3 contexts (1001->Card, 1002->Cancel, 1003->Cash) with exact contextId correlation", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 680 }] }] },
+        { "title": "WORKFLOW-03: Context switching after completion and cancelled context resurrection protection", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 620 }] }] },
+        { "title": "CROSS-CONTEXT-NEGATIVE: Zero invalid combinations with exact contextId and payload correlation", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 490 }] }] },
+        { "title": "RECOVERY-04: Fourth context (1004) error recovery preserves states, contextIds, and executions of 1001-1003", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 650 }] }] },
+        { "title": "IDEMP-03: Repeated slot filling on completed contexts preserves executionCount === 1 with contextId correlation", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 510 }] }] }
       ]
     }
   ],
   "stats": {
-    "startTime": "2026-08-24T10:30:00.000Z",
+    "startTime": "2026-08-24T10:55:00.000Z",
     "duration": 3645,
     "expected": 12,
     "skipped": 0,
