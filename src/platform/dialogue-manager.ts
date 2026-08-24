@@ -181,29 +181,6 @@ export class DialogueStateManager {
     return { status: 'NO_MATCH' };
   }
 
-  public routeUtterance(phrase: string): DialogueContext | null {
-    const text = phrase.toLowerCase();
-    const tokens = text.split(/\s+/);
-
-    // 1. Entity match across active contexts
-    for (const ctx of this.contexts.values()) {
-      if (ctx.status !== 'WAITING_FOR_SLOT') continue;
-
-      for (const [slotKey, slotVal] of Object.entries(ctx.slots)) {
-        if (slotVal === undefined || slotVal === null) continue;
-        const valStr = String(slotVal).toLowerCase();
-
-        if (tokens.includes(valStr) || text.includes(valStr)) {
-          this.activeContextId = ctx.contextId;
-          return ctx;
-        }
-      }
-    }
-
-    // 2. Active state
-    return this.getActiveState();
-  }
-
   public fillSlot(slotName: string, value: any, contextId?: string): DialogueContext | null {
     const targetId = contextId || this.activeContextId;
     if (!targetId) return null;
