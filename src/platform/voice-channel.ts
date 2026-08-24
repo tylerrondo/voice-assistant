@@ -1,161 +1,62 @@
-import { DialogueStateManager, ScenarioDefinition, DialogueStatus } from './dialogue-manager';
+import { DialogueStateManager } from './dialogue-manager';
 
 export class VoiceChannel {
   private dialogueManager: DialogueStateManager;
-  private registeredScenarios: Map<string, ScenarioDefinition> = new Map();
 
-  constructor(timeoutMs = 15000) {
-    this.dialogueManager = new DialogueStateManager(timeoutMs);
-    this.registerDefaultPlatformScenarios();
-    this.exposeRuntimeForE2E();
+  constructor(dialogueManager: DialogueStateManager) {
+    this.dialogueManager = dialogueManager;
   }
 
-  public registerScenario(scenario: ScenarioDefinition): void {
-    this.registeredScenarios.set(scenario.intent, scenario);
-  }
+  public async handleIncomingVoice(phrase: string): Promise<any> {
+    const text = phrase.trim().toLowerCase();
 
-  public getDialogueManager(): DialogueStateManager {
-    return this.dialogueManager;
-  }
+    // 1. Explicit cancellation for active context
+    if (text.includes('отмена')) {
+      return this.dialogueManager.cancelContext();
+    }
 
-  public async handleIncomingVoice(phrase: string): Promise<{ status: DialogueStatus; prompt?: string; executedAction?: any }> {
-    const text = phrase.trim();
-    const activeState = this.dialogueManager.getActiveState();
+    // 2. Global / Independent Intent (e.g. Arrived)
+    if (text.includes('я приехал') || text.includes('прибыл')) {
+      return this.dialogueManager.createContext('DRIVER_ARRIVED', {}, [], 'driver.arrived');
+    }
 
-    // 1. If waiting for slot in active dialogue
-    if (activeState && activeState.status === 'WAITING_FOR_SLOT') {
-      const resolvedNewIntent = this.resolveIntent(text);
-      if (resolvedNewIntent && resolvedNewIntent.intent !== activeState.intent) {
-        const newScenarioDef = this.registeredScenarios.get(resolvedNewIntent.intent);
-        const res = this.dialogueManager.processVoiceInput(text, resolvedNewIntent, newScenarioDef);
-        this.syncWithDriverFsm(res);
-        return res;
+    // 3. New Intent creation: "Прими заказ [id] [payment]"
+    if (text.startsWith('прими заказ') || text.startsWith('заказ')) {
+      const slots: Record<string, any> = {};
+      const numMatch = text.match(/\b\d+\b/);
+      if (numMatch) {
+        slots.orderId = parseInt(numMatch[0], 10);
+      }
+      if (text.includes('наличными') || text.includes('наличка')) {
+        slots.payment = 'cash';
+      } else if (text.includes('картой') || text.includes('карта') || text.includes('безнал')) {
+        slots.payment = 'card';
       }
 
-      const currentScenario = this.registeredScenarios.get(activeState.intent);
-      const res = this.dialogueManager.processVoiceInput(text, undefined, currentScenario);
-      this.syncWithDriverFsm(res);
-      return res;
+      return this.dialogueManager.createContext('ACCEPT_ORDER', slots, ['orderId', 'payment'], 'driver.order.accepted');
     }
 
-    // 2. Dynamic Intent Resolution
-    const resolved = this.resolveIntent(text);
-    if (resolved) {
-      const scenarioDef = this.registeredScenarios.get(resolved.intent);
-      const res = this.dialogueManager.processVoiceInput(text, resolved, scenarioDef);
-      this.syncWithDriverFsm(res);
-      return res;
+    // 4. Production Context Router integration
+    const targetCtx = this.dialogueManager.routeUtterance(text);
+    if (!targetCtx || targetCtx.status !== 'WAITING_FOR_SLOT') {
+      return null;
     }
 
-    return { status: 'IDLE' };
-  }
-
-  public resolveIntent(text: string): { intent: string; slots: Record<string, any> } | null {
-    const lower = text.toLowerCase();
-
-    for (const [intent, def] of this.registeredScenarios.entries()) {
-      if (def.aliases && def.aliases.some(alias => lower.includes(alias.toLowerCase()))) {
-        const slots: Record<string, any> = {};
-        if (def.slotExtractors) {
-          for (const [slotKey, extractor] of Object.entries(def.slotExtractors)) {
-            const extracted = extractor(lower);
-            if (extracted !== null && extracted !== undefined) {
-              slots[slotKey] = extracted;
-            }
-          }
-        }
-        return { intent, slots };
-      }
+    // Extract slots dynamically
+    const numMatch = text.match(/\b\d+\b/);
+    if (numMatch && targetCtx.missingSlots.includes('orderId')) {
+      return this.dialogueManager.fillSlot('orderId', parseInt(numMatch[0], 10), targetCtx.contextId);
     }
 
-    return null;
-  }
-
-  private syncWithDriverFsm(result: { status: DialogueStatus; executedAction?: any }): void {
-    if (result.status === 'COMPLETED' && result.executedAction) {
-      if (typeof window !== 'undefined') {
-        const action = result.executedAction;
-        window.dispatchEvent(new CustomEvent('driver:fsm:action', { detail: action }));
-        const fsmBadge = document.querySelector('[data-testid="fsm-driver-state"], .driver-status, [data-testid="driver-status"]');
-        if (fsmBadge) {
-          switch (action.intent) {
-            case 'ACCEPT_ORDER':
-              fsmBadge.textContent = 'ORDER_ACCEPTED';
-              break;
-            case 'DRIVER_ARRIVED':
-              fsmBadge.textContent = 'DRIVER_ARRIVED';
-              break;
-            case 'START_TRIP':
-              fsmBadge.textContent = 'IN_TRIP';
-              break;
-            case 'FINISH_TRIP':
-              fsmBadge.textContent = 'TRIP_FINISHED';
-              break;
-            case 'DRIVER_AVAILABLE':
-              fsmBadge.textContent = 'AVAILABLE';
-              break;
-          }
-        }
-      }
+    if ((text.includes('наличными') || text.includes('наличка')) && targetCtx.missingSlots.includes('payment')) {
+      return this.dialogueManager.fillSlot('payment', 'cash', targetCtx.contextId);
     }
-  }
 
-  private registerDefaultPlatformScenarios(): void {
-    // 1. Accept Order (Slot-filling)
-    this.registerScenario({
-      intent: 'ACCEPT_ORDER',
-      actionType: 'driver.order.accepted',
-      requiredSlots: ['orderId'],
-      clarificationPrompts: { orderId: 'Какой заказ?' },
-      aliases: ['прими заказ', 'принять заказ', 'заказ'],
-      slotExtractors: {
-        orderId: (text: string) => {
-          const match = text.match(/\b(\d{4})\b/);
-          return match ? parseInt(match[1], 10) : null;
-        }
-      }
-    });
-
-    // 2. Driver Arrived
-    this.registerScenario({
-      intent: 'DRIVER_ARRIVED',
-      actionType: 'driver.arrived',
-      requiredSlots: [],
-      aliases: ['я приехал', 'прибыл', 'на месте']
-    });
-
-    // 3. Start Trip
-    this.registerScenario({
-      intent: 'START_TRIP',
-      actionType: 'driver.trip.started',
-      requiredSlots: [],
-      aliases: ['начать поездку', 'поехали', 'старт']
-    });
-
-    // 4. Finish Trip
-    this.registerScenario({
-      intent: 'FINISH_TRIP',
-      actionType: 'driver.trip.finished',
-      requiredSlots: [],
-      aliases: ['завершить поездку', 'закончить поездку', 'приехали']
-    });
-
-    // 5. Driver Available
-    this.registerScenario({
-      intent: 'DRIVER_AVAILABLE',
-      actionType: 'driver.available',
-      requiredSlots: [],
-      aliases: ['готов к следующему заказу', 'свободен', 'готов']
-    });
-  }
-
-  private exposeRuntimeForE2E(): void {
-    if (typeof window !== 'undefined') {
-      (window as any).__VOICE_CHANNEL__ = this;
-      (window as any).__DIALOGUE_MANAGER__ = this.dialogueManager;
-      (window as any).__DISPATCH_VOICE_COMMAND__ = (phrase: string) => this.handleIncomingVoice(phrase);
+    if ((text.includes('картой') || text.includes('карта') || text.includes('безнал')) && targetCtx.missingSlots.includes('payment')) {
+      return this.dialogueManager.fillSlot('payment', 'card', targetCtx.contextId);
     }
+
+    // Invalid phrase: preserves context state
+    return targetCtx;
   }
 }
-
-export const platformVoiceChannel = new VoiceChannel();
