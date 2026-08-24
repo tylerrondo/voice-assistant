@@ -1,5 +1,11 @@
 import { DialogueStateManager } from './dialogue-manager';
 
+export interface SlotExtractorDefinition {
+  type: 'integer' | 'enum' | 'string';
+  pattern?: string;
+  mapping?: Record<string, string[]>;
+}
+
 export interface ScenarioStep {
   kind: 'emit' | 'end';
   event?: {
@@ -17,6 +23,7 @@ export interface ScenarioDefinition {
   };
   intent: string;
   requiredSlots?: string[];
+  slotExtractors?: Record<string, SlotExtractorDefinition>;
   clarificationPrompts?: Record<string, string>;
   steps: ScenarioStep[];
 }
@@ -42,19 +49,42 @@ export class VoiceChannel {
     }
   }
 
+  private extractSlotsFromText(text: string, extractors?: Record<string, SlotExtractorDefinition>): Record<string, any> {
+    const extracted: Record<string, any> = {};
+    if (!extractors) return extracted;
+
+    for (const [slotKey, extractor] of Object.entries(extractors)) {
+      if (extractor.type === 'integer' && extractor.pattern) {
+        const regex = new RegExp(extractor.pattern);
+        const match = text.match(regex);
+        if (match) {
+          extracted[slotKey] = parseInt(match[0], 10);
+        }
+      } else if (extractor.type === 'enum' && extractor.mapping) {
+        for (const [enumValue, synonyms] of Object.entries(extractor.mapping)) {
+          if (synonyms.some(synonym => text.includes(synonym.toLowerCase()))) {
+            extracted[slotKey] = enumValue;
+            break;
+          }
+        }
+      }
+    }
+
+    return extracted;
+  }
+
   public async handleIncomingVoice(phrase: string): Promise<any> {
     const text = phrase.trim().toLowerCase();
 
-    // 1. Global / Cancellation
+    // 1. Universal Cancellation
     if (text === 'отмена' || text === 'cancel') {
       return this.dialogueManager.cancelContext();
     }
 
-    // 2. Intent Resolution via Scenario Registry
+    // 2. Universal Intent Resolution via Scenario Registry
     const matchedScenario = this.scenarioRegistry.find(sc => {
       if (sc.activation.type !== 'voice') return false;
       const actPattern = sc.activation.value.replace(/^voice\./, '').replace(/[-_]/g, ' ').toLowerCase();
-      // Match if text contains words from activation or intent
       const words = actPattern.split(' ');
       return words.every(w => text.includes(w)) || text.includes(sc.intent.toLowerCase().replace(/_/g, ' '));
     });
@@ -65,22 +95,8 @@ export class VoiceChannel {
       const requiredSlots = matchedScenario.requiredSlots || [];
       const prompts = matchedScenario.clarificationPrompts || {};
 
-      // Dynamic slot extraction from utterance
-      const initialSlots: Record<string, any> = {};
-      
-      // Numeric / ID slots (orderId, cartId, passengerId, etc.)
-      const numMatch = text.match(/\b\d+\b/);
-      if (numMatch && requiredSlots.some(s => s.toLowerCase().includes('id'))) {
-        const idSlot = requiredSlots.find(s => s.toLowerCase().includes('id')) || 'orderId';
-        initialSlots[idSlot] = parseInt(numMatch[0], 10);
-      }
-
-      // Discrete / Text values
-      if (text.includes('наличными') || text.includes('наличка')) {
-        initialSlots.payment = 'cash';
-      } else if (text.includes('картой') || text.includes('карта') || text.includes('безнал')) {
-        initialSlots.payment = 'card';
-      }
+      // Universal Slot Extraction via Declarative Extractors
+      const initialSlots = this.extractSlotsFromText(text, matchedScenario.slotExtractors);
 
       return this.dialogueManager.createContext(
         matchedScenario.intent,
@@ -97,22 +113,17 @@ export class VoiceChannel {
       return null;
     }
 
-    // 4. Slot Filling into routed context
-    const numMatch = text.match(/\b\d+\b/);
-    if (numMatch && targetCtx.missingSlots.some(s => s.toLowerCase().includes('id'))) {
-      const idSlot = targetCtx.missingSlots.find(s => s.toLowerCase().includes('id'))!;
-      return this.dialogueManager.fillSlot(idSlot, parseInt(numMatch[0], 10), targetCtx.contextId);
+    // 4. Universal Slot Filling for active/routed context using registered scenario extractors
+    const activeScenario = this.scenarioRegistry.find(sc => sc.intent === targetCtx.intent);
+    const filledSlots = this.extractSlotsFromText(text, activeScenario?.slotExtractors);
+
+    let updatedCtx: any = targetCtx;
+    for (const [slotKey, slotVal] of Object.entries(filledSlots)) {
+      if (targetCtx.missingSlots.includes(slotKey)) {
+        updatedCtx = this.dialogueManager.fillSlot(slotKey, slotVal, targetCtx.contextId);
+      }
     }
 
-    if ((text.includes('наличными') || text.includes('наличка')) && targetCtx.missingSlots.includes('payment')) {
-      return this.dialogueManager.fillSlot('payment', 'cash', targetCtx.contextId);
-    }
-
-    if ((text.includes('картой') || text.includes('карта') || text.includes('безнал')) && targetCtx.missingSlots.includes('payment')) {
-      return this.dialogueManager.fillSlot('payment', 'card', targetCtx.contextId);
-    }
-
-    // Invalid response: keeps context intact in WAITING_FOR_SLOT
-    return targetCtx;
+    return updatedCtx;
   }
 }
