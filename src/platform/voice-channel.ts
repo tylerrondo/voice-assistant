@@ -1,4 +1,4 @@
-import { DialogueStateManager } from './dialogue-manager';
+import { DialogueStateManager, RoutingResult } from './dialogue-manager';
 
 export interface SlotExtractorDefinition {
   type: 'integer' | 'enum' | 'string';
@@ -76,12 +76,12 @@ export class VoiceChannel {
   public async handleIncomingVoice(phrase: string): Promise<any> {
     const text = phrase.trim().toLowerCase();
 
-    // 1. Universal Cancellation
+    // 1. Global Cancellation
     if (text === 'отмена' || text === 'cancel') {
       return this.dialogueManager.cancelContext();
     }
 
-    // 2. Universal Intent Resolution via Scenario Registry
+    // 2. Intent Resolution (New Context Initiation)
     const matchedScenario = this.scenarioRegistry.find(sc => {
       if (sc.activation.type !== 'voice') return false;
       const actPattern = sc.activation.value.replace(/^voice\./, '').replace(/[-_]/g, ' ').toLowerCase();
@@ -95,7 +95,6 @@ export class VoiceChannel {
       const requiredSlots = matchedScenario.requiredSlots || [];
       const prompts = matchedScenario.clarificationPrompts || {};
 
-      // Universal Slot Extraction via Declarative Extractors
       const initialSlots = this.extractSlotsFromText(text, matchedScenario.slotExtractors);
 
       return this.dialogueManager.createContext(
@@ -107,23 +106,43 @@ export class VoiceChannel {
       );
     }
 
-    // 3. Multi-Context Universal Entity Routing
-    const targetCtx = this.dialogueManager.routeUtterance(text);
-    if (!targetCtx || targetCtx.status !== 'WAITING_FOR_SLOT') {
-      return null;
+    // 3. Extract slots across registered scenarios
+    let extractedSlots: Record<string, any> = {};
+    for (const sc of this.scenarioRegistry) {
+      const slots = this.extractSlotsFromText(text, sc.slotExtractors);
+      extractedSlots = { ...extractedSlots, ...slots };
     }
 
-    // 4. Universal Slot Filling for active/routed context using registered scenario extractors
-    const activeScenario = this.scenarioRegistry.find(sc => sc.intent === targetCtx.intent);
-    const filledSlots = this.extractSlotsFromText(text, activeScenario?.slotExtractors);
+    const extractedSlotKeys = Object.keys(extractedSlots);
+
+    // 4. Resolve Context Route using Ambiguity Policy
+    const routingResult: RoutingResult = this.dialogueManager.resolveRouting(text, extractedSlotKeys);
+
+    if (routingResult.status === 'AMBIGUOUS_CONTEXT') {
+      // Ambiguous input: strictly NO domain execution
+      return {
+        status: 'AMBIGUOUS_CONTEXT',
+        candidateContextIds: routingResult.candidateContextIds
+      };
+    }
+
+    if (routingResult.status === 'NO_MATCH') {
+      return { status: 'NO_MATCH' };
+    }
+
+    // 5. Single Resolved Context: Fill slots and execute if complete
+    const targetCtx = this.dialogueManager.getContext(routingResult.contextId);
+    if (!targetCtx || targetCtx.status !== 'WAITING_FOR_SLOT') {
+      return routingResult;
+    }
 
     let updatedCtx: any = targetCtx;
-    for (const [slotKey, slotVal] of Object.entries(filledSlots)) {
+    for (const [slotKey, slotVal] of Object.entries(extractedSlots)) {
       if (targetCtx.missingSlots.includes(slotKey)) {
         updatedCtx = this.dialogueManager.fillSlot(slotKey, slotVal, targetCtx.contextId);
       }
     }
 
-    return updatedCtx;
+    return updatedCtx || routingResult;
   }
 }
