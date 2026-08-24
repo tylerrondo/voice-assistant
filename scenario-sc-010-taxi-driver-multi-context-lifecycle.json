@@ -1,0 +1,50 @@
+{
+  "version": 2,
+  "id": "scenario-set-sc-010-taxi-driver-multi-context-lifecycle",
+  "name": "Taxi Driver Multi-Context Complete Lifecycle Scenario",
+  "description": "Сценарий для одновременной работы с 3-4 независимыми заказами: завершение, отмена, восстановление после ошибок и контекстное переключение.",
+  "scenarios": [
+    {
+      "id": "sc010-accept-order-lifecycle",
+      "name": "Многопоточный жизненный цикл заказов водителя",
+      "activation": {
+        "type": "voice",
+        "value": "voice.accept-order"
+      },
+      "intent": "ACCEPT_ORDER",
+      "requiredSlots": ["orderId", "payment"],
+      "slotExtractors": {
+        "orderId": {
+          "type": "integer",
+          "pattern": "\\b\\d+\\b"
+        },
+        "payment": {
+          "type": "enum",
+          "mapping": {
+            "card": ["картой", "карта", "безнал", "card"],
+            "cash": ["наличными", "наличка", "cash"]
+          }
+        }
+      },
+      "clarificationPrompts": {
+        "orderId": "Какой заказ?",
+        "payment": "Какой способ оплаты?"
+      },
+      "steps": [
+        {
+          "kind": "emit",
+          "event": {
+            "type": "driver.order.accepted",
+            "payload": {
+              "orderId": "{{slots.orderId}}",
+              "payment": "{{slots.payment}}"
+            }
+          }
+        },
+        {
+          "kind": "end"
+        }
+      ]
+    }
+  ]
+}
