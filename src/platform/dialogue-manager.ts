@@ -22,9 +22,13 @@ export interface ExecutionLog {
   timestamp: number;
 }
 
+export type ActionDispatchHandler = (event: { type: string; payload: Record<string, any> }, context: DialogueContext) => void;
+
 export interface DialogueManagerConfig {
   maxActiveContexts?: number;
   defaultTtlMs?: number;
+  onActionDispatch?: ActionDispatchHandler;
+  enableAutoExpiryScheduler?: boolean;
 }
 
 export type RoutingResult =
@@ -38,19 +42,33 @@ export class DialogueStateManager {
   private executionLogs: ExecutionLog[] = [];
   private maxActiveContexts: number;
   private defaultTtlMs: number;
+  private onActionDispatch?: ActionDispatchHandler;
+  private timerMap: Map<string, any> = new Map();
+  private enableAutoExpiryScheduler: boolean;
 
   constructor(configOrTimeout: DialogueManagerConfig | number = {}) {
     if (typeof configOrTimeout === 'number') {
       this.defaultTtlMs = configOrTimeout;
       this.maxActiveContexts = 50;
+      this.enableAutoExpiryScheduler = true;
     } else {
       this.maxActiveContexts = configOrTimeout.maxActiveContexts ?? 50;
       this.defaultTtlMs = configOrTimeout.defaultTtlMs ?? 300000;
+      this.onActionDispatch = configOrTimeout.onActionDispatch;
+      this.enableAutoExpiryScheduler = configOrTimeout.enableAutoExpiryScheduler ?? true;
     }
     this.reset();
   }
 
+  public setActionDispatchHandler(handler: ActionDispatchHandler): void {
+    this.onActionDispatch = handler;
+  }
+
   public reset(): void {
+    for (const timer of this.timerMap.values()) {
+      clearTimeout(timer);
+    }
+    this.timerMap.clear();
     this.contexts.clear();
     this.activeContextId = null;
     this.executionLogs = [];
@@ -79,6 +97,21 @@ export class DialogueStateManager {
       return true;
     }
     return false;
+  }
+
+  private scheduleTtlTimer(contextId: string, ttlMs: number): void {
+    if (!this.enableAutoExpiryScheduler) return;
+
+    if (this.timerMap.has(contextId)) {
+      clearTimeout(this.timerMap.get(contextId));
+    }
+
+    const timer = setTimeout(() => {
+      this.expireContext(contextId);
+      this.timerMap.delete(contextId);
+    }, ttlMs);
+
+    this.timerMap.set(contextId, timer);
   }
 
   public createContext(
@@ -135,6 +168,8 @@ export class DialogueStateManager {
 
     if (newContext.status === 'COMPLETED') {
       this.recordExecution(newContext);
+    } else {
+      this.scheduleTtlTimer(contextId, this.defaultTtlMs);
     }
 
     return newContext;
@@ -171,7 +206,6 @@ export class DialogueStateManager {
     }
 
     if (candidates.length > 1) {
-      // Ambiguous input: no arbitrary selection, no silent activeContext fallback
       return {
         status: 'AMBIGUOUS_CONTEXT',
         candidateContextIds: candidates.map(c => c.contextId)
@@ -195,10 +229,15 @@ export class DialogueStateManager {
     if (ctx.missingSlots.length === 0) {
       ctx.status = 'COMPLETED';
       ctx.clarificationPrompt = undefined;
+      if (this.timerMap.has(ctx.contextId)) {
+        clearTimeout(this.timerMap.get(ctx.contextId));
+        this.timerMap.delete(ctx.contextId);
+      }
       this.recordExecution(ctx);
     } else {
       const nextMissing = ctx.missingSlots[0];
       ctx.clarificationPrompt = ctx.clarificationPrompts?.[nextMissing] || `Укажите ${nextMissing}`;
+      this.scheduleTtlTimer(ctx.contextId, this.defaultTtlMs);
     }
 
     return ctx;
@@ -213,15 +252,23 @@ export class DialogueStateManager {
 
     ctx.status = 'CANCELLED';
     ctx.updatedAt = Date.now();
+    if (this.timerMap.has(ctx.contextId)) {
+      clearTimeout(this.timerMap.get(ctx.contextId));
+      this.timerMap.delete(ctx.contextId);
+    }
     return true;
   }
 
   public expireContext(contextId: string): boolean {
     const ctx = this.contexts.get(contextId);
-    if (!ctx) return false;
+    if (!ctx || ctx.status !== 'WAITING_FOR_SLOT') return false;
 
     ctx.status = 'EXPIRED';
     ctx.updatedAt = Date.now();
+    if (this.timerMap.has(contextId)) {
+      clearTimeout(this.timerMap.get(contextId));
+      this.timerMap.delete(contextId);
+    }
     return true;
   }
 
@@ -233,15 +280,22 @@ export class DialogueStateManager {
       throw new Error('CONTRACT_VIOLATION: Cannot record execution without actionType');
     }
 
+    const eventObj = {
+      type: ctx.actionType,
+      payload: { ...ctx.slots }
+    };
+
     this.executionLogs.push({
       contextId: ctx.contextId,
       intent: ctx.intent,
-      event: {
-        type: ctx.actionType,
-        payload: { ...ctx.slots }
-      },
+      event: eventObj,
       timestamp: Date.now()
     });
+
+    // Real production Action Dispatch boundary
+    if (this.onActionDispatch) {
+      this.onActionDispatch(eventObj, ctx);
+    }
   }
 
   public getExecutionLogs(): ExecutionLog[] {
