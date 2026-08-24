@@ -7,7 +7,8 @@ export interface DialogueContext {
   createdAt: number;
   updatedAt: number;
   expiresAt: number;
-  actionType?: string;
+  actionType: string;
+  clarificationPrompts?: Record<string, string>;
   clarificationPrompt?: string;
 }
 
@@ -78,19 +79,24 @@ export class DialogueStateManager {
   public createContext(
     intent: string,
     initialSlots: Record<string, any> = {},
-    requiredSlots: string[] = ['orderId', 'payment'],
-    actionType: string = 'driver.order.accepted',
-    clarificationPrompts: Record<string, string> = { orderId: 'Какой заказ?', payment: 'Какой способ оплаты?' }
+    requiredSlots: string[] = [],
+    actionType: string = '',
+    clarificationPrompts: Record<string, string> = {}
   ): DialogueContext {
-    // If context with exact entity already exists and is waiting for slot, switch to it
-    const entityKey = Object.keys(initialSlots)[0];
-    if (entityKey && initialSlots[entityKey] !== undefined) {
-      const existing = Array.from(this.contexts.values()).find(
-        c => c.intent === intent && c.slots[entityKey] === initialSlots[entityKey] && c.status === 'WAITING_FOR_SLOT'
-      );
-      if (existing) {
-        this.activeContextId = existing.contextId;
-        return existing;
+    if (!actionType) {
+      throw new Error('CONTRACT_VIOLATION: actionType is strictly required for createContext');
+    }
+
+    // Entity-based deduplication/reuse: if context with identical entity slot is waiting, reactivate it
+    for (const [key, value] of Object.entries(initialSlots)) {
+      if (value !== undefined) {
+        const existing = Array.from(this.contexts.values()).find(
+          c => c.intent === intent && c.slots[key] === value && c.status === 'WAITING_FOR_SLOT'
+        );
+        if (existing) {
+          this.activeContextId = existing.contextId;
+          return existing;
+        }
       }
     }
 
@@ -115,6 +121,7 @@ export class DialogueStateManager {
       updatedAt: now,
       expiresAt: now + this.defaultTtlMs,
       actionType,
+      clarificationPrompts,
       clarificationPrompt: firstMissing ? clarificationPrompts[firstMissing] : undefined
     };
 
@@ -129,22 +136,26 @@ export class DialogueStateManager {
   }
 
   public routeUtterance(phrase: string): DialogueContext | null {
-    // Universal Entity-Based Routing: extract numeric entity or match against any slot value in pool
-    const numberMatches = phrase.match(/\b\d+\b/g);
-    if (numberMatches) {
-      for (const numStr of numberMatches) {
-        const numVal = parseInt(numStr, 10);
-        const matchingCtx = Array.from(this.contexts.values()).find(
-          c => c.status === 'WAITING_FOR_SLOT' && Object.values(c.slots).includes(numVal)
-        );
-        if (matchingCtx) {
-          this.activeContextId = matchingCtx.contextId;
-          return matchingCtx;
+    const text = phrase.toLowerCase();
+    const tokens = text.split(/\s+/);
+
+    // 1. Universal Entity / Slot-value matching across all active contexts in the pool
+    for (const ctx of this.contexts.values()) {
+      if (ctx.status !== 'WAITING_FOR_SLOT') continue;
+
+      for (const [slotKey, slotVal] of Object.entries(ctx.slots)) {
+        if (slotVal === undefined || slotVal === null) continue;
+        const valStr = String(slotVal).toLowerCase();
+
+        // Exact match or token match with slot value
+        if (tokens.includes(valStr) || text.includes(valStr)) {
+          this.activeContextId = ctx.contextId;
+          return ctx;
         }
       }
     }
 
-    // Default to active context
+    // 2. Fall back to current active context
     return this.getActiveState();
   }
 
@@ -165,7 +176,7 @@ export class DialogueStateManager {
       this.recordExecution(ctx);
     } else {
       const nextMissing = ctx.missingSlots[0];
-      ctx.clarificationPrompt = nextMissing === 'orderId' ? 'Какой заказ?' : 'Какой способ оплаты?';
+      ctx.clarificationPrompt = ctx.clarificationPrompts?.[nextMissing] || `Укажите ${nextMissing}`;
     }
 
     return ctx;
@@ -196,14 +207,15 @@ export class DialogueStateManager {
     const exists = this.executionLogs.some(l => l.contextId === ctx.contextId);
     if (exists) return;
 
-    // Universal Action Type from ScenarioDefinition
-    const eventType = ctx.actionType || (ctx.intent === 'DRIVER_ARRIVED' ? 'driver.arrived' : 'driver.order.accepted');
+    if (!ctx.actionType) {
+      throw new Error('CONTRACT_VIOLATION: Cannot record execution without actionType');
+    }
 
     this.executionLogs.push({
       contextId: ctx.contextId,
       intent: ctx.intent,
       event: {
-        type: eventType,
+        type: ctx.actionType,
         payload: { ...ctx.slots }
       },
       timestamp: Date.now()
