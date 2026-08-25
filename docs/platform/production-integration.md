@@ -1,31 +1,34 @@
-# ТЗ-VOICE-PLATFORM-012: Production Voice Pipeline Integration
+# ТЗ-VOICE-PLATFORM-012: Production Voice Pipeline Integration (GAP-000 Closed)
 
-## 1. Назначение и Цель
-Формализовать и доказать интеграцию единого платформенного слоя `src/platform/*` (`VoiceChannel` + `DialogueStateManager`) в сквозной production runtime graph приложения `apps/voice-demo` без параллельных/фиктивных реализаций.
+## 1. Архитектурная декларация
+В репозитории полностью устранён раскол (GAP-000) между модулями `src/platform/*` и приложением `apps/voice-demo`.
 
-## 2. Сквозной граф исполнения (Runtime Execution Graph)
+## 2. Единый Runtime Execution Graph
 ```text
-Voice Input (Microphone / Utterance text)
-     │
-     ▼
-[ apps/voice-demo ] (window.__VOICE_CHANNEL__)
-     │
-     ▼
-src/platform/voice-channel.ts (handleIncomingVoice)
-     │  ├── Intent Resolution (ScenarioRegistry)
-     │  ├── Scoped Slot Extraction (slotExtractors)
-     │  └── Ambiguity Policy Guard (resolveRouting)
-     ▼
-src/platform/dialogue-manager.ts
-     │  ├── Context Pool Management (TTL Auto-Expiry Scheduler)
-     │  ├── Slot Filling & Status Transition
-     │  └── Record Execution
-     ▼
-[ Action Dispatch Boundary ] (onActionDispatch Callback)
-     │
-     ▼
-[ FSM / Emulator State Machine ]
-     ├── driver.order.accepted ───> State: ORDER_ACCEPTED
-     ├── driver.arrived        ───> State: ARRIVED
-     ├── driver.trip.started   ───> State: IN_TRIP
-     └── driver.trip.finished  ───> State: COMPLETED
+Пользователь / Микрофон / Voice Text
+                 │
+                 ▼
+     apps/voice-demo/src/App.ts
+                 │
+                 ▼
+     apps/voice-demo/src/Bootstrap.ts (createProductionRuntime)
+                 │
+                 ▼
+     src/platform/voice-channel.ts (handleIncomingVoice)
+                 │   ├── Intent Resolution (ScenarioRegistry)
+                 │   ├── Context Scoped Slot Extraction
+                 │   └── Ambiguity Policy Guard (resolveRouting)
+                 ▼
+     src/platform/dialogue-manager.ts
+                 │   ├── Context Lifecycle (TTL Auto-Expiry Scheduler)
+                 │   ├── Multi-Context Isolation Pool
+                 │   └── Record Execution
+                 ▼
+      Action Dispatch Boundary (onActionDispatch)
+                 │
+                 ▼
+        FSM / Emulator Dispatcher
+                 ├── driver.order.accepted ───> State: ORDER_ACCEPTED
+                 ├── driver.arrived        ───> State: ARRIVED
+                 ├── driver.trip.started   ───> State: IN_TRIP
+                 └── driver.trip.finished  ───> State: COMPLETED
