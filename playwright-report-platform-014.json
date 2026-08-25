@@ -30,7 +30,8 @@
         { "title": "CONTRACT-15: Invalid priority (NaN or Infinity) throws CONTRACT_VIOLATION", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 14 }] }] },
         { "title": "CONTRACT-16: String extractor without pattern returns NO_MATCH", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 13 }] }] },
         { "title": "CONTRACT-17: Multiple scenarios with same intent deterministically pick highest priority scenario for prompt", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 15 }] }] },
-        { "title": "CONTRACT-18: Cross-context slot ambiguity detected when multiple contexts have conflicting slot extractors", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 16 }] }] }
+        { "title": "CONTRACT-18: Cross-context slot ambiguity detected when multiple contexts have conflicting slot extractors", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 16 }] }] },
+        { "title": "CONTRACT-19: Equal priority tie-breaker is deterministic and independent of array order", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 15 }] }] }
       ]
     },
     {
@@ -48,9 +49,9 @@
     }
   ],
   "stats": {
-    "startTime": "2026-08-25T08:00:00.000Z",
-    "duration": 5420,
-    "expected": 25,
+    "startTime": "2026-08-25T08:05:00.000Z",
+    "duration": 5580,
+    "expected": 26,
     "skipped": 0,
     "unexpected": 0,
     "flaky": 0,
