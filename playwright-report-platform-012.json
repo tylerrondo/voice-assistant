@@ -2,6 +2,7 @@
   "config": {
     "configFile": "playwright.config.ts",
     "rootDir": "/workspace/voice-assistant",
+    "testDir": "./tests",
     "fullyParallel": false,
     "workers": 1,
     "retries": 0,
@@ -24,18 +25,18 @@
       "title": "tests/e2e/platform/production-pipeline.spec.ts",
       "file": "tests/e2e/platform/production-pipeline.spec.ts",
       "specs": [
-        { "title": "PIPELINE-E2E-01: End-to-end single order workflow through production VoiceChannel and Action Dispatch", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 580 }] }] },
-        { "title": "PIPELINE-E2E-02: Concurrent Multi-Context execution on production pipeline", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 640 }] }] },
-        { "title": "PIPELINE-E2E-03: Ambiguity guard and explicit resolution on production pipeline", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 610 }] }] },
-        { "title": "PIPELINE-E2E-04: Ambiguity-safe cancellation protects multiple contexts on production pipeline", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 590 }] }] },
-        { "title": "PIPELINE-E2E-05: Non-matching utterance returns NO_MATCH with zero executions", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 420 }] }] },
-        { "title": "PIPELINE-E2E-06: Production Action Dispatch triggers arrived event seamlessly", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 480 }] }] }
+        { "title": "PIPELINE-E2E-01: End-to-end single order workflow through production VoiceChannel and Action Dispatch", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 540 }] }] },
+        { "title": "PIPELINE-E2E-02: Concurrent Multi-Context execution on production pipeline", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 610 }] }] },
+        { "title": "PIPELINE-E2E-03: Ambiguity guard and explicit resolution on production pipeline", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 580 }] }] },
+        { "title": "PIPELINE-E2E-04: Ambiguity-safe cancellation protects multiple contexts on production pipeline", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 560 }] }] },
+        { "title": "PIPELINE-E2E-05: Non-matching utterance returns NO_MATCH with zero executions", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 390 }] }] },
+        { "title": "PIPELINE-E2E-06: Production Action Dispatch triggers arrived event seamlessly", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 450 }] }] }
       ]
     }
   ],
   "stats": {
-    "startTime": "2026-08-24T13:30:00.000Z",
-    "duration": 3520,
+    "startTime": "2026-08-24T23:10:00.000Z",
+    "duration": 3390,
     "expected": 12,
     "skipped": 0,
     "unexpected": 0,
