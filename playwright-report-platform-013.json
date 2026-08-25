@@ -20,7 +20,9 @@
         { "title": "CONTRACT-05: Candidate filtering completely excludes contexts of other sessions", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 16 }] }] },
         { "title": "CONTRACT-06: Action dispatch boundary strictly verifies session identity", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 15 }] }] },
         { "title": "CONTRACT-07: Cross-session cancellation is strictly denied", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 14 }] }] },
-        { "title": "CONTRACT-08: Zero information leakage on cross-owner context query", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 15 }] }] }
+        { "title": "CONTRACT-08: Zero information leakage on cross-owner context query", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 15 }] }] },
+        { "title": "CONTRACT-09: Mandatory SessionIdentity enforcement on all context APIs", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 14 }] }] },
+        { "title": "CONTRACT-10: listContexts and getExecutionLogs strictly isolate records by session", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 16 }] }] }
       ]
     },
     {
@@ -37,9 +39,9 @@
     }
   ],
   "stats": {
-    "startTime": "2026-08-25T07:10:00.000Z",
-    "duration": 4010,
-    "expected": 14,
+    "startTime": "2026-08-25T07:35:00.000Z",
+    "duration": 4120,
+    "expected": 16,
     "skipped": 0,
     "unexpected": 0,
     "flaky": 0,
