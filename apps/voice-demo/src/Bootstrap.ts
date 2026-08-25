@@ -1,69 +1,43 @@
-/**
- * Validation Bench
- *
- * Wires together all components for the Validation Bench.
- */
-import {
-    BrowserRecognitionProvider,
-    BrowserSpeechProvider
-} from "../../../packages/voice/dist/browser/index"
-import {
-    VoiceChannel,
-    DefaultRecognitionMapper,
-    DefaultSpeechMapper
-} from "../../../packages/voice/dist/channel/index"
-import { EmulatorContract } from "../../../packages/emulator/dist/index"
-import { ScenarioRegistry, loadBuiltinScenarioSet, loadScenarioSetIntoRegistry } from "../../../packages/scenario-engine/dist/index"
-import type { ScenarioSet } from "../../../packages/scenario-engine/dist/index"
-import { ExecutionLog, LogDispatcher, ConsoleLogSink, MemoryLogSink } from "../../../packages/execution-log/dist/index"
-import type { InteractionContract } from "../../../packages/interaction-contract/dist/index"
-import { DemoLogger } from "./DemoLogger"
-import { BackendClient } from "./BackendClient"
+import { DialogueStateManager } from '../../../src/platform/dialogue-manager';
+import { VoiceChannel } from '../../../src/platform/voice-channel';
 
-export interface BenchApp {
-    readonly channel: VoiceChannel
-    readonly logger: DemoLogger
-    readonly executionLog: ExecutionLog
-    readonly memorySink: MemoryLogSink
-    readonly registry: ScenarioRegistry
-    readonly backend: BackendClient
-    readonly interaction: InteractionContract
-    readonly recognition: BrowserRecognitionProvider
-    readonly speech: BrowserSpeechProvider
-    /** PR-11: the ScenarioSet currently loaded into `registry`. */
-    activeScenarioSet: ScenarioSet
-    /** PR-11: "builtin" until a JSON file is loaded via the UI. */
-    activeScenarioSource: "builtin" | "file"
-    /** PR-11: set when activeScenarioSource === "file". */
-    activeScenarioFileName: string | null
+export interface AppRuntimeContext {
+  dialogueManager: DialogueStateManager;
+  voiceChannel: VoiceChannel;
+  emulator: any;
 }
 
-export function bootstrap(language = "en-US"): BenchApp {
-    const registry = new ScenarioRegistry()
-    const builtinScenarioSet = loadBuiltinScenarioSet()
-    loadScenarioSetIntoRegistry(registry, builtinScenarioSet)
-    const dispatcher = new LogDispatcher()
-    const consoleSink = new ConsoleLogSink()
-    const memorySink = new MemoryLogSink()
-    dispatcher.register(consoleSink)
-    dispatcher.register(memorySink)
-    const executionLog = new ExecutionLog(dispatcher)
-    const logger = new DemoLogger(executionLog)
-    const interaction = new EmulatorContract(registry)
-    const recognition = new BrowserRecognitionProvider(language)
-    const speech = new BrowserSpeechProvider()
-    const channel = new VoiceChannel({
-        recognition,
-        speech,
-        interaction,
-        recognitionMapper: new DefaultRecognitionMapper(),
-        speechMapper: new DefaultSpeechMapper()
-    })
-    const backend = new BackendClient()
-    return {
-        channel, logger, executionLog, memorySink, registry, backend, interaction, recognition, speech,
-        activeScenarioSet: builtinScenarioSet,
-        activeScenarioSource: "builtin",
-        activeScenarioFileName: null
+export function createProductionRuntime(emulatorInstance?: any): AppRuntimeContext {
+  // 1. Create production DialogueStateManager with Action Dispatch connected to Emulator / FSM
+  const dialogueManager = new DialogueStateManager({
+    defaultTtlMs: 300000,
+    enableAutoExpiryScheduler: true,
+    onActionDispatch: (event, ctx) => {
+      console.log(`[ACTION_DISPATCH] Dispatching event "${event.type}" for context ${ctx.contextId}:`, event.payload);
+      if (emulatorInstance && typeof emulatorInstance.dispatch === 'function') {
+        emulatorInstance.dispatch(event.type, event.payload);
+      } else if (emulatorInstance && typeof emulatorInstance.emit === 'function') {
+        emulatorInstance.emit(event.type, event.payload);
+      }
     }
+  });
+
+  // 2. Create production VoiceChannel wrapping DialogueStateManager
+  const voiceChannel = new VoiceChannel(dialogueManager);
+
+  // 3. Expose strictly identical production instances on window for UI and E2E access
+  if (typeof window !== 'undefined') {
+    (window as any).__DIALOGUE_MANAGER__ = dialogueManager;
+    (window as any).__VOICE_CHANNEL__ = voiceChannel;
+    (window as any).__SCENARIO_ENGINE__ = {
+      getActiveScenarioSetId: () => voiceChannel.getActiveScenarioSetId(),
+      registerScenarioSet: (set: any) => voiceChannel.registerScenarioSet(set)
+    };
+  }
+
+  return {
+    dialogueManager,
+    voiceChannel,
+    emulator: emulatorInstance
+  };
 }
