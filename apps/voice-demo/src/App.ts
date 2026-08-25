@@ -1,47 +1,26 @@
-import { createProductionRuntime, AppRuntimeContext } from './Bootstrap';
+import { SessionIdentity } from '../../../src/platform/dialogue-manager';
 
 export class VoiceDemoApp {
-  public runtime: AppRuntimeContext;
-  private container: HTMLElement;
+  private runtime: any;
+  private currentIdentity: SessionIdentity = { ownerId: 'demo-driver-001', sessionId: 'demo-session-001' };
 
-  constructor(container: HTMLElement, emulatorInstance?: any) {
-    this.container = container;
-    this.runtime = createProductionRuntime(emulatorInstance);
-    this.initUI();
+  constructor(runtime: any) {
+    this.runtime = runtime;
   }
 
-  public loadScenarioSet(scenarioSet: any): void {
-    this.runtime.voiceChannel.registerScenarioSet(scenarioSet);
+  public async handleVoice(phrase: string) {
+    return this.runtime.voiceChannel.handleIncomingVoice(phrase, this.currentIdentity);
   }
 
-  public async processVoiceInput(text: string): Promise<any> {
-    return this.runtime.voiceChannel.handleIncomingVoice(text);
+  public setIdentity(identity: SessionIdentity) {
+    this.currentIdentity = identity;
   }
+}
 
-  private initUI(): void {
-    if (!this.container) return;
-    this.container.innerHTML = `
-      <div id="voice-demo-root" class="voice-app-container">
-        <h2>Voice Assistant Production Runtime</h2>
-        <div id="status-indicator">Ready</div>
-        <input type="file" id="scenario-loader" accept=".json" />
-      </div>
-    `;
-
-    const fileInput = this.container.querySelector('#scenario-loader') as HTMLInputElement;
-    if (fileInput) {
-      fileInput.addEventListener('change', async (e: any) => {
-        const file = e.target.files?.[0];
-        if (file) {
-          const text = await file.text();
-          try {
-            const scenarioSet = JSON.parse(text);
-            this.loadScenarioSet(scenarioSet);
-          } catch (err) {
-            console.error('Failed to parse ScenarioSet JSON:', err);
-          }
-        }
-      });
-    }
+export function mountApp(runtime: any) {
+  const app = new VoiceDemoApp(runtime);
+  if (typeof window !== 'undefined') {
+    (window as any).__VOICE_DEMO_APP__ = app;
   }
+  return app;
 }
