@@ -10,37 +10,56 @@ export interface DialogueContext {
   intent: string;
   slots: Record<string, any>;
   missingSlots: string[];
-  status: 'WAITING_FOR_SLOT' | 'COMPLETED' | 'CANCELLED' | 'EXPIRED';
+  status: 'WAITING_FOR_SLOT' | 'COMPLETED' | 'CANCELLED' | 'EXPIRED' | 'DISPATCHING';
   createdAt: number;
   updatedAt: number;
   expiresAt: number;
   actionType: string;
+  scenarioId?: string;
   clarificationPrompts?: Record<string, string>;
   clarificationPrompt?: string;
 }
 
-export interface ExecutionLog {
-  contextId: string;
+export type ExecutionStatus = 'PENDING' | 'DISPATCHING' | 'SUCCEEDED' | 'FAILED' | 'UNKNOWN';
+
+export interface ActionExecution {
+  executionId: string;
+  idempotencyKey: string;
   ownerId: string;
   sessionId: string;
+  contextId: string;
+  scenarioId: string;
   intent: string;
-  event: {
-    type: string;
-    payload: Record<string, any>;
-  };
-  timestamp: number;
+  actionType: string;
+  payload: Record<string, any>;
+  status: ExecutionStatus;
+  attempt: number;
+  createdAt: number;
+  updatedAt: number;
+  errorCode?: string;
 }
 
-export type ActionDispatchHandler = (
+export type DispatchResult =
+  | { status: 'SUCCEEDED'; executionId: string; attempt: number }
+  | { status: 'FAILED'; executionId: string; errorCode: string; attempt: number }
+  | { status: 'UNKNOWN'; executionId: string; errorCode: string; attempt: number };
+
+export interface RetryPolicy {
+  maxAttempts: number;
+  retryableErrors: string[];
+}
+
+export type ActionDispatcher = (
   event: { type: string; payload: Record<string, any> },
   context: DialogueContext,
-  identity: SessionIdentity
-) => void;
+  execution: ActionExecution
+) => Promise<DispatchResult>;
 
 export interface DialogueManagerConfig {
   maxActiveContexts?: number;
   defaultTtlMs?: number;
-  onActionDispatch?: ActionDispatchHandler;
+  actionDispatcher?: ActionDispatcher;
+  retryPolicy?: RetryPolicy;
   enableAutoExpiryScheduler?: boolean;
 }
 
@@ -53,10 +72,11 @@ export type RoutingResult =
 export class DialogueStateManager {
   private contexts: Map<string, DialogueContext> = new Map();
   private activeContextId: string | null = null;
-  private executionLogs: ExecutionLog[] = [];
+  private executions: Map<string, ActionExecution> = new Map();
   private maxActiveContexts: number;
   private defaultTtlMs: number;
-  private onActionDispatch?: ActionDispatchHandler;
+  private actionDispatcher?: ActionDispatcher;
+  private retryPolicy: RetryPolicy;
   private timerMap: Map<string, any> = new Map();
   private enableAutoExpiryScheduler: boolean;
 
@@ -65,17 +85,19 @@ export class DialogueStateManager {
       this.defaultTtlMs = configOrTimeout;
       this.maxActiveContexts = 50;
       this.enableAutoExpiryScheduler = true;
+      this.retryPolicy = { maxAttempts: 3, retryableErrors: ['TIMEOUT', 'NETWORK_ERROR', 'TEMPORARY_UNAVAILABLE'] };
     } else {
       this.maxActiveContexts = configOrTimeout.maxActiveContexts ?? 50;
       this.defaultTtlMs = configOrTimeout.defaultTtlMs ?? 300000;
-      this.onActionDispatch = configOrTimeout.onActionDispatch;
+      this.actionDispatcher = configOrTimeout.actionDispatcher;
+      this.retryPolicy = configOrTimeout.retryPolicy ?? { maxAttempts: 3, retryableErrors: ['TIMEOUT', 'NETWORK_ERROR', 'TEMPORARY_UNAVAILABLE'] };
       this.enableAutoExpiryScheduler = configOrTimeout.enableAutoExpiryScheduler ?? true;
     }
     this.reset();
   }
 
-  public setActionDispatchHandler(handler: ActionDispatchHandler): void {
-    this.onActionDispatch = handler;
+  public setActionDispatcher(dispatcher: ActionDispatcher): void {
+    this.actionDispatcher = dispatcher;
   }
 
   public reset(): void {
@@ -85,7 +107,7 @@ export class DialogueStateManager {
     this.timerMap.clear();
     this.contexts.clear();
     this.activeContextId = null;
-    this.executionLogs = [];
+    this.executions.clear();
   }
 
   private validateIdentity(identity: SessionIdentity): void {
@@ -113,7 +135,7 @@ export class DialogueStateManager {
     const ctx = this.contexts.get(contextId);
     if (!ctx) return undefined;
     if (ctx.ownerId !== identity.ownerId || ctx.sessionId !== identity.sessionId) {
-      return undefined; // Strict zero information leakage
+      return undefined;
     }
     return ctx;
   }
@@ -156,14 +178,14 @@ export class DialogueStateManager {
     requiredSlots: string[],
     actionType: string,
     clarificationPrompts: Record<string, string>,
-    identity: SessionIdentity
+    identity: SessionIdentity,
+    scenarioId?: string
   ): DialogueContext {
     this.validateIdentity(identity);
     if (!actionType) {
       throw new Error('CONTRACT_VIOLATION: actionType is strictly required for createContext');
     }
 
-    // Entity deduplication scoped strictly to current session
     for (const [key, value] of Object.entries(initialSlots)) {
       if (value !== undefined) {
         const existing = Array.from(this.contexts.values()).find(
@@ -207,6 +229,7 @@ export class DialogueStateManager {
       updatedAt: now,
       expiresAt: now + this.defaultTtlMs,
       actionType,
+      scenarioId,
       clarificationPrompts,
       clarificationPrompt: firstMissing ? clarificationPrompts[firstMissing] : undefined
     };
@@ -214,9 +237,7 @@ export class DialogueStateManager {
     this.contexts.set(contextId, newContext);
     this.activeContextId = contextId;
 
-    if (newContext.status === 'COMPLETED') {
-      this.recordExecution(newContext, identity);
-    } else {
+    if (missingSlots.length > 0) {
       this.scheduleTtlTimer(contextId, this.defaultTtlMs);
     }
 
@@ -232,7 +253,6 @@ export class DialogueStateManager {
     const text = phrase.toLowerCase();
     const tokens = text.split(/\s+/);
 
-    // 1. Explicit entity match check across all active contexts
     for (const ctx of this.contexts.values()) {
       if (ctx.status !== 'WAITING_FOR_SLOT') continue;
 
@@ -250,7 +270,6 @@ export class DialogueStateManager {
       }
     }
 
-    // 2. Candidate Resolution filtered strictly by current session ownership
     const candidates = Array.from(this.contexts.values()).filter(ctx => {
       if (ctx.ownerId !== identity.ownerId || ctx.sessionId !== identity.sessionId) return false;
       if (ctx.status !== 'WAITING_FOR_SLOT') return false;
@@ -296,13 +315,11 @@ export class DialogueStateManager {
     ctx.updatedAt = Date.now();
 
     if (ctx.missingSlots.length === 0) {
-      ctx.status = 'COMPLETED';
       ctx.clarificationPrompt = undefined;
       if (this.timerMap.has(ctx.contextId)) {
         clearTimeout(this.timerMap.get(ctx.contextId));
         this.timerMap.delete(ctx.contextId);
       }
-      this.recordExecution(ctx, identity);
     } else {
       const nextMissing = ctx.missingSlots[0];
       ctx.clarificationPrompt = ctx.clarificationPrompts?.[nextMissing] || `Укажите ${nextMissing}`;
@@ -349,40 +366,150 @@ export class DialogueStateManager {
     return true;
   }
 
-  public recordExecution(ctx: DialogueContext, identity: SessionIdentity): void {
+  public createExecution(
+    ctx: DialogueContext,
+    identity: SessionIdentity,
+    providedExecutionId?: string
+  ): ActionExecution {
     this.validateIdentity(identity);
     if (ctx.ownerId !== identity.ownerId || ctx.sessionId !== identity.sessionId) {
-      throw new Error('SECURITY_VIOLATION: Cannot record execution for cross-owner context');
+      throw new Error('SECURITY_VIOLATION: Cannot create execution for foreign context');
     }
 
-    const exists = this.executionLogs.some(l => l.contextId === ctx.contextId);
-    if (exists) return;
+    const executionId = providedExecutionId || `exec_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const idempotencyKey = `idemp_${ctx.contextId}_${ctx.actionType}_${JSON.stringify(ctx.slots)}`;
+    const now = Date.now();
 
-    if (!ctx.actionType) {
-      throw new Error('CONTRACT_VIOLATION: Cannot record execution without actionType');
-    }
-
-    const eventObj = {
-      type: ctx.actionType,
-      payload: { ...ctx.slots }
+    const execution: ActionExecution = {
+      executionId,
+      idempotencyKey,
+      ownerId: identity.ownerId,
+      sessionId: identity.sessionId,
+      contextId: ctx.contextId,
+      scenarioId: ctx.scenarioId || 'sc-default',
+      intent: ctx.intent,
+      actionType: ctx.actionType,
+      payload: { ...ctx.slots },
+      status: 'PENDING',
+      attempt: 0,
+      createdAt: now,
+      updatedAt: now
     };
 
-    this.executionLogs.push({
-      contextId: ctx.contextId,
-      ownerId: ctx.ownerId,
-      sessionId: ctx.sessionId,
-      intent: ctx.intent,
-      event: eventObj,
-      timestamp: Date.now()
-    });
-
-    if (this.onActionDispatch) {
-      this.onActionDispatch(eventObj, ctx, identity);
-    }
+    this.executions.set(executionId, execution);
+    return execution;
   }
 
-  public getExecutionLogs(identity: SessionIdentity): ExecutionLog[] {
+  public async dispatchAction(
+    executionId: string,
+    payload: Record<string, any>,
+    identity: SessionIdentity
+  ): Promise<DispatchResult> {
     this.validateIdentity(identity);
-    return this.executionLogs.filter(l => l.ownerId === identity.ownerId && l.sessionId === identity.sessionId);
+    const execution = this.executions.get(executionId);
+    if (!execution) {
+      throw new Error(`CONTRACT_VIOLATION: Execution "${executionId}" not found`);
+    }
+
+    if (execution.ownerId !== identity.ownerId || execution.sessionId !== identity.sessionId) {
+      throw new Error('SECURITY_VIOLATION: Cannot dispatch cross-session execution');
+    }
+
+    if (JSON.stringify(execution.payload) !== JSON.stringify(payload)) {
+      throw new Error('CONTRACT_VIOLATION: Payload cannot be mutated for same executionId');
+    }
+
+    if (execution.status === 'SUCCEEDED') {
+      return { status: 'SUCCEEDED', executionId: execution.executionId, attempt: execution.attempt };
+    }
+
+    if (execution.status === 'DISPATCHING') {
+      return { status: 'UNKNOWN', executionId: execution.executionId, errorCode: 'ALREADY_IN_PROGRESS', attempt: execution.attempt };
+    }
+
+    const ctx = this.contexts.get(execution.contextId);
+    if (!ctx) {
+      throw new Error(`CONTRACT_VIOLATION: Context "${execution.contextId}" not found`);
+    }
+
+    let currentAttempt = execution.attempt;
+    let lastResult: DispatchResult = { status: 'UNKNOWN', executionId, errorCode: 'INIT', attempt: currentAttempt };
+
+    while (currentAttempt < this.retryPolicy.maxAttempts) {
+      currentAttempt++;
+      execution.attempt = currentAttempt;
+      execution.status = 'DISPATCHING';
+      execution.updatedAt = Date.now();
+
+      if (!this.actionDispatcher) {
+        execution.status = 'SUCCEEDED';
+        execution.updatedAt = Date.now();
+        ctx.status = 'COMPLETED';
+        return { status: 'SUCCEEDED', executionId: execution.executionId, attempt: currentAttempt };
+      }
+
+      try {
+        const result = await this.actionDispatcher(
+          { type: execution.actionType, payload: execution.payload },
+          ctx,
+          execution
+        );
+
+        lastResult = result;
+        execution.updatedAt = Date.now();
+
+        if (result.status === 'SUCCEEDED') {
+          execution.status = 'SUCCEEDED';
+          ctx.status = 'COMPLETED';
+          return result;
+        }
+
+        if (result.status === 'FAILED') {
+          execution.errorCode = result.errorCode;
+          if (!this.retryPolicy.retryableErrors.includes(result.errorCode)) {
+            execution.status = 'FAILED';
+            return result;
+          }
+        }
+
+        if (result.status === 'UNKNOWN') {
+          execution.status = 'UNKNOWN';
+          execution.errorCode = result.errorCode;
+          return result;
+        }
+      } catch (err: any) {
+        const code = err.message || 'DISPATCH_ERROR';
+        lastResult = { status: 'FAILED', executionId, errorCode: code, attempt: currentAttempt };
+        execution.errorCode = code;
+
+        if (!this.retryPolicy.retryableErrors.includes(code)) {
+          execution.status = 'FAILED';
+          return lastResult;
+        }
+      }
+    }
+
+    execution.status = lastResult.status === 'SUCCEEDED' ? 'SUCCEEDED' : 'FAILED';
+    if (execution.status !== 'SUCCEEDED') {
+      execution.errorCode = lastResult.errorCode || 'MAX_RETRIES_EXCEEDED';
+    }
+    return lastResult;
+  }
+
+  public getExecution(executionId: string, identity: SessionIdentity): ActionExecution | undefined {
+    this.validateIdentity(identity);
+    const exec = this.executions.get(executionId);
+    if (!exec) return undefined;
+    if (exec.ownerId !== identity.ownerId || exec.sessionId !== identity.sessionId) {
+      return undefined;
+    }
+    return exec;
+  }
+
+  public getExecutionLogs(identity: SessionIdentity): ActionExecution[] {
+    this.validateIdentity(identity);
+    return Array.from(this.executions.values()).filter(
+      l => l.ownerId === identity.ownerId && l.sessionId === identity.sessionId
+    );
   }
 }
