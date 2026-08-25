@@ -17,19 +17,29 @@ test.describe('E2E: PLATFORM-015 Action Dispatch Reliability Suite', () => {
     await fileInput.setInputFiles(scenarioFilePath);
   }
 
-  test('E2E-RELIABILITY-01: Successful dispatch completes context and execution', async ({ page }) => {
+  test('E2E-RELIABILITY-01: Full Voice -> Intent -> Context -> Dispatch execution (HIGH-8)', async ({ page }) => {
     await setupApp(page);
 
     const res = await page.evaluate(async (id) => {
+      const vc = (window as any).__VOICE_CHANNEL__;
       const dm = (window as any).__DIALOGUE_MANAGER__;
-      const ctx = dm.createContext('ORDER_DISPATCH', { orderId: 1001 }, ['orderId'], 'order.dispatch.completed', {}, id);
-      const ex = dm.createExecution(ctx, id);
-      const dispatchRes = await dm.dispatchAction(ex.executionId, { orderId: 1001 }, id);
-      return { dispatchRes, ctx: dm.getContext(ctx.contextId, id) };
+
+      let dispatchedEvent: any = null;
+      dm.setActionDispatcher(async (ev: any, ctx: any, ex: any) => {
+        dispatchedEvent = ev;
+        return { status: 'SUCCEEDED', executionId: ex.executionId, attempt: ex.attempt };
+      });
+
+      const voiceRes = await vc.handleIncomingVoice('заказ 1001', id);
+      const logs = dm.getExecutionLogs(id);
+
+      return { voiceRes, dispatchedEvent, logsCount: logs.length, execution: logs[0] };
     }, sessionA);
 
-    expect(res.dispatchRes.status).toBe('SUCCEEDED');
-    expect(res.ctx.status).toBe('COMPLETED');
+    expect(res.voiceRes.status).toBe('SUCCEEDED');
+    expect(res.dispatchedEvent.payload.orderId).toBe(1001);
+    expect(res.logsCount).toBe(1);
+    expect(res.execution.status).toBe('SUCCEEDED');
   });
 
   test('E2E-RELIABILITY-02: Retry succeeds on second attempt', async ({ page }) => {
@@ -82,7 +92,6 @@ test.describe('E2E: PLATFORM-015 Action Dispatch Reliability Suite', () => {
       });
 
       const ctx = dm.createContext('ORDER_DISPATCH', { orderId: 4004 }, ['orderId'], 'order.dispatch.completed', {}, id);
-      ctx.status = 'WAITING_FOR_SLOT';
       const ex = dm.createExecution(ctx, id);
       const dispatchRes = await dm.dispatchAction(ex.executionId, { orderId: 4004 }, id);
       return { dispatchRes, ctx: dm.getContext(ctx.contextId, id) };
@@ -100,7 +109,7 @@ test.describe('E2E: PLATFORM-015 Action Dispatch Reliability Suite', () => {
       const dm = (window as any).__DIALOGUE_MANAGER__;
       dm.setActionDispatcher(async (ev: any, ctx: any, ex: any) => {
         count++;
-        await new Promise(r => setTimeout(r, 10));
+        await new Promise(r => setTimeout(r, 15));
         return { status: 'SUCCEEDED', executionId: ex.executionId, attempt: ex.attempt };
       });
 
