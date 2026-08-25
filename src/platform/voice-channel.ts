@@ -1,4 +1,4 @@
-import { DialogueStateManager, RoutingResult, ActionDispatchHandler, SessionIdentity } from './dialogue-manager';
+import { DialogueStateManager, RoutingResult, ActionDispatcher, SessionIdentity } from './dialogue-manager';
 
 export interface SlotExtractorDefinition {
   type: 'integer' | 'enum' | 'string';
@@ -68,7 +68,6 @@ export class VoiceChannel {
     const seenIds = new Set<string>();
     const seenTriggers = new Set<string>();
 
-    // Comprehensive atomic registry validation
     for (const sc of scenarioSet.scenarios) {
       if (!sc.id || typeof sc.id !== 'string') {
         throw new Error('CONTRACT_VIOLATION: Scenario missing valid id');
@@ -127,7 +126,6 @@ export class VoiceChannel {
       }
     }
 
-    // Atomic assignment on successful validation
     this.scenarioRegistry = [...scenarioSet.scenarios];
     this.activeScenarioSetId = scenarioSet.id;
   }
@@ -136,8 +134,9 @@ export class VoiceChannel {
     return this.activeScenarioSetId;
   }
 
-  public setActionDispatchHandler(handler: ActionDispatchHandler): void {
-    this.dialogueManager.setActionDispatchHandler(handler);
+  // BLOCKER-1: Uses unified ActionDispatcher
+  public setActionDispatcher(dispatcher: ActionDispatcher): void {
+    this.dialogueManager.setActionDispatcher(dispatcher);
   }
 
   public getDeterministicScenarioForIntent(intent: string): ScenarioDefinition | undefined {
@@ -147,8 +146,6 @@ export class VoiceChannel {
 
     const maxPriority = Math.max(...matching.map(s => s.priority ?? 0));
     const highest = matching.filter(s => (s.priority ?? 0) === maxPriority);
-    
-    // Deterministic tie-breaker: order-independent lexical sorting by scenario ID
     highest.sort((a, b) => a.id.localeCompare(b.id));
     return highest[0];
   }
@@ -179,7 +176,6 @@ export class VoiceChannel {
       return { status: 'RESOLVED', scenarioId: sc.id, intent: sc.intent, scenario: sc };
     }
 
-    // Priority-based resolution
     const maxPriority = Math.max(...matchingScenarios.map(s => s.priority ?? 0));
     const highestCandidates = matchingScenarios.filter(s => (s.priority ?? 0) === maxPriority);
 
@@ -188,13 +184,10 @@ export class VoiceChannel {
       return { status: 'RESOLVED', scenarioId: sc.id, intent: sc.intent, scenario: sc };
     }
 
-    const candidateIds = highestCandidates.map(s => s.id);
-    const candidateIntents = highestCandidates.map(s => s.intent);
-
     return {
       status: 'AMBIGUOUS_INTENT',
-      candidateScenarioIds: candidateIds,
-      candidateIntents: candidateIntents,
+      candidateScenarioIds: highestCandidates.map(s => s.id),
+      candidateIntents: highestCandidates.map(s => s.intent),
       clarificationPrompt: highestCandidates[0].ambiguityPrompt?.template
     };
   }
@@ -208,8 +201,7 @@ export class VoiceChannel {
 
     for (const [slotKey, extractor] of Object.entries(extractors)) {
       if (extractor.type === 'integer' && extractor.pattern) {
-        const regex = new RegExp(extractor.pattern);
-        const match = text.match(regex);
+        const match = text.match(new RegExp(extractor.pattern));
         if (match) {
           candidates.push({
             slotName: slotKey,
@@ -243,15 +235,9 @@ export class VoiceChannel {
       }
     }
 
-    if (candidates.length === 0) {
-      return { status: 'NO_MATCH' };
-    }
+    if (candidates.length === 0) return { status: 'NO_MATCH' };
+    if (candidates.length === 1) return { status: 'RESOLVED', slots: { [candidates[0].slotName]: candidates[0].value } };
 
-    if (candidates.length === 1) {
-      return { status: 'RESOLVED', slots: { [candidates[0].slotName]: candidates[0].value } };
-    }
-
-    // Check for Slot Ambiguity across candidates
     const maxPrio = Math.max(...candidates.map(c => c.priority));
     const highest = candidates.filter(c => c.priority === maxPrio);
 
@@ -273,7 +259,7 @@ export class VoiceChannel {
     const text = phrase.trim().toLowerCase();
     const tokens = text.split(/\s+/);
 
-    // 1. Strict Cancellation Flow
+    // 1. Cancellation Flow
     const isCancelToken = tokens.includes('отмена') || tokens.includes('отменить') || tokens.includes('cancel');
     if (isCancelToken) {
       const isPureCancel = text === 'отмена' || text === 'отменить' || text === 'cancel';
@@ -291,11 +277,7 @@ export class VoiceChannel {
 
           const candidateIntent = activeWaiting[0]?.intent;
           const matchingScenario = this.getDeterministicScenarioForIntent(candidateIntent);
-          if (!matchingScenario?.ambiguityPrompt?.template) {
-            throw new Error('CONTRACT_VIOLATION: ambiguityPrompt template is missing in ScenarioDefinition for intent: ' + candidateIntent);
-          }
-
-          const promptText = matchingScenario.ambiguityPrompt.template.replace('{candidateEntities}', candidateEntities);
+          const promptText = matchingScenario?.ambiguityPrompt?.template?.replace('{candidateEntities}', candidateEntities) || 'Уточните';
 
           return {
             status: 'AMBIGUOUS_CONTEXT',
@@ -306,7 +288,6 @@ export class VoiceChannel {
         return { status: 'NO_MATCH' };
       }
 
-      // Explicit cancellation (e.g. "Заказ 1002 отмена")
       const routeResult = this.dialogueManager.resolveRouting(text, [], identity);
       if (routeResult.status === 'RESOLVED') {
         return this.dialogueManager.cancelContext(routeResult.contextId, identity);
@@ -345,14 +326,30 @@ export class VoiceChannel {
 
       const initialSlots = slotRes.status === 'RESOLVED' ? slotRes.slots : {};
 
-      return this.dialogueManager.createContext(
+      const ctx = this.dialogueManager.createContext(
         sc.intent,
         initialSlots,
         requiredSlots,
         actionType,
         prompts,
-        identity
+        identity,
+        sc.id
       );
+
+      // HIGH-8: Full Voice -> Dispatch Execution integration
+      if (ctx.missingSlots.length === 0) {
+        const exec = this.dialogueManager.createExecution(ctx, identity);
+        const dispatchRes = await this.dialogueManager.dispatchAction(exec.executionId, ctx.slots, identity);
+        return {
+          status: dispatchRes.status,
+          contextId: ctx.contextId,
+          executionId: exec.executionId,
+          attempt: dispatchRes.attempt,
+          context: this.dialogueManager.getContext(ctx.contextId, identity)
+        };
+      }
+
+      return ctx;
     }
 
     // 3. Extract slots scoped to active contexts of the current session
@@ -368,10 +365,7 @@ export class VoiceChannel {
       if (scenario && scenario.slotExtractors) {
         const slotRes = this.extractSlotsDeterministically(text, scenario.slotExtractors, scenario.id);
         if (slotRes.status === 'AMBIGUOUS_SLOT') {
-          return {
-            status: 'AMBIGUOUS_SLOT',
-            candidates: slotRes.candidates
-          };
+          return { status: 'AMBIGUOUS_SLOT', candidates: slotRes.candidates };
         }
         if (slotRes.status === 'RESOLVED') {
           for (const [slotKey, slotVal] of Object.entries(slotRes.slots)) {
@@ -382,11 +376,8 @@ export class VoiceChannel {
       }
     }
 
-    if (allSlotCandidates.length === 0) {
-      return { status: 'NO_MATCH' };
-    }
+    if (allSlotCandidates.length === 0) return { status: 'NO_MATCH' };
 
-    // Check for cross-context slot ambiguity
     const extractedSlots: Record<string, any> = {};
     if (allSlotCandidates.length === 1) {
       extractedSlots[allSlotCandidates[0].slotName] = allSlotCandidates[0].value;
@@ -398,64 +389,41 @@ export class VoiceChannel {
       } else {
         const distinctSlots = new Set(highestSlots.map(h => h.slotName));
         if (distinctSlots.size > 1) {
-          return {
-            status: 'AMBIGUOUS_SLOT',
-            candidates: highestSlots.map(h => ({ slotName: h.slotName, value: h.value, scenarioId: h.scenarioId }))
-          };
+          return { status: 'AMBIGUOUS_SLOT', candidates: highestSlots.map(h => ({ slotName: h.slotName, value: h.value, scenarioId: h.scenarioId })) };
         }
         extractedSlots[highestSlots[0].slotName] = highestSlots[0].value;
       }
     }
 
-    const extractedSlotKeys = Object.keys(extractedSlots);
+    const routingResult: RoutingResult = this.dialogueManager.resolveRouting(text, Object.keys(extractedSlots), identity);
 
-    // 4. Resolve Context Route using Ownership & Ambiguity Policy
-    const routingResult: RoutingResult = this.dialogueManager.resolveRouting(text, extractedSlotKeys, identity);
-
-    if (routingResult.status === 'CONTEXT_ACCESS_DENIED') {
-      return { status: 'CONTEXT_ACCESS_DENIED' };
-    }
-
+    if (routingResult.status === 'CONTEXT_ACCESS_DENIED') return { status: 'CONTEXT_ACCESS_DENIED' };
+    if (routingResult.status === 'NO_MATCH') return { status: 'NO_MATCH' };
     if (routingResult.status === 'AMBIGUOUS_CONTEXT') {
-      const candidateContexts = routingResult.candidateContextIds
-        .map(id => this.dialogueManager.getContext(id, identity))
-        .filter(Boolean);
-
-      const candidateEntities = candidateContexts
-        .map(c => Object.values(c!.slots)[0])
-        .filter(v => v !== undefined)
-        .join(', ');
-
-      const candidateIntent = candidateContexts[0]?.intent;
-      const matchingScenario = this.getDeterministicScenarioForIntent(candidateIntent);
-      if (!matchingScenario?.ambiguityPrompt?.template) {
-        throw new Error('CONTRACT_VIOLATION: ambiguityPrompt template is missing in ScenarioDefinition for intent: ' + candidateIntent);
-      }
-
-      const promptText = matchingScenario.ambiguityPrompt.template.replace('{candidateEntities}', candidateEntities);
-
-      return {
-        status: 'AMBIGUOUS_CONTEXT',
-        candidateContextIds: routingResult.candidateContextIds,
-        clarificationPrompt: promptText
-      };
+      return { status: 'AMBIGUOUS_CONTEXT', candidateContextIds: routingResult.candidateContextIds };
     }
 
-    if (routingResult.status === 'NO_MATCH') {
-      return { status: 'NO_MATCH' };
-    }
-
-    // 5. Single Resolved Context: Fill slots and execute deterministically
     const targetCtx = this.dialogueManager.getContext(routingResult.contextId, identity);
-    if (!targetCtx || targetCtx.status !== 'WAITING_FOR_SLOT') {
-      return routingResult;
-    }
+    if (!targetCtx || targetCtx.status !== 'WAITING_FOR_SLOT') return routingResult;
 
     let updatedCtx: any = targetCtx;
     for (const [slotKey, slotVal] of Object.entries(extractedSlots)) {
       if (targetCtx.missingSlots.includes(slotKey)) {
         updatedCtx = this.dialogueManager.fillSlot(slotKey, slotVal, targetCtx.contextId, identity);
       }
+    }
+
+    // HIGH-8: Full Voice -> Dispatch Execution upon completing missing slots
+    if (updatedCtx && updatedCtx.status === 'WAITING_FOR_SLOT' && updatedCtx.missingSlots.length === 0) {
+      const exec = this.dialogueManager.createExecution(updatedCtx, identity);
+      const dispatchRes = await this.dialogueManager.dispatchAction(exec.executionId, updatedCtx.slots, identity);
+      return {
+        status: dispatchRes.status,
+        contextId: updatedCtx.contextId,
+        executionId: exec.executionId,
+        attempt: dispatchRes.attempt,
+        context: this.dialogueManager.getContext(updatedCtx.contextId, identity)
+      };
     }
 
     return updatedCtx;
