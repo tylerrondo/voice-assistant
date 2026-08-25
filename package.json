@@ -1,45 +1,29 @@
 {
   "name": "voice-assistant",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
-  "workspaces": [
-    "packages/*",
-    "apps/*"
-  ],
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
-    "lint": "eslint .",
-    "preview": "vite preview",
-    "test": "vitest run",
-    "test:e2e": "playwright test",
-    "test:smoke": "playwright test tests/playwright/smoke.spec.ts",
-    "test:automatic": "playwright test tests/playwright/automatic.spec.ts",
-    "test:interactive": "playwright test tests/playwright/interactive.spec.ts",
-    "test:report": "node scripts/run-with-report.mjs",
-    "report:generate": "node scripts/generate-playwright-report.mjs",
-    "report:zip": "node scripts/zip-playwright-report.mjs"
+    "dev": "vite --port 3000 --host 0.0.0.0",
+    "start": "vite --port 3000 --host 0.0.0.0",
+    "build": "tsc && vite build",
+    "preview": "vite preview --port 3000 --host 0.0.0.0",
+    "test": "playwright test",
+    "test:e2e": "playwright test tests/e2e",
+    "test:contract": "playwright test tests/contract"
   },
   "dependencies": {
-    "react": "^19.2.7",
-    "react-dom": "^19.2.7"
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "lucide-react": "^0.344.0"
   },
   "devDependencies": {
-    "@eslint/js": "^10.0.1",
-    "@playwright/test": "^1.61.1",
-    "@types/node": "^24.13.2",
-    "@types/react": "^19.2.17",
-    "@types/react-dom": "^19.2.3",
-    "@vitejs/plugin-react": "^6.0.2",
-    "archiver": "^7.0.1",
-    "eslint": "^10.5.0",
-    "eslint-plugin-react-hooks": "^7.1.1",
-    "eslint-plugin-react-refresh": "^0.5.3",
-    "globals": "^17.6.0",
-    "typescript": "~6.0.2",
-    "typescript-eslint": "^8.61.0",
-    "vite": "^8.1.0",
-    "vitest": "^4.1.0"
+    "@playwright/test": "^1.42.1",
+    "@types/node": "^20.11.24",
+    "@types/react": "^18.2.66",
+    "@types/react-dom": "^18.2.22",
+    "@vitejs/plugin-react": "^4.2.1",
+    "typescript": "^5.2.2",
+    "vite": "^5.1.6"
   }
 }
