@@ -147,6 +147,9 @@ export class VoiceChannel {
 
     const maxPriority = Math.max(...matching.map(s => s.priority ?? 0));
     const highest = matching.filter(s => (s.priority ?? 0) === maxPriority);
+    
+    // Deterministic tie-breaker: order-independent lexical sorting by scenario ID
+    highest.sort((a, b) => a.id.localeCompare(b.id));
     return highest[0];
   }
 
