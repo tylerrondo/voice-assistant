@@ -6,7 +6,7 @@ const scenarioFilePath = path.resolve(__dirname, '../../../scenario-platform-012
 test.describe('E2E: PLATFORM-012 Production Voice Pipeline Integration Suite', () => {
 
   async function setupApp(page: any) {
-    const appUrl = process.env.APP_URL || 'https://voice-assistant-two-olive.vercel.app';
+    const appUrl = process.env.APP_URL || 'http://localhost:3000';
     await page.goto(appUrl);
     await expect(page.locator('body')).toBeVisible();
 
