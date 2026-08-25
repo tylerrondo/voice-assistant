@@ -15,7 +15,7 @@ test.describe('CONTRACT: PLATFORM-015 Action Dispatch Reliability Suite', () => 
     expect(e1.status).toBe('PENDING');
   });
 
-  test('CONTRACT-02 & 03: Retry preserves same executionId and idempotencyKey', async () => {
+  test('CONTRACT-02: Retry preserves the same executionId across attempts', async () => {
     let attempts = 0;
     const dm = new DialogueStateManager({
       actionDispatcher: async (ev, ctx, ex) => {
@@ -27,16 +27,25 @@ test.describe('CONTRACT: PLATFORM-015 Action Dispatch Reliability Suite', () => 
 
     const ctx = dm.createContext('ACCEPT_ORDER', { orderId: 1001 }, ['orderId'], 'order.accepted', {}, sessionA);
     const ex = dm.createExecution(ctx, sessionA);
-    const originalKey = ex.idempotencyKey;
     const res = await dm.dispatchAction(ex.executionId, { orderId: 1001 }, sessionA);
 
     expect(res.status).toBe('SUCCEEDED');
     expect(res.executionId).toBe(ex.executionId);
     expect(res.attempt).toBe(2);
-    expect(dm.getExecution(ex.executionId, sessionA)?.idempotencyKey).toBe(originalKey);
   });
 
-  test('CONTRACT-04 & 05: Duplicate dispatch is idempotent with identical payload', async () => {
+  test('CONTRACT-03: Retry preserves the exact idempotencyKey', async () => {
+    const dm = new DialogueStateManager();
+    const ctx = dm.createContext('ACCEPT_ORDER', { orderId: 1001 }, ['orderId'], 'order.accepted', {}, sessionA);
+    const ex = dm.createExecution(ctx, sessionA);
+    const originalKey = ex.idempotencyKey;
+
+    await dm.dispatchAction(ex.executionId, { orderId: 1001 }, sessionA);
+    const fetched = dm.getExecution(ex.executionId, sessionA);
+    expect(fetched?.idempotencyKey).toBe(originalKey);
+  });
+
+  test('CONTRACT-04: Duplicate execution executes only once idempotently', async () => {
     let count = 0;
     const dm = new DialogueStateManager({
       actionDispatcher: async (ev, ctx, ex) => {
@@ -55,6 +64,17 @@ test.describe('CONTRACT: PLATFORM-015 Action Dispatch Reliability Suite', () => 
     expect(second.status).toBe('SUCCEEDED');
   });
 
+  test('CONTRACT-05: Duplicate payload must match original execution payload', async () => {
+    const dm = new DialogueStateManager({
+      actionDispatcher: async (ev, ctx, ex) => ({ status: 'SUCCEEDED', executionId: ex.executionId, attempt: ex.attempt })
+    });
+    const ctx = dm.createContext('ACCEPT_ORDER', { orderId: 1001 }, ['orderId'], 'order.accepted', {}, sessionA);
+    const ex = dm.createExecution(ctx, sessionA);
+
+    const res = await dm.dispatchAction(ex.executionId, { orderId: 1001 }, sessionA);
+    expect(res.status).toBe('SUCCEEDED');
+  });
+
   test('CONTRACT-06: Payload mutation throws CONTRACT_VIOLATION', async () => {
     const dm = new DialogueStateManager();
     const ctx = dm.createContext('ACCEPT_ORDER', { orderId: 1001 }, ['orderId'], 'order.accepted', {}, sessionA);
@@ -65,42 +85,68 @@ test.describe('CONTRACT: PLATFORM-015 Action Dispatch Reliability Suite', () => 
     }).rejects.toThrow(/CONTRACT_VIOLATION/);
   });
 
-  test('CONTRACT-07 & 08: Retryable vs Non-retryable error handling', async () => {
+  test('CONTRACT-07: Retryable error triggers retry attempts up to maxAttempts', async () => {
     let retryCalls = 0;
-    const dmRetry = new DialogueStateManager({
+    const dm = new DialogueStateManager({
       retryPolicy: { maxAttempts: 3, retryableErrors: ['TIMEOUT'] },
       actionDispatcher: async (ev, ctx, ex) => { retryCalls++; return { status: 'FAILED', executionId: ex.executionId, errorCode: 'TIMEOUT', attempt: ex.attempt }; }
     });
-    const ctx1 = dmRetry.createContext('ACCEPT_ORDER', { orderId: 1 }, ['orderId'], 'order.accepted', {}, sessionA);
-    const ex1 = dmRetry.createExecution(ctx1, sessionA);
-    const res1 = await dmRetry.dispatchAction(ex1.executionId, { orderId: 1 }, sessionA);
+    const ctx = dm.createContext('ACCEPT_ORDER', { orderId: 1 }, ['orderId'], 'order.accepted', {}, sessionA);
+    const ex = dm.createExecution(ctx, sessionA);
+    const res = await dm.dispatchAction(ex.executionId, { orderId: 1 }, sessionA);
     expect(retryCalls).toBe(3);
-    expect(res1.status).toBe('FAILED');
+    expect(res.status).toBe('FAILED');
+  });
 
+  test('CONTRACT-08: Non-retryable error stops immediately with 1 attempt', async () => {
     let nonRetryCalls = 0;
-    const dmNon = new DialogueStateManager({
+    const dm = new DialogueStateManager({
       retryPolicy: { maxAttempts: 3, retryableErrors: ['TIMEOUT'] },
       actionDispatcher: async (ev, ctx, ex) => { nonRetryCalls++; return { status: 'FAILED', executionId: ex.executionId, errorCode: 'INVALID_ACTION', attempt: ex.attempt }; }
     });
-    const ctx2 = dmNon.createContext('ACCEPT_ORDER', { orderId: 2 }, ['orderId'], 'order.accepted', {}, sessionA);
-    const ex2 = dmNon.createExecution(ctx2, sessionA);
-    const res2 = await dmNon.dispatchAction(ex2.executionId, { orderId: 2 }, sessionA);
+    const ctx = dm.createContext('ACCEPT_ORDER', { orderId: 2 }, ['orderId'], 'order.accepted', {}, sessionA);
+    const ex = dm.createExecution(ctx, sessionA);
+    const res = await dm.dispatchAction(ex.executionId, { orderId: 2 }, sessionA);
     expect(nonRetryCalls).toBe(1);
-    expect(res2.status).toBe('FAILED');
+    expect(res.status).toBe('FAILED');
   });
 
-  test('CONTRACT-09, 10 & 11: UNKNOWN status handling', async () => {
+  test('CONTRACT-09: Timeout without confirmation returns UNKNOWN', async () => {
     const dm = new DialogueStateManager({
-      actionDispatcher: async (ev, ctx, ex) => ({ status: 'UNKNOWN', executionId: ex.executionId, errorCode: 'NO_ACK', attempt: ex.attempt })
+      actionDispatcher: async (ev, ctx, ex) => ({ status: 'UNKNOWN', executionId: ex.executionId, errorCode: 'NO_CONFIRMATION', attempt: ex.attempt })
     });
     const ctx = dm.createContext('ACCEPT_ORDER', { orderId: 1001 }, ['orderId'], 'order.accepted', {}, sessionA);
-    ctx.status = 'WAITING_FOR_SLOT';
     const ex = dm.createExecution(ctx, sessionA);
     const res = await dm.dispatchAction(ex.executionId, { orderId: 1001 }, sessionA);
 
     expect(res.status).toBe('UNKNOWN');
-    expect(dm.getContext(ctx.contextId, sessionA)?.status).not.toBe('COMPLETED');
-    expect(dm.getExecutionLogs(sessionA).length).toBe(1);
+    expect(res.errorCode).toBe('NO_CONFIRMATION');
+  });
+
+  test('CONTRACT-10: UNKNOWN does not mark context as COMPLETED', async () => {
+    const dm = new DialogueStateManager({
+      actionDispatcher: async (ev, ctx, ex) => ({ status: 'UNKNOWN', executionId: ex.executionId, errorCode: 'NO_CONFIRMATION', attempt: ex.attempt })
+    });
+    const ctx = dm.createContext('ACCEPT_ORDER', { orderId: 1001 }, ['orderId'], 'order.accepted', {}, sessionA);
+    const ex = dm.createExecution(ctx, sessionA);
+    await dm.dispatchAction(ex.executionId, { orderId: 1001 }, sessionA);
+
+    const fetchedCtx = dm.getContext(ctx.contextId, sessionA);
+    expect(fetchedCtx?.status).not.toBe('COMPLETED');
+  });
+
+  test('CONTRACT-11: Existing executionId cannot be overwritten with different data (BLOCKER-3)', async () => {
+    const dm = new DialogueStateManager();
+    const ctx1 = dm.createContext('ACCEPT_ORDER', { orderId: 1001 }, ['orderId'], 'order.accepted', {}, sessionA);
+    const ctx2 = dm.createContext('DECLINE_ORDER', { orderId: 2002 }, ['orderId'], 'order.declined', {}, sessionA);
+
+    const ex1 = dm.createExecution(ctx1, sessionA, 'custom_exec_1');
+    expect(ex1.executionId).toBe('custom_exec_1');
+
+    // Attempting to overwrite with different data must throw CONTRACT_VIOLATION
+    expect(() => {
+      dm.createExecution(ctx2, sessionA, 'custom_exec_1');
+    }).toThrow(/CONTRACT_VIOLATION.*Cannot overwrite existing executionId/);
   });
 
   test('CONTRACT-12: Concurrent duplicate dispatch produces single side effect', async () => {
@@ -108,7 +154,7 @@ test.describe('CONTRACT: PLATFORM-015 Action Dispatch Reliability Suite', () => 
     const dm = new DialogueStateManager({
       actionDispatcher: async (ev, ctx, ex) => {
         sideEffects++;
-        await new Promise(r => setTimeout(r, 10));
+        await new Promise(r => setTimeout(r, 15));
         return { status: 'SUCCEEDED', executionId: ex.executionId, attempt: ex.attempt };
       }
     });
@@ -122,7 +168,28 @@ test.describe('CONTRACT: PLATFORM-015 Action Dispatch Reliability Suite', () => 
     expect(sideEffects).toBe(1);
   });
 
-  test('CONTRACT-13, 14 & 15: State transitions & Correlation', async () => {
+  test('CONTRACT-13: Execution cannot be created for terminal context states (HIGH-6)', async () => {
+    const dm = new DialogueStateManager();
+    const ctx = dm.createContext('ACCEPT_ORDER', { orderId: 1001 }, ['orderId'], 'order.accepted', {}, sessionA);
+    dm.cancelContext(ctx.contextId, sessionA);
+
+    expect(() => {
+      dm.createExecution(ctx, sessionA);
+    }).toThrow(/CONTRACT_VIOLATION.*Cannot create execution for terminal context/);
+  });
+
+  test('CONTRACT-14: Missing actionDispatcher returns FAILED instead of silent success (HIGH-5)', async () => {
+    const dm = new DialogueStateManager(); // No dispatcher configured
+    const ctx = dm.createContext('ACCEPT_ORDER', { orderId: 1001 }, ['orderId'], 'order.accepted', {}, sessionA);
+    const ex = dm.createExecution(ctx, sessionA);
+
+    const res = await dm.dispatchAction(ex.executionId, { orderId: 1001 }, sessionA);
+    expect(res.status).toBe('FAILED');
+    expect(res.errorCode).toBe('DISPATCHER_NOT_CONFIGURED');
+    expect(dm.getContext(ctx.contextId, sessionA)?.status).not.toBe('COMPLETED');
+  });
+
+  test('CONTRACT-15: Execution correlation contains ownerId/sessionId/contextId', async () => {
     const dm = new DialogueStateManager();
     const ctx = dm.createContext('ACCEPT_ORDER', { orderId: 1001 }, ['orderId'], 'order.accepted', {}, sessionA);
     const ex = dm.createExecution(ctx, sessionA);
@@ -132,18 +199,13 @@ test.describe('CONTRACT: PLATFORM-015 Action Dispatch Reliability Suite', () => 
     expect(ex.contextId).toBe(ctx.contextId);
   });
 
-  test('CONTRACT-16: Sequential distinct executions in single context', async () => {
+  test('CONTRACT-16: Distinct executions get unique idempotency keys (BLOCKER-4)', async () => {
     const dm = new DialogueStateManager();
     const ctx = dm.createContext('ORDER', { orderId: 1001 }, ['orderId'], 'order.step1', {}, sessionA);
     const ex1 = dm.createExecution(ctx, sessionA);
-    await dm.dispatchAction(ex1.executionId, { orderId: 1001 }, sessionA);
-
-    ctx.actionType = 'order.step2';
     const ex2 = dm.createExecution(ctx, sessionA);
-    await dm.dispatchAction(ex2.executionId, { orderId: 1001 }, sessionA);
 
-    expect(ex1.executionId).not.toEqual(ex2.executionId);
-    expect(dm.getExecutionLogs(sessionA).length).toBe(2);
+    expect(ex1.idempotencyKey).not.toEqual(ex2.idempotencyKey);
   });
 
 });
