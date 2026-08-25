@@ -87,28 +87,28 @@ test.describe('CONTRACT: PLATFORM-015 Action Dispatch Reliability Suite', () => 
 
   test('CONTRACT-07: Retryable error triggers retry attempts up to maxAttempts', async () => {
     let retryCalls = 0;
-    const dm = new DialogueStateManager({
+    const dmRetry = new DialogueStateManager({
       retryPolicy: { maxAttempts: 3, retryableErrors: ['TIMEOUT'] },
       actionDispatcher: async (ev, ctx, ex) => { retryCalls++; return { status: 'FAILED', executionId: ex.executionId, errorCode: 'TIMEOUT', attempt: ex.attempt }; }
     });
-    const ctx = dm.createContext('ACCEPT_ORDER', { orderId: 1 }, ['orderId'], 'order.accepted', {}, sessionA);
-    const ex = dm.createExecution(ctx, sessionA);
-    const res = await dm.dispatchAction(ex.executionId, { orderId: 1 }, sessionA);
+    const ctx1 = dmRetry.createContext('ACCEPT_ORDER', { orderId: 1 }, ['orderId'], 'order.accepted', {}, sessionA);
+    const ex1 = dmRetry.createExecution(ctx1, sessionA);
+    const res1 = await dmRetry.dispatchAction(ex1.executionId, { orderId: 1 }, sessionA);
     expect(retryCalls).toBe(3);
-    expect(res.status).toBe('FAILED');
+    expect(res1.status).toBe('FAILED');
   });
 
   test('CONTRACT-08: Non-retryable error stops immediately with 1 attempt', async () => {
     let nonRetryCalls = 0;
-    const dm = new DialogueStateManager({
+    const dmNon = new DialogueStateManager({
       retryPolicy: { maxAttempts: 3, retryableErrors: ['TIMEOUT'] },
       actionDispatcher: async (ev, ctx, ex) => { nonRetryCalls++; return { status: 'FAILED', executionId: ex.executionId, errorCode: 'INVALID_ACTION', attempt: ex.attempt }; }
     });
-    const ctx = dm.createContext('ACCEPT_ORDER', { orderId: 2 }, ['orderId'], 'order.accepted', {}, sessionA);
-    const ex = dm.createExecution(ctx, sessionA);
-    const res = await dm.dispatchAction(ex.executionId, { orderId: 2 }, sessionA);
+    const ctx2 = dmNon.createContext('ACCEPT_ORDER', { orderId: 2 }, ['orderId'], 'order.accepted', {}, sessionA);
+    const ex2 = dmNon.createExecution(ctx2, sessionA);
+    const res2 = await dmNon.dispatchAction(ex2.executionId, { orderId: 2 }, sessionA);
     expect(nonRetryCalls).toBe(1);
-    expect(res.status).toBe('FAILED');
+    expect(res2.status).toBe('FAILED');
   });
 
   test('CONTRACT-09: Timeout without confirmation returns UNKNOWN', async () => {
@@ -143,7 +143,6 @@ test.describe('CONTRACT: PLATFORM-015 Action Dispatch Reliability Suite', () => 
     const ex1 = dm.createExecution(ctx1, sessionA, 'custom_exec_1');
     expect(ex1.executionId).toBe('custom_exec_1');
 
-    // Attempting to overwrite with different data must throw CONTRACT_VIOLATION
     expect(() => {
       dm.createExecution(ctx2, sessionA, 'custom_exec_1');
     }).toThrow(/CONTRACT_VIOLATION.*Cannot overwrite existing executionId/);
@@ -179,7 +178,7 @@ test.describe('CONTRACT: PLATFORM-015 Action Dispatch Reliability Suite', () => 
   });
 
   test('CONTRACT-14: Missing actionDispatcher returns FAILED instead of silent success (HIGH-5)', async () => {
-    const dm = new DialogueStateManager(); // No dispatcher configured
+    const dm = new DialogueStateManager();
     const ctx = dm.createContext('ACCEPT_ORDER', { orderId: 1001 }, ['orderId'], 'order.accepted', {}, sessionA);
     const ex = dm.createExecution(ctx, sessionA);
 
