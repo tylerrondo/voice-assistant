@@ -1,5 +1,12 @@
+export interface SessionIdentity {
+  ownerId: string;
+  sessionId: string;
+}
+
 export interface DialogueContext {
   contextId: string;
+  ownerId: string;
+  sessionId: string;
   intent: string;
   slots: Record<string, any>;
   missingSlots: string[];
@@ -14,6 +21,8 @@ export interface DialogueContext {
 
 export interface ExecutionLog {
   contextId: string;
+  ownerId: string;
+  sessionId: string;
   intent: string;
   event: {
     type: string;
@@ -22,7 +31,11 @@ export interface ExecutionLog {
   timestamp: number;
 }
 
-export type ActionDispatchHandler = (event: { type: string; payload: Record<string, any> }, context: DialogueContext) => void;
+export type ActionDispatchHandler = (
+  event: { type: string; payload: Record<string, any> },
+  context: DialogueContext,
+  identity: SessionIdentity
+) => void;
 
 export interface DialogueManagerConfig {
   maxActiveContexts?: number;
@@ -34,7 +47,8 @@ export interface DialogueManagerConfig {
 export type RoutingResult =
   | { status: 'RESOLVED'; contextId: string }
   | { status: 'AMBIGUOUS_CONTEXT'; candidateContextIds: string[] }
-  | { status: 'NO_MATCH' };
+  | { status: 'NO_MATCH' }
+  | { status: 'CONTEXT_ACCESS_DENIED' };
 
 export class DialogueStateManager {
   private contexts: Map<string, DialogueContext> = new Map();
@@ -83,20 +97,29 @@ export class DialogueStateManager {
     return this.contexts.get(this.activeContextId) || null;
   }
 
-  public getContext(contextId: string): DialogueContext | undefined {
-    return this.contexts.get(contextId);
-  }
-
-  public listContexts(): DialogueContext[] {
-    return Array.from(this.contexts.values());
-  }
-
-  public activateContext(contextId: string): boolean {
-    if (this.contexts.has(contextId)) {
-      this.activeContextId = contextId;
-      return true;
+  public getContext(contextId: string, identity?: SessionIdentity): DialogueContext | undefined {
+    const ctx = this.contexts.get(contextId);
+    if (!ctx) return undefined;
+    if (identity && (ctx.ownerId !== identity.ownerId || ctx.sessionId !== identity.sessionId)) {
+      return undefined; // Security: no information leakage for cross-owner requests
     }
-    return false;
+    return ctx;
+  }
+
+  public listContexts(identity?: SessionIdentity): DialogueContext[] {
+    const all = Array.from(this.contexts.values());
+    if (!identity) return all;
+    return all.filter(c => c.ownerId === identity.ownerId && c.sessionId === identity.sessionId);
+  }
+
+  public activateContext(contextId: string, identity?: SessionIdentity): boolean {
+    const ctx = this.contexts.get(contextId);
+    if (!ctx) return false;
+    if (identity && (ctx.ownerId !== identity.ownerId || ctx.sessionId !== identity.sessionId)) {
+      return false;
+    }
+    this.activeContextId = contextId;
+    return true;
   }
 
   private scheduleTtlTimer(contextId: string, ttlMs: number): void {
@@ -119,17 +142,23 @@ export class DialogueStateManager {
     initialSlots: Record<string, any> = {},
     requiredSlots: string[] = [],
     actionType: string = '',
-    clarificationPrompts: Record<string, string> = {}
+    clarificationPrompts: Record<string, string> = {},
+    identity: SessionIdentity = { ownerId: 'default-owner', sessionId: 'default-session' }
   ): DialogueContext {
     if (!actionType) {
       throw new Error('CONTRACT_VIOLATION: actionType is strictly required for createContext');
     }
 
-    // Entity-based deduplication/reuse: if context with identical entity slot is waiting, reactivate it
+    // Entity deduplication scoped strictly to the same owner and session
     for (const [key, value] of Object.entries(initialSlots)) {
       if (value !== undefined) {
         const existing = Array.from(this.contexts.values()).find(
-          c => c.intent === intent && c.slots[key] === value && c.status === 'WAITING_FOR_SLOT'
+          c =>
+            c.ownerId === identity.ownerId &&
+            c.sessionId === identity.sessionId &&
+            c.intent === intent &&
+            c.slots[key] === value &&
+            c.status === 'WAITING_FOR_SLOT'
         );
         if (existing) {
           this.activeContextId = existing.contextId;
@@ -138,7 +167,10 @@ export class DialogueStateManager {
       }
     }
 
-    const activeCount = Array.from(this.contexts.values()).filter(c => c.status === 'WAITING_FOR_SLOT').length;
+    const activeCount = Array.from(this.contexts.values()).filter(
+      c => c.ownerId === identity.ownerId && c.sessionId === identity.sessionId && c.status === 'WAITING_FOR_SLOT'
+    ).length;
+
     if (activeCount >= this.maxActiveContexts) {
       throw new Error(`REJECT_NEW_CONTEXT: Runtime policy max active contexts (${this.maxActiveContexts}) reached`);
     }
@@ -151,6 +183,8 @@ export class DialogueStateManager {
     const firstMissing = missingSlots[0];
     const newContext: DialogueContext = {
       contextId,
+      ownerId: identity.ownerId,
+      sessionId: identity.sessionId,
       intent,
       slots,
       missingSlots,
@@ -167,7 +201,7 @@ export class DialogueStateManager {
     this.activeContextId = contextId;
 
     if (newContext.status === 'COMPLETED') {
-      this.recordExecution(newContext);
+      this.recordExecution(newContext, identity);
     } else {
       this.scheduleTtlTimer(contextId, this.defaultTtlMs);
     }
@@ -175,11 +209,15 @@ export class DialogueStateManager {
     return newContext;
   }
 
-  public resolveRouting(phrase: string, extractedSlotKeys: string[]): RoutingResult {
+  public resolveRouting(
+    phrase: string,
+    extractedSlotKeys: string[],
+    identity: SessionIdentity = { ownerId: 'default-owner', sessionId: 'default-session' }
+  ): RoutingResult {
     const text = phrase.toLowerCase();
     const tokens = text.split(/\s+/);
 
-    // 1. Explicit Entity / Slot-value matching has highest priority
+    // 1. Check for cross-owner explicit entity collision
     for (const ctx of this.contexts.values()) {
       if (ctx.status !== 'WAITING_FOR_SLOT') continue;
 
@@ -188,14 +226,19 @@ export class DialogueStateManager {
         const valStr = String(slotVal).toLowerCase();
 
         if (tokens.includes(valStr) || text.includes(valStr)) {
+          // Ownership verification on explicit entity match
+          if (ctx.ownerId !== identity.ownerId || ctx.sessionId !== identity.sessionId) {
+            return { status: 'CONTEXT_ACCESS_DENIED' };
+          }
           this.activeContextId = ctx.contextId;
           return { status: 'RESOLVED', contextId: ctx.contextId };
         }
       }
     }
 
-    // 2. Candidate Resolution: Filter contexts in WAITING_FOR_SLOT that are missing any extracted slot
+    // 2. Candidate Resolution filtered strictly by current session ownership
     const candidates = Array.from(this.contexts.values()).filter(ctx => {
+      if (ctx.ownerId !== identity.ownerId || ctx.sessionId !== identity.sessionId) return false;
       if (ctx.status !== 'WAITING_FOR_SLOT') return false;
       return extractedSlotKeys.some(key => ctx.missingSlots.includes(key));
     });
@@ -215,12 +258,23 @@ export class DialogueStateManager {
     return { status: 'NO_MATCH' };
   }
 
-  public fillSlot(slotName: string, value: any, contextId?: string): DialogueContext | null {
+  public fillSlot(
+    slotName: string,
+    value: any,
+    contextId?: string,
+    identity: SessionIdentity = { ownerId: 'default-owner', sessionId: 'default-session' }
+  ): DialogueContext | { status: 'CONTEXT_ACCESS_DENIED' } | null {
     const targetId = contextId || this.activeContextId;
     if (!targetId) return null;
 
     const ctx = this.contexts.get(targetId);
-    if (!ctx || ctx.status !== 'WAITING_FOR_SLOT') return null;
+    if (!ctx) return null;
+
+    if (ctx.ownerId !== identity.ownerId || ctx.sessionId !== identity.sessionId) {
+      return { status: 'CONTEXT_ACCESS_DENIED' };
+    }
+
+    if (ctx.status !== 'WAITING_FOR_SLOT') return null;
 
     ctx.slots[slotName] = value;
     ctx.missingSlots = ctx.missingSlots.filter(s => s !== slotName);
@@ -233,7 +287,7 @@ export class DialogueStateManager {
         clearTimeout(this.timerMap.get(ctx.contextId));
         this.timerMap.delete(ctx.contextId);
       }
-      this.recordExecution(ctx);
+      this.recordExecution(ctx, identity);
     } else {
       const nextMissing = ctx.missingSlots[0];
       ctx.clarificationPrompt = ctx.clarificationPrompts?.[nextMissing] || `Укажите ${nextMissing}`;
@@ -243,12 +297,19 @@ export class DialogueStateManager {
     return ctx;
   }
 
-  public cancelContext(contextId?: string): boolean {
+  public cancelContext(
+    contextId?: string,
+    identity: SessionIdentity = { ownerId: 'default-owner', sessionId: 'default-session' }
+  ): boolean | { status: 'CONTEXT_ACCESS_DENIED' } {
     const targetId = contextId || this.activeContextId;
     if (!targetId) return false;
 
     const ctx = this.contexts.get(targetId);
     if (!ctx) return false;
+
+    if (ctx.ownerId !== identity.ownerId || ctx.sessionId !== identity.sessionId) {
+      return { status: 'CONTEXT_ACCESS_DENIED' };
+    }
 
     ctx.status = 'CANCELLED';
     ctx.updatedAt = Date.now();
@@ -272,7 +333,14 @@ export class DialogueStateManager {
     return true;
   }
 
-  public recordExecution(ctx: DialogueContext): void {
+  public recordExecution(
+    ctx: DialogueContext,
+    identity: SessionIdentity = { ownerId: 'default-owner', sessionId: 'default-session' }
+  ): void {
+    if (ctx.ownerId !== identity.ownerId || ctx.sessionId !== identity.sessionId) {
+      throw new Error('SECURITY_VIOLATION: Cannot record execution for cross-owner context');
+    }
+
     const exists = this.executionLogs.some(l => l.contextId === ctx.contextId);
     if (exists) return;
 
@@ -287,18 +355,20 @@ export class DialogueStateManager {
 
     this.executionLogs.push({
       contextId: ctx.contextId,
+      ownerId: ctx.ownerId,
+      sessionId: ctx.sessionId,
       intent: ctx.intent,
       event: eventObj,
       timestamp: Date.now()
     });
 
-    // Real production Action Dispatch boundary
     if (this.onActionDispatch) {
-      this.onActionDispatch(eventObj, ctx);
+      this.onActionDispatch(eventObj, ctx, identity);
     }
   }
 
-  public getExecutionLogs(): ExecutionLog[] {
-    return [...this.executionLogs];
+  public getExecutionLogs(identity?: SessionIdentity): ExecutionLog[] {
+    if (!identity) return [...this.executionLogs];
+    return this.executionLogs.filter(l => l.ownerId === identity.ownerId && l.sessionId === identity.sessionId);
   }
 }
