@@ -1,0 +1,53 @@
+{
+  "version": 2,
+  "id": "scenario-set-platform-013-context-ownership",
+  "name": "Platform Context Ownership & Session Isolation Scenario",
+  "description": "Спецификация сценариев проверки изоляции сессий и владения контекстами (Context Ownership / Session Isolation).",
+  "scenarios": [
+    {
+      "id": "platform013-accept-order",
+      "name": "Принятие заказа с изоляцией сессий",
+      "activation": {
+        "type": "voice",
+        "value": "voice.accept-order"
+      },
+      "intent": "ACCEPT_ORDER",
+      "requiredSlots": ["orderId", "payment"],
+      "slotExtractors": {
+        "orderId": {
+          "type": "integer",
+          "pattern": "\\b\\d+\\b"
+        },
+        "payment": {
+          "type": "enum",
+          "mapping": {
+            "card": ["картой", "карта", "безнал", "card"],
+            "cash": ["наличными", "наличка", "cash"]
+          }
+        }
+      },
+      "clarificationPrompts": {
+        "orderId": "Какой заказ?",
+        "payment": "Какой способ оплаты?"
+      },
+      "ambiguityPrompt": {
+        "template": "Уточните заказ: {candidateEntities}"
+      },
+      "steps": [
+        {
+          "kind": "emit",
+          "event": {
+            "type": "driver.order.accepted",
+            "payload": {
+              "orderId": "{{slots.orderId}}",
+              "payment": "{{slots.payment}}"
+            }
+          }
+        },
+        {
+          "kind": "end"
+        }
+      ]
+    }
+  ]
+}
