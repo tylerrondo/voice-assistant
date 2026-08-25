@@ -88,34 +88,47 @@ export class DialogueStateManager {
     this.executionLogs = [];
   }
 
+  private validateIdentity(identity: SessionIdentity): void {
+    if (!identity || typeof identity.ownerId !== 'string' || typeof identity.sessionId !== 'string' || !identity.ownerId || !identity.sessionId) {
+      throw new Error('CONTRACT_VIOLATION: SessionIdentity with non-empty ownerId and sessionId is strictly required');
+    }
+  }
+
   public getActiveContextId(): string | null {
     return this.activeContextId;
   }
 
-  public getActiveState(): DialogueContext | null {
+  public getActiveState(identity: SessionIdentity): DialogueContext | null {
+    this.validateIdentity(identity);
     if (!this.activeContextId) return null;
-    return this.contexts.get(this.activeContextId) || null;
-  }
-
-  public getContext(contextId: string, identity?: SessionIdentity): DialogueContext | undefined {
-    const ctx = this.contexts.get(contextId);
-    if (!ctx) return undefined;
-    if (identity && (ctx.ownerId !== identity.ownerId || ctx.sessionId !== identity.sessionId)) {
-      return undefined; // Security: no information leakage for cross-owner requests
+    const ctx = this.contexts.get(this.activeContextId);
+    if (!ctx || ctx.ownerId !== identity.ownerId || ctx.sessionId !== identity.sessionId) {
+      return null;
     }
     return ctx;
   }
 
-  public listContexts(identity?: SessionIdentity): DialogueContext[] {
-    const all = Array.from(this.contexts.values());
-    if (!identity) return all;
-    return all.filter(c => c.ownerId === identity.ownerId && c.sessionId === identity.sessionId);
+  public getContext(contextId: string, identity: SessionIdentity): DialogueContext | undefined {
+    this.validateIdentity(identity);
+    const ctx = this.contexts.get(contextId);
+    if (!ctx) return undefined;
+    if (ctx.ownerId !== identity.ownerId || ctx.sessionId !== identity.sessionId) {
+      return undefined; // Strict zero information leakage
+    }
+    return ctx;
   }
 
-  public activateContext(contextId: string, identity?: SessionIdentity): boolean {
+  public listContexts(identity: SessionIdentity): DialogueContext[] {
+    this.validateIdentity(identity);
+    return Array.from(this.contexts.values()).filter(
+      c => c.ownerId === identity.ownerId && c.sessionId === identity.sessionId
+    );
+  }
+
+  public activateContext(contextId: string, identity: SessionIdentity): boolean {
+    this.validateIdentity(identity);
     const ctx = this.contexts.get(contextId);
-    if (!ctx) return false;
-    if (identity && (ctx.ownerId !== identity.ownerId || ctx.sessionId !== identity.sessionId)) {
+    if (!ctx || ctx.ownerId !== identity.ownerId || ctx.sessionId !== identity.sessionId) {
       return false;
     }
     this.activeContextId = contextId;
@@ -139,17 +152,18 @@ export class DialogueStateManager {
 
   public createContext(
     intent: string,
-    initialSlots: Record<string, any> = {},
-    requiredSlots: string[] = [],
-    actionType: string = '',
-    clarificationPrompts: Record<string, string> = {},
-    identity: SessionIdentity = { ownerId: 'default-owner', sessionId: 'default-session' }
+    initialSlots: Record<string, any>,
+    requiredSlots: string[],
+    actionType: string,
+    clarificationPrompts: Record<string, string>,
+    identity: SessionIdentity
   ): DialogueContext {
+    this.validateIdentity(identity);
     if (!actionType) {
       throw new Error('CONTRACT_VIOLATION: actionType is strictly required for createContext');
     }
 
-    // Entity deduplication scoped strictly to the same owner and session
+    // Entity deduplication scoped strictly to current session
     for (const [key, value] of Object.entries(initialSlots)) {
       if (value !== undefined) {
         const existing = Array.from(this.contexts.values()).find(
@@ -212,12 +226,13 @@ export class DialogueStateManager {
   public resolveRouting(
     phrase: string,
     extractedSlotKeys: string[],
-    identity: SessionIdentity = { ownerId: 'default-owner', sessionId: 'default-session' }
+    identity: SessionIdentity
   ): RoutingResult {
+    this.validateIdentity(identity);
     const text = phrase.toLowerCase();
     const tokens = text.split(/\s+/);
 
-    // 1. Check for cross-owner explicit entity collision
+    // 1. Explicit entity match check across all active contexts
     for (const ctx of this.contexts.values()) {
       if (ctx.status !== 'WAITING_FOR_SLOT') continue;
 
@@ -226,7 +241,6 @@ export class DialogueStateManager {
         const valStr = String(slotVal).toLowerCase();
 
         if (tokens.includes(valStr) || text.includes(valStr)) {
-          // Ownership verification on explicit entity match
           if (ctx.ownerId !== identity.ownerId || ctx.sessionId !== identity.sessionId) {
             return { status: 'CONTEXT_ACCESS_DENIED' };
           }
@@ -261,9 +275,10 @@ export class DialogueStateManager {
   public fillSlot(
     slotName: string,
     value: any,
-    contextId?: string,
-    identity: SessionIdentity = { ownerId: 'default-owner', sessionId: 'default-session' }
+    contextId: string,
+    identity: SessionIdentity
   ): DialogueContext | { status: 'CONTEXT_ACCESS_DENIED' } | null {
+    this.validateIdentity(identity);
     const targetId = contextId || this.activeContextId;
     if (!targetId) return null;
 
@@ -298,9 +313,10 @@ export class DialogueStateManager {
   }
 
   public cancelContext(
-    contextId?: string,
-    identity: SessionIdentity = { ownerId: 'default-owner', sessionId: 'default-session' }
+    contextId: string,
+    identity: SessionIdentity
   ): boolean | { status: 'CONTEXT_ACCESS_DENIED' } {
+    this.validateIdentity(identity);
     const targetId = contextId || this.activeContextId;
     if (!targetId) return false;
 
@@ -333,10 +349,8 @@ export class DialogueStateManager {
     return true;
   }
 
-  public recordExecution(
-    ctx: DialogueContext,
-    identity: SessionIdentity = { ownerId: 'default-owner', sessionId: 'default-session' }
-  ): void {
+  public recordExecution(ctx: DialogueContext, identity: SessionIdentity): void {
+    this.validateIdentity(identity);
     if (ctx.ownerId !== identity.ownerId || ctx.sessionId !== identity.sessionId) {
       throw new Error('SECURITY_VIOLATION: Cannot record execution for cross-owner context');
     }
@@ -367,8 +381,8 @@ export class DialogueStateManager {
     }
   }
 
-  public getExecutionLogs(identity?: SessionIdentity): ExecutionLog[] {
-    if (!identity) return [...this.executionLogs];
+  public getExecutionLogs(identity: SessionIdentity): ExecutionLog[] {
+    this.validateIdentity(identity);
     return this.executionLogs.filter(l => l.ownerId === identity.ownerId && l.sessionId === identity.sessionId);
   }
 }
