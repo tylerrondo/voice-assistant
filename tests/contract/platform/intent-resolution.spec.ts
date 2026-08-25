@@ -433,4 +433,37 @@ test.describe('CONTRACT: PLATFORM-014 Intent Resolution & Slot Ambiguity Suite',
     expect(fillRes.status).toBe('AMBIGUOUS_SLOT');
   });
 
+  test('CONTRACT-19: Equal priority tie-breaker is deterministic and independent of array order', async () => {
+    const dm = new DialogueStateManager();
+    const channel1 = new VoiceChannel(dm);
+    const channel2 = new VoiceChannel(dm);
+
+    const scAlpha = { id: 'sc-alpha', name: 'A', activation: { type: 'voice' as const, value: 'voice.a' }, priority: 50, intent: 'SHARED_INTENT', ambiguityPrompt: { template: 'Alpha Prompt' }, steps: [{ kind: 'emit' as const, event: { type: 'ea', payload: {} } }] };
+    const scBeta = { id: 'sc-beta', name: 'B', activation: { type: 'voice' as const, value: 'voice.b' }, priority: 50, intent: 'SHARED_INTENT', ambiguityPrompt: { template: 'Beta Prompt' }, steps: [{ kind: 'emit' as const, event: { type: 'eb', payload: {} } }] };
+
+    // Order 1: [Alpha, Beta]
+    channel1.registerScenarioSet({
+      version: 2,
+      id: 'order-1',
+      name: 'Order 1',
+      scenarios: [scAlpha, scBeta]
+    });
+
+    // Order 2: [Beta, Alpha] (reversed)
+    channel2.registerScenarioSet({
+      version: 2,
+      id: 'order-2',
+      name: 'Order 2',
+      scenarios: [scBeta, scAlpha]
+    });
+
+    const chosen1 = channel1.getDeterministicScenarioForIntent('SHARED_INTENT');
+    const chosen2 = channel2.getDeterministicScenarioForIntent('SHARED_INTENT');
+
+    // Both must yield the exact same deterministic result (sc-alpha by lexical tie-breaker)
+    expect(chosen1?.id).toBe('sc-alpha');
+    expect(chosen2?.id).toBe('sc-alpha');
+    expect(chosen1?.ambiguityPrompt?.template).toBe(chosen2?.ambiguityPrompt?.template);
+  });
+
 });
