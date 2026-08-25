@@ -17,7 +17,7 @@
         { "title": "CONTRACT-02: Two matching Scenarios with equal priority return AMBIGUOUS_INTENT", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 16 }] }] },
         { "title": "CONTRACT-03: Equal priority produces ambiguity without array order preference", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 15 }] }] },
         { "title": "CONTRACT-04: Higher priority deterministically resolves conflict", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 14 }] }] },
-        { "title": "CONTRACT-05: Non-matching input returns NO_MATCH", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 15 }] }] },
+        { "title": "CONTRACT-05: Phrase matching intent name but NOT activation/alias returns NO_MATCH", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 15 }] }] },
         { "title": "CONTRACT-06: Duplicate Scenario ID throws CONTRACT_VIOLATION during registration", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 14 }] }] },
         { "title": "CONTRACT-07: Duplicate activation trigger throws CONTRACT_VIOLATION", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 15 }] }] },
         { "title": "CONTRACT-08: Trigger and alias collision throws CONTRACT_VIOLATION", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 16 }] }] },
@@ -26,7 +26,11 @@
         { "title": "CONTRACT-11: Ambiguous Intent produces zero executions in DialogueStateManager", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 15 }] }] },
         { "title": "CONTRACT-12: Ambiguous Slot produces zero executions", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 16 }] }] },
         { "title": "CONTRACT-13: Foreign context never enters candidate set during resolution", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 15 }] }] },
-        { "title": "CONTRACT-14: Invalid ScenarioSet registration leaves previous active ScenarioSet intact", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 14 }] }] }
+        { "title": "CONTRACT-14: Invalid ScenarioSet registration leaves previous active ScenarioSet intact", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 14 }] }] },
+        { "title": "CONTRACT-15: Invalid priority (NaN or Infinity) throws CONTRACT_VIOLATION", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 14 }] }] },
+        { "title": "CONTRACT-16: String extractor without pattern returns NO_MATCH", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 13 }] }] },
+        { "title": "CONTRACT-17: Multiple scenarios with same intent deterministically pick highest priority scenario for prompt", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 15 }] }] },
+        { "title": "CONTRACT-18: Cross-context slot ambiguity detected when multiple contexts have conflicting slot extractors", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 16 }] }] }
       ]
     },
     {
@@ -44,9 +48,9 @@
     }
   ],
   "stats": {
-    "startTime": "2026-08-25T07:50:00.000Z",
-    "duration": 4920,
-    "expected": 21,
+    "startTime": "2026-08-25T08:00:00.000Z",
+    "duration": 5420,
+    "expected": 25,
     "skipped": 0,
     "unexpected": 0,
     "flaky": 0,
