@@ -1,0 +1,90 @@
+{
+  "version": 2,
+  "id": "scenario-set-platform-014-intent-slot-resolution",
+  "name": "Platform Intent Resolution, Slot Ambiguity & Registry Integrity Scenario",
+  "description": "Спецификация для проверки детерминированного разрешения интентов, разрешения неоднозначности слотов и атомарной валидации реестра сценариев.",
+  "scenarios": [
+    {
+      "id": "sc-order-standard",
+      "name": "Стандартный заказ",
+      "activation": {
+        "type": "voice",
+        "value": "voice.order-standard"
+      },
+      "aliases": ["заказ", "прими заказ"],
+      "priority": 50,
+      "intent": "ORDER_STANDARD",
+      "requiredSlots": ["orderId", "destination"],
+      "slotExtractors": {
+        "orderId": {
+          "type": "integer",
+          "pattern": "\\b\\d+\\b",
+          "priority": 100
+        },
+        "destination": {
+          "type": "string",
+          "priority": 50
+        },
+        "passengerName": {
+          "type": "string",
+          "priority": 50
+        }
+      },
+      "clarificationPrompts": {
+        "orderId": "Какой номер заказа?",
+        "destination": "Куда едем?"
+      },
+      "ambiguityPrompt": {
+        "template": "Уточните заказ: {candidateEntities}"
+      },
+      "steps": [
+        {
+          "kind": "emit",
+          "event": {
+            "type": "order.standard.created",
+            "payload": {
+              "orderId": "{{slots.orderId}}",
+              "destination": "{{slots.destination}}"
+            }
+          }
+        },
+        {
+          "kind": "end"
+        }
+      ]
+    },
+    {
+      "id": "sc-order-express",
+      "name": "Экспресс заказ с высоким приоритетом",
+      "activation": {
+        "type": "voice",
+        "value": "voice.order-express"
+      },
+      "aliases": ["экспресс заказ"],
+      "priority": 100,
+      "intent": "ORDER_EXPRESS",
+      "requiredSlots": ["orderId"],
+      "slotExtractors": {
+        "orderId": {
+          "type": "integer",
+          "pattern": "\\b\\d+\\b",
+          "priority": 100
+        }
+      },
+      "steps": [
+        {
+          "kind": "emit",
+          "event": {
+            "type": "order.express.created",
+            "payload": {
+              "orderId": "{{slots.orderId}}"
+            }
+          }
+        },
+        {
+          "kind": "end"
+        }
+      ]
+    }
+  ]
+}
