@@ -1,4 +1,4 @@
-import { DialogueStateManager, RoutingResult, ActionDispatchHandler } from './dialogue-manager';
+import { DialogueStateManager, RoutingResult, ActionDispatchHandler, SessionIdentity } from './dialogue-manager';
 
 export interface SlotExtractorDefinition {
   type: 'integer' | 'enum' | 'string';
@@ -42,9 +42,18 @@ export class VoiceChannel {
   private dialogueManager: DialogueStateManager;
   private scenarioRegistry: ScenarioDefinition[] = [];
   private activeScenarioSetId: string = '';
+  private currentIdentity: SessionIdentity = { ownerId: 'driver-001', sessionId: 'session-001' };
 
   constructor(dialogueManager: DialogueStateManager) {
     this.dialogueManager = dialogueManager;
+  }
+
+  public setSessionIdentity(identity: SessionIdentity): void {
+    this.currentIdentity = identity;
+  }
+
+  public getSessionIdentity(): SessionIdentity {
+    return { ...this.currentIdentity };
   }
 
   public registerScenarioSet(scenarioSet: ScenarioSet): void {
@@ -86,19 +95,20 @@ export class VoiceChannel {
     return extracted;
   }
 
-  public async handleIncomingVoice(phrase: string): Promise<any> {
+  public async handleIncomingVoice(phrase: string, identity?: SessionIdentity): Promise<any> {
+    const sessionIdentity = identity || this.currentIdentity;
     const text = phrase.trim().toLowerCase();
     const tokens = text.split(/\s+/);
 
-    // 1. Strict Cancellation Intent Resolution
+    // 1. Strict Cancellation Intent Resolution with Ownership
     const isCancelToken = tokens.includes('отмена') || tokens.includes('отменить') || tokens.includes('cancel');
     if (isCancelToken) {
       const isPureCancel = text === 'отмена' || text === 'отменить' || text === 'cancel';
-      const activeWaiting = this.dialogueManager.listContexts().filter(c => c.status === 'WAITING_FOR_SLOT');
+      const activeWaiting = this.dialogueManager.listContexts(sessionIdentity).filter(c => c.status === 'WAITING_FOR_SLOT');
 
       if (isPureCancel) {
         if (activeWaiting.length === 1) {
-          return this.dialogueManager.cancelContext(activeWaiting[0].contextId);
+          return this.dialogueManager.cancelContext(activeWaiting[0].contextId, sessionIdentity);
         }
         if (activeWaiting.length > 1) {
           const candidateEntities = activeWaiting
@@ -124,14 +134,17 @@ export class VoiceChannel {
       }
 
       // Explicit cancellation (e.g. "Заказ 1002 отмена")
-      const routeResult = this.dialogueManager.resolveRouting(text, []);
+      const routeResult = this.dialogueManager.resolveRouting(text, [], sessionIdentity);
       if (routeResult.status === 'RESOLVED') {
-        return this.dialogueManager.cancelContext(routeResult.contextId);
+        return this.dialogueManager.cancelContext(routeResult.contextId, sessionIdentity);
+      }
+      if (routeResult.status === 'CONTEXT_ACCESS_DENIED') {
+        return { status: 'CONTEXT_ACCESS_DENIED' };
       }
       return { status: 'NO_MATCH' };
     }
 
-    // 2. Intent Resolution (New Context Initiation)
+    // 2. Intent Resolution (New Context Initiation with Session Identity)
     const matchedScenario = this.scenarioRegistry.find(sc => {
       if (sc.activation.type !== 'voice') return false;
       const actPattern = sc.activation.value.replace(/^voice\./, '').replace(/[-_]/g, ' ').toLowerCase();
@@ -152,12 +165,13 @@ export class VoiceChannel {
         initialSlots,
         requiredSlots,
         actionType,
-        prompts
+        prompts,
+        sessionIdentity
       );
     }
 
-    // 3. Extract slots strictly scoped to active contexts in WAITING_FOR_SLOT
-    const activeContexts = this.dialogueManager.listContexts().filter(c => c.status === 'WAITING_FOR_SLOT');
+    // 3. Extract slots strictly scoped to active contexts of the CURRENT session in WAITING_FOR_SLOT
+    const activeContexts = this.dialogueManager.listContexts(sessionIdentity).filter(c => c.status === 'WAITING_FOR_SLOT');
     let extractedSlots: Record<string, any> = {};
 
     for (const ctx of activeContexts) {
@@ -170,12 +184,16 @@ export class VoiceChannel {
 
     const extractedSlotKeys = Object.keys(extractedSlots);
 
-    // 4. Resolve Context Route using Ambiguity Policy
-    const routingResult: RoutingResult = this.dialogueManager.resolveRouting(text, extractedSlotKeys);
+    // 4. Resolve Context Route using Ownership & Ambiguity Policy
+    const routingResult: RoutingResult = this.dialogueManager.resolveRouting(text, extractedSlotKeys, sessionIdentity);
+
+    if (routingResult.status === 'CONTEXT_ACCESS_DENIED') {
+      return { status: 'CONTEXT_ACCESS_DENIED' };
+    }
 
     if (routingResult.status === 'AMBIGUOUS_CONTEXT') {
       const candidateContexts = routingResult.candidateContextIds
-        .map(id => this.dialogueManager.getContext(id))
+        .map(id => this.dialogueManager.getContext(id, sessionIdentity))
         .filter(Boolean);
 
       const candidateEntities = candidateContexts
@@ -203,7 +221,7 @@ export class VoiceChannel {
     }
 
     // 5. Single Resolved Context: Fill slots and execute deterministically
-    const targetCtx = this.dialogueManager.getContext(routingResult.contextId);
+    const targetCtx = this.dialogueManager.getContext(routingResult.contextId, sessionIdentity);
     if (!targetCtx || targetCtx.status !== 'WAITING_FOR_SLOT') {
       return routingResult;
     }
@@ -211,7 +229,7 @@ export class VoiceChannel {
     let updatedCtx: any = targetCtx;
     for (const [slotKey, slotVal] of Object.entries(extractedSlots)) {
       if (targetCtx.missingSlots.includes(slotKey)) {
-        updatedCtx = this.dialogueManager.fillSlot(slotKey, slotVal, targetCtx.contextId);
+        updatedCtx = this.dialogueManager.fillSlot(slotKey, slotVal, targetCtx.contextId, sessionIdentity);
       }
     }
 
