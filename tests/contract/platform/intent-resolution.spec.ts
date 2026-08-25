@@ -133,25 +133,26 @@ test.describe('CONTRACT: PLATFORM-014 Intent Resolution & Slot Ambiguity Suite',
     }
   });
 
-  test('CONTRACT-05: Non-matching input returns NO_MATCH', async () => {
+  test('CONTRACT-05: Phrase matching intent name but NOT activation/alias returns NO_MATCH', async () => {
     const dm = new DialogueStateManager();
     const channel = new VoiceChannel(dm);
     channel.registerScenarioSet({
       version: 2,
-      id: 'set-5',
-      name: 'Set 5',
+      id: 'set-strict',
+      name: 'Set Strict',
       scenarios: [
         {
           id: 'sc-1',
           name: 'Sc 1',
-          activation: { type: 'voice', value: 'voice.order' },
-          intent: 'ORDER',
+          activation: { type: 'voice', value: 'voice.accept' },
+          intent: 'ACCEPT_ORDER',
           steps: [{ kind: 'emit', event: { type: 'e1', payload: {} } }]
         }
       ]
     });
 
-    const res = channel.resolveIntent('completely unrelated phrase');
+    // Matches intent name "accept order" but trigger is "accept"
+    const res = channel.resolveIntent('order');
     expect(res.status).toBe('NO_MATCH');
   });
 
@@ -211,8 +212,8 @@ test.describe('CONTRACT: PLATFORM-014 Intent Resolution & Slot Ambiguity Suite',
     const channel = new VoiceChannel(dm);
 
     const extractors: any = {
-      address: { type: 'string', priority: 50 },
-      passengerName: { type: 'string', priority: 50 }
+      address: { type: 'string', pattern: 'центральная', priority: 50 },
+      passengerName: { type: 'string', pattern: 'центральная', priority: 50 }
     };
 
     const res = channel.extractSlotsDeterministically('центральная', extractors, 'sc-test');
@@ -228,8 +229,8 @@ test.describe('CONTRACT: PLATFORM-014 Intent Resolution & Slot Ambiguity Suite',
     const channel = new VoiceChannel(dm);
 
     const extractors: any = {
-      address: { type: 'string', priority: 100 },
-      passengerName: { type: 'string', priority: 50 }
+      address: { type: 'string', pattern: 'центральная', priority: 100 },
+      passengerName: { type: 'string', pattern: 'центральная', priority: 50 }
     };
 
     const res = channel.extractSlotsDeterministically('центральная', extractors, 'sc-test');
@@ -272,8 +273,8 @@ test.describe('CONTRACT: PLATFORM-014 Intent Resolution & Slot Ambiguity Suite',
           intent: 'CREATE',
           requiredSlots: ['target'],
           slotExtractors: {
-            dest: { type: 'string', priority: 10 },
-            name: { type: 'string', priority: 10 }
+            dest: { type: 'string', pattern: 'москва', priority: 10 },
+            name: { type: 'string', pattern: 'москва', priority: 10 }
           },
           steps: [{ kind: 'emit', event: { type: 'e1', payload: {} } }]
         }
@@ -283,7 +284,7 @@ test.describe('CONTRACT: PLATFORM-014 Intent Resolution & Slot Ambiguity Suite',
     const res = await channel.handleIncomingVoice('create', sessionA);
     expect(res.status).toBe('WAITING_FOR_SLOT');
 
-    const fillRes = await channel.handleIncomingVoice('любой текст', sessionA);
+    const fillRes = await channel.handleIncomingVoice('москва', sessionA);
     expect(fillRes.status).toBe('AMBIGUOUS_SLOT');
     expect(dm.getExecutionLogs(sessionA).length).toBe(0);
   });
@@ -348,6 +349,88 @@ test.describe('CONTRACT: PLATFORM-014 Intent Resolution & Slot Ambiguity Suite',
     }).toThrow();
 
     expect(channel.getActiveScenarioSetId()).toBe('valid-set-1');
+  });
+
+  test('CONTRACT-15: Invalid priority (NaN or Infinity) throws CONTRACT_VIOLATION', async () => {
+    const dm = new DialogueStateManager();
+    const channel = new VoiceChannel(dm);
+
+    expect(() => {
+      channel.registerScenarioSet({
+        version: 2,
+        id: 'nan-prio-set',
+        name: 'NaN Prio',
+        scenarios: [
+          { id: 'sc-nan', name: 'NaN', activation: { type: 'voice', value: 'voice.nan' }, priority: NaN, intent: 'NAN', steps: [{ kind: 'emit', event: { type: 'e', payload: {} } }] }
+        ]
+      });
+    }).toThrow(/CONTRACT_VIOLATION.*invalid priority/);
+  });
+
+  test('CONTRACT-16: String extractor without pattern returns NO_MATCH', async () => {
+    const dm = new DialogueStateManager();
+    const channel = new VoiceChannel(dm);
+
+    const extractors: any = {
+      address: { type: 'string' }
+    };
+
+    const res = channel.extractSlotsDeterministically('любой текст', extractors, 'sc-test');
+    expect(res.status).toBe('NO_MATCH');
+  });
+
+  test('CONTRACT-17: Multiple scenarios with same intent deterministically pick highest priority scenario for prompt', async () => {
+    const dm = new DialogueStateManager();
+    const channel = new VoiceChannel(dm);
+    channel.registerScenarioSet({
+      version: 2,
+      id: 'multi-same-intent',
+      name: 'Multi Same Intent',
+      scenarios: [
+        { id: 'sc-low', name: 'Low', activation: { type: 'voice', value: 'voice.low' }, priority: 10, intent: 'SAME_INTENT', ambiguityPrompt: { template: 'Low prompt' }, steps: [{ kind: 'emit', event: { type: 'e1', payload: {} } }] },
+        { id: 'sc-high', name: 'High', activation: { type: 'voice', value: 'voice.high' }, priority: 100, intent: 'SAME_INTENT', ambiguityPrompt: { template: 'High prompt' }, steps: [{ kind: 'emit', event: { type: 'e2', payload: {} } }] }
+      ]
+    });
+
+    const chosen = channel.getDeterministicScenarioForIntent('SAME_INTENT');
+    expect(chosen?.id).toBe('sc-high');
+    expect(chosen?.ambiguityPrompt?.template).toBe('High prompt');
+  });
+
+  test('CONTRACT-18: Cross-context slot ambiguity detected when multiple contexts have conflicting slot extractors', async () => {
+    const dm = new DialogueStateManager();
+    const channel = new VoiceChannel(dm);
+    channel.registerScenarioSet({
+      version: 2,
+      id: 'cross-ctx-set',
+      name: 'Cross Context Set',
+      scenarios: [
+        {
+          id: 'sc-ctx1',
+          name: 'Ctx 1',
+          activation: { type: 'voice', value: 'voice.order-one' },
+          intent: 'INTENT_ONE',
+          requiredSlots: ['city'],
+          slotExtractors: { city: { type: 'string', pattern: 'самарканд', priority: 50 } },
+          steps: [{ kind: 'emit', event: { type: 'e1', payload: {} } }]
+        },
+        {
+          id: 'sc-ctx2',
+          name: 'Ctx 2',
+          activation: { type: 'voice', value: 'voice.order-two' },
+          intent: 'INTENT_TWO',
+          requiredSlots: ['destination'],
+          slotExtractors: { destination: { type: 'string', pattern: 'самарканд', priority: 50 } },
+          steps: [{ kind: 'emit', event: { type: 'e2', payload: {} } }]
+        }
+      ]
+    });
+
+    await channel.handleIncomingVoice('order-one', sessionA);
+    await channel.handleIncomingVoice('order-two', sessionA);
+
+    const fillRes = await channel.handleIncomingVoice('самарканд', sessionA);
+    expect(fillRes.status).toBe('AMBIGUOUS_SLOT');
   });
 
 });
