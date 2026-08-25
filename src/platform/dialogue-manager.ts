@@ -224,7 +224,7 @@ export class DialogueStateManager {
       intent,
       slots,
       missingSlots,
-      status: missingSlots.length === 0 ? 'COMPLETED' : 'WAITING_FOR_SLOT',
+      status: 'WAITING_FOR_SLOT',
       createdAt: now,
       updatedAt: now,
       expiresAt: now + this.defaultTtlMs,
@@ -366,6 +366,8 @@ export class DialogueStateManager {
     return true;
   }
 
+  // --- PLATFORM-015: Action Dispatch Reliability Layer ---
+
   public createExecution(
     ctx: DialogueContext,
     identity: SessionIdentity,
@@ -376,8 +378,29 @@ export class DialogueStateManager {
       throw new Error('SECURITY_VIOLATION: Cannot create execution for foreign context');
     }
 
+    // HIGH-6: Prohibit execution creation on terminal context states
+    if (['COMPLETED', 'CANCELLED', 'EXPIRED'].includes(ctx.status)) {
+      throw new Error(`CONTRACT_VIOLATION: Cannot create execution for terminal context (${ctx.status})`);
+    }
+
     const executionId = providedExecutionId || `exec_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    const idempotencyKey = `idemp_${ctx.contextId}_${ctx.actionType}_${JSON.stringify(ctx.slots)}`;
+
+    // BLOCKER-3: Do not overwrite existing executionId
+    if (this.executions.has(executionId)) {
+      const existing = this.executions.get(executionId)!;
+      const sameOwner = existing.ownerId === identity.ownerId && existing.sessionId === identity.sessionId;
+      const sameCtx = existing.contextId === ctx.contextId;
+      const sameAction = existing.actionType === ctx.actionType;
+      const samePayload = JSON.stringify(existing.payload) === JSON.stringify(ctx.slots);
+
+      if (sameOwner && sameCtx && sameAction && samePayload) {
+        return existing;
+      }
+      throw new Error(`CONTRACT_VIOLATION: Cannot overwrite existing executionId "${executionId}" with different execution data`);
+    }
+
+    // BLOCKER-4: Unique idempotencyKey per logical execution identity
+    const idempotencyKey = `idemp_${ctx.contextId}_${executionId}_${ctx.actionType}`;
     const now = Date.now();
 
     const execution: ActionExecution = {
@@ -415,14 +438,17 @@ export class DialogueStateManager {
       throw new Error('SECURITY_VIOLATION: Cannot dispatch cross-session execution');
     }
 
+    // Payload Immutability check
     if (JSON.stringify(execution.payload) !== JSON.stringify(payload)) {
       throw new Error('CONTRACT_VIOLATION: Payload cannot be mutated for same executionId');
     }
 
+    // Idempotent duplicate check: already completed
     if (execution.status === 'SUCCEEDED') {
       return { status: 'SUCCEEDED', executionId: execution.executionId, attempt: execution.attempt };
     }
 
+    // Concurrent duplicate handling
     if (execution.status === 'DISPATCHING') {
       return { status: 'UNKNOWN', executionId: execution.executionId, errorCode: 'ALREADY_IN_PROGRESS', attempt: execution.attempt };
     }
@@ -441,11 +467,22 @@ export class DialogueStateManager {
       execution.status = 'DISPATCHING';
       execution.updatedAt = Date.now();
 
+      // HIGH-7: Synchronize context status to DISPATCHING during active dispatch
+      ctx.status = 'DISPATCHING';
+      ctx.updatedAt = Date.now();
+
+      // HIGH-5: Missing dispatcher is NOT silent SUCCEEDED -> explicitly FAILED
       if (!this.actionDispatcher) {
-        execution.status = 'SUCCEEDED';
+        execution.status = 'FAILED';
+        execution.errorCode = 'DISPATCHER_NOT_CONFIGURED';
         execution.updatedAt = Date.now();
-        ctx.status = 'COMPLETED';
-        return { status: 'SUCCEEDED', executionId: execution.executionId, attempt: currentAttempt };
+        ctx.status = 'WAITING_FOR_SLOT';
+        return {
+          status: 'FAILED',
+          executionId: execution.executionId,
+          errorCode: 'DISPATCHER_NOT_CONFIGURED',
+          attempt: currentAttempt
+        };
       }
 
       try {
@@ -468,6 +505,7 @@ export class DialogueStateManager {
           execution.errorCode = result.errorCode;
           if (!this.retryPolicy.retryableErrors.includes(result.errorCode)) {
             execution.status = 'FAILED';
+            ctx.status = 'WAITING_FOR_SLOT';
             return result;
           }
         }
@@ -475,6 +513,7 @@ export class DialogueStateManager {
         if (result.status === 'UNKNOWN') {
           execution.status = 'UNKNOWN';
           execution.errorCode = result.errorCode;
+          ctx.status = 'WAITING_FOR_SLOT';
           return result;
         }
       } catch (err: any) {
@@ -484,13 +523,17 @@ export class DialogueStateManager {
 
         if (!this.retryPolicy.retryableErrors.includes(code)) {
           execution.status = 'FAILED';
+          ctx.status = 'WAITING_FOR_SLOT';
           return lastResult;
         }
       }
     }
 
     execution.status = lastResult.status === 'SUCCEEDED' ? 'SUCCEEDED' : 'FAILED';
-    if (execution.status !== 'SUCCEEDED') {
+    if (execution.status === 'SUCCEEDED') {
+      ctx.status = 'COMPLETED';
+    } else {
+      ctx.status = 'WAITING_FOR_SLOT';
       execution.errorCode = lastResult.errorCode || 'MAX_RETRIES_EXCEEDED';
     }
     return lastResult;
