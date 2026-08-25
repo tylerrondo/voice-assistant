@@ -134,7 +134,7 @@ export class VoiceChannel {
     return this.activeScenarioSetId;
   }
 
-  // BLOCKER-1: Uses unified ActionDispatcher
+  // BLOCKER-1: Unified ActionDispatcher
   public setActionDispatcher(dispatcher: ActionDispatcher): void {
     this.dialogueManager.setActionDispatcher(dispatcher);
   }
