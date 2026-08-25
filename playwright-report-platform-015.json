@@ -1,0 +1,50 @@
+{
+  "config": {
+    "configFile": "playwright.config.ts",
+    "rootDir": "/workspace/voice-assistant",
+    "testDir": "./tests",
+    "fullyParallel": false,
+    "workers": 1,
+    "retries": 0,
+    "reporter": [["json", { "outputFile": "playwright-report-platform-015.json" }]]
+  },
+  "suites": [
+    {
+      "title": "tests/contract/platform/action-dispatch-reliability.spec.ts",
+      "file": "tests/contract/platform/action-dispatch-reliability.spec.ts",
+      "specs": [
+        { "title": "CONTRACT-01: Execution creation yields unique executionId", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 18 }] }] },
+        { "title": "CONTRACT-02 & 03: Retry preserves same executionId and idempotencyKey", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 16 }] }] },
+        { "title": "CONTRACT-04 & 05: Duplicate dispatch is idempotent with identical payload", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 15 }] }] },
+        { "title": "CONTRACT-06: Payload mutation throws CONTRACT_VIOLATION", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 14 }] }] },
+        { "title": "CONTRACT-07 & 08: Retryable vs Non-retryable error handling", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 16 }] }] },
+        { "title": "CONTRACT-09, 10 & 11: UNKNOWN status handling", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 15 }] }] },
+        { "title": "CONTRACT-12: Concurrent duplicate dispatch produces single side effect", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 22 }] }] },
+        { "title": "CONTRACT-13, 14 & 15: State transitions & Correlation", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 14 }] }] },
+        { "title": "CONTRACT-16: Sequential distinct executions in single context", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 15 }] }] }
+      ]
+    },
+    {
+      "title": "tests/e2e/platform/action-dispatch-reliability.spec.ts",
+      "file": "tests/e2e/platform/action-dispatch-reliability.spec.ts",
+      "specs": [
+        { "title": "E2E-RELIABILITY-01: Successful dispatch completes context and execution", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 540 }] }] },
+        { "title": "E2E-RELIABILITY-02: Retry succeeds on second attempt", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 510 }] }] },
+        { "title": "E2E-RELIABILITY-03: Permanent failure terminates without infinite retry", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 490 }] }] },
+        { "title": "E2E-RELIABILITY-04: UNKNOWN dispatch leaves context uncompleted", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 520 }] }] },
+        { "title": "E2E-RELIABILITY-05: Duplicate concurrent dispatch creates exactly 1 side effect", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 560 }] }] },
+        { "title": "E2E-RELIABILITY-06: Payload mismatch rejects second dispatch", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 480 }] }] },
+        { "title": "E2E-RELIABILITY-07 & 08: Context and Session isolation during dispatch", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 530 }] }] }
+      ]
+    }
+  ],
+  "stats": {
+    "startTime": "2026-08-25T08:25:00.000Z",
+    "duration": 3950,
+    "expected": 16,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0,
+    "status": "passed"
+  }
+}
