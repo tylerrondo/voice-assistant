@@ -68,7 +68,7 @@ export class VoiceChannel {
     const seenIds = new Set<string>();
     const seenTriggers = new Set<string>();
 
-    // Atomic registry validation
+    // Comprehensive atomic registry validation
     for (const sc of scenarioSet.scenarios) {
       if (!sc.id || typeof sc.id !== 'string') {
         throw new Error('CONTRACT_VIOLATION: Scenario missing valid id');
@@ -82,17 +82,43 @@ export class VoiceChannel {
         throw new Error(`CONTRACT_VIOLATION: Scenario "${sc.id}" missing intent`);
       }
 
+      if (sc.priority !== undefined) {
+        if (typeof sc.priority !== 'number' || !Number.isFinite(sc.priority) || Number.isNaN(sc.priority)) {
+          throw new Error(`CONTRACT_VIOLATION: Scenario "${sc.id}" has invalid priority`);
+        }
+      }
+
+      if (sc.aliases !== undefined && !Array.isArray(sc.aliases)) {
+        throw new Error(`CONTRACT_VIOLATION: Scenario "${sc.id}" aliases must be an array`);
+      }
+
       if (!sc.activation || sc.activation.type !== 'voice' || !sc.activation.value) {
         throw new Error(`CONTRACT_VIOLATION: Scenario "${sc.id}" missing valid voice activation`);
       }
 
       const allTriggers = [sc.activation.value, ...(sc.aliases || [])];
       for (const trig of allTriggers) {
+        if (typeof trig !== 'string' || !trig.trim()) {
+          throw new Error(`CONTRACT_VIOLATION: Empty or invalid trigger/alias in scenario "${sc.id}"`);
+        }
         const norm = trig.trim().toLowerCase();
         if (seenTriggers.has(norm)) {
           throw new Error(`CONTRACT_VIOLATION: Trigger or alias collision detected for "${norm}" in scenario "${sc.id}"`);
         }
         seenTriggers.add(norm);
+      }
+
+      if (sc.slotExtractors) {
+        for (const [slotKey, ext] of Object.entries(sc.slotExtractors)) {
+          if (!['integer', 'enum', 'string'].includes(ext.type)) {
+            throw new Error(`CONTRACT_VIOLATION: Invalid extractor type for "${slotKey}" in scenario "${sc.id}"`);
+          }
+          if (ext.priority !== undefined) {
+            if (typeof ext.priority !== 'number' || !Number.isFinite(ext.priority) || Number.isNaN(ext.priority)) {
+              throw new Error(`CONTRACT_VIOLATION: Extractor "${slotKey}" in scenario "${sc.id}" has invalid priority`);
+            }
+          }
+        }
       }
 
       const hasEmit = sc.steps && sc.steps.some(st => st.kind === 'emit' && st.event && st.event.type);
@@ -114,6 +140,16 @@ export class VoiceChannel {
     this.dialogueManager.setActionDispatchHandler(handler);
   }
 
+  public getDeterministicScenarioForIntent(intent: string): ScenarioDefinition | undefined {
+    const matching = this.scenarioRegistry.filter(sc => sc.intent === intent);
+    if (matching.length === 0) return undefined;
+    if (matching.length === 1) return matching[0];
+
+    const maxPriority = Math.max(...matching.map(s => s.priority ?? 0));
+    const highest = matching.filter(s => (s.priority ?? 0) === maxPriority);
+    return highest[0];
+  }
+
   public resolveIntent(phrase: string): IntentResolutionResult {
     const text = phrase.trim().toLowerCase();
     const matchingScenarios: ScenarioDefinition[] = [];
@@ -123,7 +159,7 @@ export class VoiceChannel {
       const matches = allTriggers.some(trig => {
         const clean = trig.replace(/^voice\./, '').replace(/[-_]/g, ' ').toLowerCase();
         const words = clean.split(/\s+/);
-        return words.every(w => text.includes(w)) || text.includes(sc.intent.toLowerCase().replace(/_/g, ' '));
+        return words.every(w => text.includes(w));
       });
 
       if (matches) {
@@ -191,21 +227,12 @@ export class VoiceChannel {
             break;
           }
         }
-      } else if (extractor.type === 'string') {
-        if (extractor.pattern) {
-          const match = text.match(new RegExp(extractor.pattern));
-          if (match) {
-            candidates.push({
-              slotName: slotKey,
-              value: match[0],
-              priority: extractor.priority ?? 0,
-              scenarioId
-            });
-          }
-        } else if (text.length > 0) {
+      } else if (extractor.type === 'string' && extractor.pattern) {
+        const match = text.match(new RegExp(extractor.pattern));
+        if (match) {
           candidates.push({
             slotName: slotKey,
-            value: text,
+            value: match[0],
             priority: extractor.priority ?? 0,
             scenarioId
           });
@@ -221,7 +248,7 @@ export class VoiceChannel {
       return { status: 'RESOLVED', slots: { [candidates[0].slotName]: candidates[0].value } };
     }
 
-    // Check for Slot Ambiguity across candidates claiming the phrase
+    // Check for Slot Ambiguity across candidates
     const maxPrio = Math.max(...candidates.map(c => c.priority));
     const highest = candidates.filter(c => c.priority === maxPrio);
 
@@ -229,7 +256,6 @@ export class VoiceChannel {
       return { status: 'RESOLVED', slots: { [highest[0].slotName]: highest[0].value } };
     }
 
-    // Ambiguous Slot conflict detected
     return {
       status: 'AMBIGUOUS_SLOT',
       candidates: highest.map(h => ({ slotName: h.slotName, value: h.value, scenarioId: h.scenarioId }))
@@ -261,7 +287,7 @@ export class VoiceChannel {
             .join(', ');
 
           const candidateIntent = activeWaiting[0]?.intent;
-          const matchingScenario = this.scenarioRegistry.find(sc => sc.intent === candidateIntent);
+          const matchingScenario = this.getDeterministicScenarioForIntent(candidateIntent);
           if (!matchingScenario?.ambiguityPrompt?.template) {
             throw new Error('CONTRACT_VIOLATION: ambiguityPrompt template is missing in ScenarioDefinition for intent: ' + candidateIntent);
           }
@@ -332,10 +358,10 @@ export class VoiceChannel {
       return { status: 'NO_MATCH' };
     }
 
-    let extractedSlots: Record<string, any> = {};
+    const allSlotCandidates: Array<{ slotName: string; value: any; priority: number; scenarioId: string }> = [];
 
     for (const ctx of activeContexts) {
-      const scenario = this.scenarioRegistry.find(sc => sc.intent === ctx.intent);
+      const scenario = this.getDeterministicScenarioForIntent(ctx.intent);
       if (scenario && scenario.slotExtractors) {
         const slotRes = this.extractSlotsDeterministically(text, scenario.slotExtractors, scenario.id);
         if (slotRes.status === 'AMBIGUOUS_SLOT') {
@@ -345,8 +371,36 @@ export class VoiceChannel {
           };
         }
         if (slotRes.status === 'RESOLVED') {
-          extractedSlots = { ...extractedSlots, ...slotRes.slots };
+          for (const [slotKey, slotVal] of Object.entries(slotRes.slots)) {
+            const extPrio = scenario.slotExtractors[slotKey]?.priority ?? 0;
+            allSlotCandidates.push({ slotName: slotKey, value: slotVal, priority: extPrio, scenarioId: scenario.id });
+          }
         }
+      }
+    }
+
+    if (allSlotCandidates.length === 0) {
+      return { status: 'NO_MATCH' };
+    }
+
+    // Check for cross-context slot ambiguity
+    const extractedSlots: Record<string, any> = {};
+    if (allSlotCandidates.length === 1) {
+      extractedSlots[allSlotCandidates[0].slotName] = allSlotCandidates[0].value;
+    } else {
+      const maxSlotPrio = Math.max(...allSlotCandidates.map(c => c.priority));
+      const highestSlots = allSlotCandidates.filter(c => c.priority === maxSlotPrio);
+      if (highestSlots.length === 1) {
+        extractedSlots[highestSlots[0].slotName] = highestSlots[0].value;
+      } else {
+        const distinctSlots = new Set(highestSlots.map(h => h.slotName));
+        if (distinctSlots.size > 1) {
+          return {
+            status: 'AMBIGUOUS_SLOT',
+            candidates: highestSlots.map(h => ({ slotName: h.slotName, value: h.value, scenarioId: h.scenarioId }))
+          };
+        }
+        extractedSlots[highestSlots[0].slotName] = highestSlots[0].value;
       }
     }
 
@@ -370,7 +424,7 @@ export class VoiceChannel {
         .join(', ');
 
       const candidateIntent = candidateContexts[0]?.intent;
-      const matchingScenario = this.scenarioRegistry.find(sc => sc.intent === candidateIntent);
+      const matchingScenario = this.getDeterministicScenarioForIntent(candidateIntent);
       if (!matchingScenario?.ambiguityPrompt?.template) {
         throw new Error('CONTRACT_VIOLATION: ambiguityPrompt template is missing in ScenarioDefinition for intent: ' + candidateIntent);
       }
