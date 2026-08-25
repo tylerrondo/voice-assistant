@@ -1,0 +1,41 @@
+{
+  "version": 2,
+  "id": "scenario-set-platform-015-action-dispatch-reliability",
+  "name": "Platform Action Dispatch Reliability & Retry Semantics",
+  "description": "Спецификация для проверки идемпотентного выполнения Action Dispatch, семантики retry, UNKNOWN статусов и изоляции исполнения.",
+  "scenarios": [
+    {
+      "id": "sc-order-dispatch",
+      "name": "Надёжная диспетчеризация заказа",
+      "activation": {
+        "type": "voice",
+        "value": "voice.order-dispatch"
+      },
+      "aliases": ["прими заказ", "заказ"],
+      "priority": 100,
+      "intent": "ORDER_DISPATCH",
+      "requiredSlots": ["orderId"],
+      "slotExtractors": {
+        "orderId": {
+          "type": "integer",
+          "pattern": "\\b\\d+\\b",
+          "priority": 100
+        }
+      },
+      "steps": [
+        {
+          "kind": "emit",
+          "event": {
+            "type": "order.dispatch.completed",
+            "payload": {
+              "orderId": "{{slots.orderId}}"
+            }
+          }
+        },
+        {
+          "kind": "end"
+        }
+      ]
+    }
+  ]
+}
