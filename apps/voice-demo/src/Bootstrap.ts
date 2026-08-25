@@ -2,12 +2,14 @@ import { DialogueStateManager, ActionDispatcher } from '../../../src/platform/di
 import { VoiceChannel } from '../../../src/platform/voice-channel';
 
 export function initializeVoicePlatform(dispatcher?: ActionDispatcher) {
+  if (!dispatcher) {
+    throw new Error('CONTRACT_VIOLATION: ActionDispatcher is strictly required to initialize Voice Platform in production');
+  }
+
   const dialogueManager = new DialogueStateManager({
     maxActiveContexts: 50,
     defaultTtlMs: 300000,
-    actionDispatcher: dispatcher || (async (event, ctx, exec) => {
-      return { status: 'SUCCEEDED', executionId: exec.executionId, attempt: exec.attempt };
-    })
+    actionDispatcher: dispatcher
   });
 
   const voiceChannel = new VoiceChannel(dialogueManager);
@@ -19,3 +21,6 @@ export function initializeVoicePlatform(dispatcher?: ActionDispatcher) {
 
   return { dialogueManager, voiceChannel };
 }
+
+// Named alias for backward-compatible entrypoints
+export const bootstrap = initializeVoicePlatform;
