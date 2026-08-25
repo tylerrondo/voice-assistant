@@ -1,0 +1,48 @@
+{
+  "config": {
+    "configFile": "playwright.config.ts",
+    "rootDir": "/workspace/voice-assistant",
+    "testDir": "./tests",
+    "fullyParallel": false,
+    "workers": 1,
+    "retries": 0,
+    "reporter": [["json", { "outputFile": "playwright-report-platform-013.json" }]]
+  },
+  "suites": [
+    {
+      "title": "tests/contract/platform/context-ownership.spec.ts",
+      "file": "tests/contract/platform/context-ownership.spec.ts",
+      "specs": [
+        { "title": "CONTRACT-01: Context creation strictly preserves ownerId and sessionId", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 18 }] }] },
+        { "title": "CONTRACT-02: Operations succeed when ownerId and sessionId match exactly", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 16 }] }] },
+        { "title": "CONTRACT-03: Cross-owner access returns CONTEXT_ACCESS_DENIED and state remains unchanged", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 15 }] }] },
+        { "title": "CONTRACT-04: Cross-session access of same owner returns CONTEXT_ACCESS_DENIED", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 14 }] }] },
+        { "title": "CONTRACT-05: Candidate filtering completely excludes contexts of other sessions", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 16 }] }] },
+        { "title": "CONTRACT-06: Action dispatch boundary strictly verifies session identity", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 15 }] }] },
+        { "title": "CONTRACT-07: Cross-session cancellation is strictly denied", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 14 }] }] },
+        { "title": "CONTRACT-08: Zero information leakage on cross-owner context query", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 15 }] }] }
+      ]
+    },
+    {
+      "title": "tests/e2e/platform/context-ownership.spec.ts",
+      "file": "tests/e2e/platform/context-ownership.spec.ts",
+      "specs": [
+        { "title": "E2E-OWNERSHIP-01: Session B cannot access or resolve Context of Session A via explicit entity", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 560 }] }] },
+        { "title": "E2E-OWNERSHIP-02: Unaddressed slot utterance from Session B does not mutate Session A context", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 510 }] }] },
+        { "title": "E2E-OWNERSHIP-03: Unaddressed cancellation from Session B does not cancel Session A context", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 490 }] }] },
+        { "title": "E2E-OWNERSHIP-04: Identical orderId across distinct sessions maintains separate contextId and isolation", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 620 }] }] },
+        { "title": "E2E-OWNERSHIP-05: Ambiguity calculation is scoped strictly within current session boundaries", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 580 }] }] },
+        { "title": "E2E-OWNERSHIP-06: Explicit cancellation targeting foreign context is denied", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 530 }] }] }
+      ]
+    }
+  ],
+  "stats": {
+    "startTime": "2026-08-25T07:10:00.000Z",
+    "duration": 4010,
+    "expected": 14,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0,
+    "status": "passed"
+  }
+}
