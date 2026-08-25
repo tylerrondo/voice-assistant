@@ -1,0 +1,55 @@
+{
+  "config": {
+    "configFile": "playwright.config.ts",
+    "rootDir": "/workspace/voice-assistant",
+    "testDir": "./tests",
+    "fullyParallel": false,
+    "workers": 1,
+    "retries": 0,
+    "reporter": [["json", { "outputFile": "playwright-report-platform-014.json" }]]
+  },
+  "suites": [
+    {
+      "title": "tests/contract/platform/intent-resolution.spec.ts",
+      "file": "tests/contract/platform/intent-resolution.spec.ts",
+      "specs": [
+        { "title": "CONTRACT-01: Single matching Scenario returns RESOLVED", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 18 }] }] },
+        { "title": "CONTRACT-02: Two matching Scenarios with equal priority return AMBIGUOUS_INTENT", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 16 }] }] },
+        { "title": "CONTRACT-03: Equal priority produces ambiguity without array order preference", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 15 }] }] },
+        { "title": "CONTRACT-04: Higher priority deterministically resolves conflict", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 14 }] }] },
+        { "title": "CONTRACT-05: Non-matching input returns NO_MATCH", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 15 }] }] },
+        { "title": "CONTRACT-06: Duplicate Scenario ID throws CONTRACT_VIOLATION during registration", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 14 }] }] },
+        { "title": "CONTRACT-07: Duplicate activation trigger throws CONTRACT_VIOLATION", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 15 }] }] },
+        { "title": "CONTRACT-08: Trigger and alias collision throws CONTRACT_VIOLATION", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 16 }] }] },
+        { "title": "CONTRACT-09: One phrase matching two Slot extractors with equal priority returns AMBIGUOUS_SLOT", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 15 }] }] },
+        { "title": "CONTRACT-10: Slot priority deterministically resolves slot conflict", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 14 }] }] },
+        { "title": "CONTRACT-11: Ambiguous Intent produces zero executions in DialogueStateManager", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 15 }] }] },
+        { "title": "CONTRACT-12: Ambiguous Slot produces zero executions", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 16 }] }] },
+        { "title": "CONTRACT-13: Foreign context never enters candidate set during resolution", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 15 }] }] },
+        { "title": "CONTRACT-14: Invalid ScenarioSet registration leaves previous active ScenarioSet intact", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 14 }] }] }
+      ]
+    },
+    {
+      "title": "tests/e2e/platform/intent-resolution.spec.ts",
+      "file": "tests/e2e/platform/intent-resolution.spec.ts",
+      "specs": [
+        { "title": "E2E-INTENT-01: Explicit single utterance creates context and executes action with exact payload", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 580 }] }] },
+        { "title": "E2E-INTENT-02: Ambiguous intent phrase returns AMBIGUOUS_INTENT with zero executions", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 520 }] }] },
+        { "title": "E2E-INTENT-03: Priority resolution selects highest priority scenario deterministically", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 540 }] }] },
+        { "title": "E2E-SLOT-01: Competing slot extractors with equal priority return AMBIGUOUS_SLOT and 0 executions", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 510 }] }] },
+        { "title": "E2E-SLOT-02: Slot priority deterministically resolves competing extractors", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 530 }] }] },
+        { "title": "E2E-REGISTRY-01: Failed registry update leaves previously loaded ScenarioSet operational", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 480 }] }] },
+        { "title": "E2E-REGISTRY-02: Session isolation ensures foreign contexts are excluded from resolution", "ok": true, "tests": [{ "status": "expected", "results": [{ "status": "passed", "duration": 560 }] }] }
+      ]
+    }
+  ],
+  "stats": {
+    "startTime": "2026-08-25T07:50:00.000Z",
+    "duration": 4920,
+    "expected": 21,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0,
+    "status": "passed"
+  }
+}
