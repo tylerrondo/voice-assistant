@@ -378,14 +378,12 @@ export class DialogueStateManager {
       throw new Error('SECURITY_VIOLATION: Cannot create execution for foreign context');
     }
 
-    // HIGH-6: Prohibit execution creation on terminal context states
     if (['COMPLETED', 'CANCELLED', 'EXPIRED'].includes(ctx.status)) {
       throw new Error(`CONTRACT_VIOLATION: Cannot create execution for terminal context (${ctx.status})`);
     }
 
     const executionId = providedExecutionId || `exec_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-    // BLOCKER-3: Do not overwrite existing executionId
     if (this.executions.has(executionId)) {
       const existing = this.executions.get(executionId)!;
       const sameOwner = existing.ownerId === identity.ownerId && existing.sessionId === identity.sessionId;
@@ -399,7 +397,6 @@ export class DialogueStateManager {
       throw new Error(`CONTRACT_VIOLATION: Cannot overwrite existing executionId "${executionId}" with different execution data`);
     }
 
-    // BLOCKER-4: Unique idempotencyKey per logical execution identity
     const idempotencyKey = `idemp_${ctx.contextId}_${executionId}_${ctx.actionType}`;
     const now = Date.now();
 
@@ -448,6 +445,16 @@ export class DialogueStateManager {
       return { status: 'SUCCEEDED', executionId: execution.executionId, attempt: execution.attempt };
     }
 
+    // HIGH-6: Terminal FAILED execution cannot be directly re-dispatched
+    if (execution.status === 'FAILED') {
+      throw new Error(`CONTRACT_VIOLATION: Cannot dispatch terminal FAILED execution "${executionId}". A new executionId must be created.`);
+    }
+
+    // HIGH-4 & HIGH-7: UNKNOWN execution requires explicit reconciliation before retry
+    if (execution.status === 'UNKNOWN') {
+      throw new Error(`CONTRACT_VIOLATION: Execution "${executionId}" is in UNKNOWN state. Explicit reconciliation is required before retry.`);
+    }
+
     // Concurrent duplicate handling
     if (execution.status === 'DISPATCHING') {
       return { status: 'UNKNOWN', executionId: execution.executionId, errorCode: 'ALREADY_IN_PROGRESS', attempt: execution.attempt };
@@ -467,11 +474,9 @@ export class DialogueStateManager {
       execution.status = 'DISPATCHING';
       execution.updatedAt = Date.now();
 
-      // HIGH-7: Synchronize context status to DISPATCHING during active dispatch
       ctx.status = 'DISPATCHING';
       ctx.updatedAt = Date.now();
 
-      // HIGH-5: Missing dispatcher is NOT silent SUCCEEDED -> explicitly FAILED
       if (!this.actionDispatcher) {
         execution.status = 'FAILED';
         execution.errorCode = 'DISPATCHER_NOT_CONFIGURED';
@@ -491,6 +496,14 @@ export class DialogueStateManager {
           ctx,
           execution
         );
+
+        // HIGH-5: Strict validation of returned execution identity & attempt
+        if (result.executionId !== execution.executionId || result.attempt !== execution.attempt) {
+          execution.status = 'FAILED';
+          execution.errorCode = 'DISPATCHER_IDENTITY_MISMATCH';
+          ctx.status = 'WAITING_FOR_SLOT';
+          throw new Error(`CONTRACT_VIOLATION: ActionDispatcher returned mismatched identity. Expected executionId=${execution.executionId}, attempt=${execution.attempt}; Received executionId=${result.executionId}, attempt=${result.attempt}`);
+        }
 
         lastResult = result;
         execution.updatedAt = Date.now();
@@ -517,6 +530,9 @@ export class DialogueStateManager {
           return result;
         }
       } catch (err: any) {
+        if (err.message && err.message.startsWith('CONTRACT_VIOLATION')) {
+          throw err;
+        }
         const code = err.message || 'DISPATCH_ERROR';
         lastResult = { status: 'FAILED', executionId, errorCode: code, attempt: currentAttempt };
         execution.errorCode = code;
@@ -537,6 +553,44 @@ export class DialogueStateManager {
       execution.errorCode = lastResult.errorCode || 'MAX_RETRIES_EXCEEDED';
     }
     return lastResult;
+  }
+
+  // HIGH-4 & HIGH-7: Explicit reconciliation policy for UNKNOWN execution state
+  public reconcileExecution(
+    executionId: string,
+    resolvedStatus: 'SUCCEEDED' | 'FAILED',
+    identity: SessionIdentity,
+    errorCode?: string
+  ): ActionExecution {
+    this.validateIdentity(identity);
+    const execution = this.executions.get(executionId);
+    if (!execution) {
+      throw new Error(`CONTRACT_VIOLATION: Execution "${executionId}" not found for reconciliation`);
+    }
+
+    if (execution.ownerId !== identity.ownerId || execution.sessionId !== identity.sessionId) {
+      throw new Error('SECURITY_VIOLATION: Cross-session reconciliation is denied');
+    }
+
+    if (execution.status !== 'UNKNOWN') {
+      throw new Error(`CONTRACT_VIOLATION: Cannot reconcile execution in non-UNKNOWN status (${execution.status})`);
+    }
+
+    execution.status = resolvedStatus;
+    execution.updatedAt = Date.now();
+    if (errorCode) execution.errorCode = errorCode;
+
+    const ctx = this.contexts.get(execution.contextId);
+    if (ctx) {
+      if (resolvedStatus === 'SUCCEEDED') {
+        ctx.status = 'COMPLETED';
+      } else {
+        ctx.status = 'WAITING_FOR_SLOT';
+      }
+      ctx.updatedAt = Date.now();
+    }
+
+    return execution;
   }
 
   public getExecution(executionId: string, identity: SessionIdentity): ActionExecution | undefined {
