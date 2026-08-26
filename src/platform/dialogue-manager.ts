@@ -72,7 +72,13 @@ export type RoutingResult =
 
 export type MutationResult<T> =
   | { success: true; data: T; version: number }
-  | { success: false; error: 'CONTEXT_VERSION_CONFLICT' | 'TERMINAL_STATE' | 'CONTEXT_NOT_FOUND' | 'ACCESS_DENIED' | 'MUTATION_REJECTED'; message: string };
+  | { success: false; error: 'CONTEXT_VERSION_CONFLICT' | 'TERMINAL_STATE' | 'CONTEXT_NOT_FOUND' | 'ACCESS_DENIED' | 'SYSTEM_EVENT_NOT_HANDLED' | 'MUTATION_REJECTED'; message: string };
+
+export interface SystemEventDescriptor {
+  type: string;
+  targetTransition?: 'COMPLETE' | 'CANCEL' | 'NONE';
+  payload?: Record<string, any>;
+}
 
 export class DialogueStateManager {
   private contexts: Map<string, DialogueContext> = new Map();
@@ -85,7 +91,7 @@ export class DialogueStateManager {
   private timerMap: Map<string, any> = new Map();
   private enableAutoExpiryScheduler: boolean;
 
-  // PLATFORM-016: Per-Context Serialization Promise Chains (No global mutex!)
+  // Per-Context Serialization Queues
   private contextMutationQueues: Map<string, Promise<any>> = new Map();
 
   constructor(configOrTimeout: DialogueManagerConfig | number = {}) {
@@ -166,7 +172,7 @@ export class DialogueStateManager {
     return true;
   }
 
-  // --- PLATFORM-016: Per-Context Serialization & Atomic CAS Engine ---
+  // --- Per-Context Serialization & Queue Lifecycle Management ---
 
   public async executeSerializedMutation<T>(
     contextId: string,
@@ -197,7 +203,7 @@ export class DialogueStateManager {
         };
       }
 
-      // Terminal State Protection: No mutation allowed once in terminal state
+      // Terminal State Protection
       if (['COMPLETED', 'CANCELLED', 'EXPIRED'].includes(ctx.status)) {
         return {
           success: false as const,
@@ -211,7 +217,7 @@ export class DialogueStateManager {
         return { success: false as const, error: 'MUTATION_REJECTED' as const, message: 'Mutation rejected by predicate' };
       }
 
-      // Atomic version increment & timestamp update
+      // Atomic version increment
       ctx.version += 1;
       ctx.updatedAt = Date.now();
       if (outcome.targetStatus) {
@@ -225,6 +231,11 @@ export class DialogueStateManager {
       };
     }).catch(err => {
       return { success: false as const, error: 'MUTATION_REJECTED' as const, message: err?.message || 'Unknown error' };
+    }).finally(() => {
+      // HIGH-6: Clean up queue memory after completion if no new promises attached
+      if (this.contextMutationQueues.get(contextId) === mutationPromise) {
+        this.contextMutationQueues.delete(contextId);
+      }
     });
 
     this.contextMutationQueues.set(contextId, mutationPromise);
@@ -370,7 +381,6 @@ export class DialogueStateManager {
     return { status: 'NO_MATCH' };
   }
 
-  // PLATFORM-016: Serialized slot filling with version tracking
   public async fillSlot(
     slotName: string,
     value: any,
@@ -409,7 +419,6 @@ export class DialogueStateManager {
     });
   }
 
-  // PLATFORM-016: Serialized cancellation
   public async cancelContext(
     contextId: string,
     identity: SessionIdentity,
@@ -432,7 +441,6 @@ export class DialogueStateManager {
     });
   }
 
-  // PLATFORM-016: Serialized TTL Expiry
   public async expireContext(
     contextId: string,
     identity: SessionIdentity,
@@ -453,25 +461,33 @@ export class DialogueStateManager {
     });
   }
 
-  // PLATFORM-016: Serialized Generic System Event Ingestion (Domain-Agnostic)
+  // BLOCKER-4 & HIGH-5: Domain-agnostic declarative system events
   public async handleSystemEvent(
     contextId: string,
-    eventType: string,
-    eventPayload: Record<string, any>,
+    event: SystemEventDescriptor | string,
     identity: SessionIdentity,
     expectedVersion?: number
   ): Promise<MutationResult<{ handled: boolean; eventType: string; context: DialogueContext }>> {
-    return this.executeSerializedMutation(contextId, expectedVersion, identity, async (ctx) => {
-      const isTerminalCancel = ['CANCEL', 'CANCELLED', 'ORDER_CANCELLED', 'ABORT'].includes(eventType.toUpperCase());
-      const isTerminalFinish = ['FINISH', 'TRIP_FINISHED', 'ORDER_FINISHED', 'TERMINATE'].includes(eventType.toUpperCase());
+    const descriptor: SystemEventDescriptor = typeof event === 'string'
+      ? { type: event, targetTransition: 'NONE' }
+      : event;
 
-      if (isTerminalCancel) {
+    if (!descriptor.targetTransition || descriptor.targetTransition === 'NONE') {
+      return {
+        success: false,
+        error: 'SYSTEM_EVENT_NOT_HANDLED',
+        message: `System event "${descriptor.type}" specifies no state transition and was ignored without mutation.`
+      };
+    }
+
+    return this.executeSerializedMutation(contextId, expectedVersion, identity, async (ctx) => {
+      if (descriptor.targetTransition === 'CANCEL') {
         if (this.timerMap.has(ctx.contextId)) {
           clearTimeout(this.timerMap.get(ctx.contextId));
           this.timerMap.delete(ctx.contextId);
         }
         ctx.status = 'CANCELLED';
-      } else if (isTerminalFinish) {
+      } else if (descriptor.targetTransition === 'COMPLETE') {
         if (this.timerMap.has(ctx.contextId)) {
           clearTimeout(this.timerMap.get(ctx.contextId));
           this.timerMap.delete(ctx.contextId);
@@ -482,14 +498,12 @@ export class DialogueStateManager {
       return {
         result: {
           handled: true,
-          eventType,
+          eventType: descriptor.type,
           context: { ...ctx, slots: { ...ctx.slots }, missingSlots: [...ctx.missingSlots] }
         }
       };
     });
   }
-
-  // --- PLATFORM-015/016: Action Dispatch & Reliability Engine ---
 
   public createExecution(
     ctx: DialogueContext,
@@ -543,6 +557,7 @@ export class DialogueStateManager {
     return execution;
   }
 
+  // BLOCKER-1: Action Dispatch is fully held inside the per-context serialization queue
   public async dispatchAction(
     executionId: string,
     payload: Record<string, any>,
@@ -578,125 +593,132 @@ export class DialogueStateManager {
       return { status: 'UNKNOWN', executionId: execution.executionId, errorCode: 'ALREADY_IN_PROGRESS', attempt: execution.attempt };
     }
 
-    const ctx = this.contexts.get(execution.contextId);
-    if (!ctx) {
-      throw new Error(`CONTRACT_VIOLATION: Context "${execution.contextId}" not found`);
-    }
+    const contextId = execution.contextId;
 
-    // PLATFORM-016: Serialized Dispatch State Transition
-    await this.executeSerializedMutation(ctx.contextId, undefined, identity, async (c) => {
-      c.status = 'DISPATCHING';
-      return { result: true };
-    });
+    // Enqueue entire dispatch lifecycle (Option B) into the context queue
+    const prevPromise = this.contextMutationQueues.get(contextId) || Promise.resolve();
 
-    let currentAttempt = execution.attempt;
-    let lastResult: DispatchResult = { status: 'UNKNOWN', executionId, errorCode: 'INIT', attempt: currentAttempt };
-
-    while (currentAttempt < this.retryPolicy.maxAttempts) {
-      currentAttempt++;
-      execution.attempt = currentAttempt;
-      execution.status = 'DISPATCHING';
-      execution.updatedAt = Date.now();
-
-      if (!this.actionDispatcher) {
-        execution.status = 'FAILED';
-        execution.errorCode = 'DISPATCHER_NOT_CONFIGURED';
-        execution.updatedAt = Date.now();
-        await this.executeSerializedMutation(ctx.contextId, undefined, identity, async (c) => {
-          c.status = 'WAITING_FOR_SLOT';
-          return { result: true };
-        });
-        return {
-          status: 'FAILED',
-          executionId: execution.executionId,
-          errorCode: 'DISPATCHER_NOT_CONFIGURED',
-          attempt: currentAttempt
-        };
+    const dispatchPromise = prevPromise.then(async () => {
+      const ctx = this.contexts.get(contextId);
+      if (!ctx) {
+        throw new Error(`CONTRACT_VIOLATION: Context "${contextId}" not found`);
       }
 
-      try {
-        const result = await this.actionDispatcher(
-          { type: execution.actionType, payload: execution.payload },
-          ctx,
-          execution
-        );
+      if (['COMPLETED', 'CANCELLED', 'EXPIRED'].includes(ctx.status)) {
+        throw new Error(`CONTRACT_VIOLATION: Context "${contextId}" is already in terminal status "${ctx.status}"`);
+      }
 
-        if (result.executionId !== execution.executionId || result.attempt !== execution.attempt) {
-          execution.status = 'FAILED';
-          execution.errorCode = 'DISPATCHER_IDENTITY_MISMATCH';
-          await this.executeSerializedMutation(ctx.contextId, undefined, identity, async (c) => {
-            c.status = 'WAITING_FOR_SLOT';
-            return { result: true };
-          });
-          throw new Error(`CONTRACT_VIOLATION: ActionDispatcher returned mismatched identity.`);
-        }
+      // Mark context as DISPATCHING under the queue lock
+      ctx.status = 'DISPATCHING';
+      ctx.version += 1;
+      ctx.updatedAt = Date.now();
 
-        lastResult = result;
+      let currentAttempt = execution.attempt;
+      let lastResult: DispatchResult = { status: 'UNKNOWN', executionId, errorCode: 'INIT', attempt: currentAttempt };
+
+      while (currentAttempt < this.retryPolicy.maxAttempts) {
+        currentAttempt++;
+        execution.attempt = currentAttempt;
+        execution.status = 'DISPATCHING';
         execution.updatedAt = Date.now();
 
-        if (result.status === 'SUCCEEDED') {
-          execution.status = 'SUCCEEDED';
-          await this.executeSerializedMutation(ctx.contextId, undefined, identity, async (c) => {
-            c.status = 'COMPLETED';
-            return { result: true };
-          });
-          return result;
+        if (!this.actionDispatcher) {
+          execution.status = 'FAILED';
+          execution.errorCode = 'DISPATCHER_NOT_CONFIGURED';
+          execution.updatedAt = Date.now();
+          ctx.status = 'WAITING_FOR_SLOT';
+          ctx.version += 1;
+          ctx.updatedAt = Date.now();
+          return {
+            status: 'FAILED',
+            executionId: execution.executionId,
+            errorCode: 'DISPATCHER_NOT_CONFIGURED',
+            attempt: currentAttempt
+          };
         }
 
-        if (result.status === 'FAILED') {
-          execution.errorCode = result.errorCode;
-          if (!this.retryPolicy.retryableErrors.includes(result.errorCode)) {
+        try {
+          const result = await this.actionDispatcher(
+            { type: execution.actionType, payload: execution.payload },
+            { ...ctx, slots: { ...ctx.slots }, missingSlots: [...ctx.missingSlots] },
+            execution
+          );
+
+          if (result.executionId !== execution.executionId || result.attempt !== execution.attempt) {
             execution.status = 'FAILED';
-            await this.executeSerializedMutation(ctx.contextId, undefined, identity, async (c) => {
-              c.status = 'WAITING_FOR_SLOT';
-              return { result: true };
-            });
+            execution.errorCode = 'DISPATCHER_IDENTITY_MISMATCH';
+            ctx.status = 'WAITING_FOR_SLOT';
+            ctx.version += 1;
+            ctx.updatedAt = Date.now();
+            throw new Error(`CONTRACT_VIOLATION: ActionDispatcher returned mismatched identity.`);
+          }
+
+          lastResult = result;
+          execution.updatedAt = Date.now();
+
+          if (result.status === 'SUCCEEDED') {
+            execution.status = 'SUCCEEDED';
+            ctx.status = 'COMPLETED';
+            ctx.version += 1;
+            ctx.updatedAt = Date.now();
             return result;
           }
-        }
 
-        if (result.status === 'UNKNOWN') {
-          execution.status = 'UNKNOWN';
-          execution.errorCode = result.errorCode;
-          await this.executeSerializedMutation(ctx.contextId, undefined, identity, async (c) => {
-            c.status = 'WAITING_FOR_SLOT';
-            return { result: true };
-          });
-          return result;
-        }
-      } catch (err: any) {
-        if (err.message && err.message.startsWith('CONTRACT_VIOLATION')) {
-          throw err;
-        }
-        const code = err.message || 'DISPATCH_ERROR';
-        lastResult = { status: 'FAILED', executionId, errorCode: code, attempt: currentAttempt };
-        execution.errorCode = code;
+          if (result.status === 'FAILED') {
+            execution.errorCode = result.errorCode;
+            if (!this.retryPolicy.retryableErrors.includes(result.errorCode)) {
+              execution.status = 'FAILED';
+              ctx.status = 'WAITING_FOR_SLOT';
+              ctx.version += 1;
+              ctx.updatedAt = Date.now();
+              return result;
+            }
+          }
 
-        if (!this.retryPolicy.retryableErrors.includes(code)) {
-          execution.status = 'FAILED';
-          await this.executeSerializedMutation(ctx.contextId, undefined, identity, async (c) => {
-            c.status = 'WAITING_FOR_SLOT';
-            return { result: true };
-          });
-          return lastResult;
+          if (result.status === 'UNKNOWN') {
+            execution.status = 'UNKNOWN';
+            execution.errorCode = result.errorCode;
+            ctx.status = 'WAITING_FOR_SLOT';
+            ctx.version += 1;
+            ctx.updatedAt = Date.now();
+            return result;
+          }
+        } catch (err: any) {
+          if (err.message && err.message.startsWith('CONTRACT_VIOLATION')) {
+            throw err;
+          }
+          const code = err.message || 'DISPATCH_ERROR';
+          lastResult = { status: 'FAILED', executionId, errorCode: code, attempt: currentAttempt };
+          execution.errorCode = code;
+
+          if (!this.retryPolicy.retryableErrors.includes(code)) {
+            execution.status = 'FAILED';
+            ctx.status = 'WAITING_FOR_SLOT';
+            ctx.version += 1;
+            ctx.updatedAt = Date.now();
+            return lastResult;
+          }
         }
       }
-    }
 
-    execution.status = lastResult.status === 'SUCCEEDED' ? 'SUCCEEDED' : 'FAILED';
-    if (execution.status === 'SUCCEEDED') {
-      await this.executeSerializedMutation(ctx.contextId, undefined, identity, async (c) => {
-        c.status = 'COMPLETED';
-        return { result: true };
-      });
-    } else {
-      await this.executeSerializedMutation(ctx.contextId, undefined, identity, async (c) => {
-        c.status = 'WAITING_FOR_SLOT';
-        return { result: true };
-      });
-      execution.errorCode = lastResult.errorCode || 'MAX_RETRIES_EXCEEDED';
-    }
-    return lastResult;
+      execution.status = lastResult.status === 'SUCCEEDED' ? 'SUCCEEDED' : 'FAILED';
+      if (execution.status === 'SUCCEEDED') {
+        ctx.status = 'COMPLETED';
+      } else {
+        ctx.status = 'WAITING_FOR_SLOT';
+        execution.errorCode = lastResult.errorCode || 'MAX_RETRIES_EXCEEDED';
+      }
+      ctx.version += 1;
+      ctx.updatedAt = Date.now();
+      return lastResult;
+    }).finally(() => {
+      if (this.contextMutationQueues.get(contextId) === dispatchPromise) {
+        this.contextMutationQueues.delete(contextId);
+      }
+    });
+
+    this.contextMutationQueues.set(contextId, dispatchPromise);
+    return dispatchPromise;
   }
 
   public async reconcileExecution(
