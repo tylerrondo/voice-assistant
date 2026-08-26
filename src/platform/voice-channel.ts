@@ -15,6 +15,14 @@ export interface ScenarioStep {
   };
 }
 
+export interface ScenarioQueryEvaluation {
+  kind: 'compare' | 'query_attribute' | 'select_reference';
+  attribute?: string;
+  order?: 'min' | 'max';
+  targetIndex?: number;
+  responseTemplate?: string;
+}
+
 export interface ScenarioDefinition {
   id: string;
   name: string;
@@ -31,6 +39,7 @@ export interface ScenarioDefinition {
   ambiguityPrompt?: {
     template: string;
   };
+  evaluation?: ScenarioQueryEvaluation;
   steps: ScenarioStep[];
 }
 
@@ -224,7 +233,7 @@ export class VoiceChannel {
     return { status: 'RESOLVED', slots: { [highest[0].slotName]: highest[0].value } };
   }
 
-  // Resolves natural references ("первый", "второй", "третий", "комфорт", "подешевле") dynamically against the context's OfferSet
+  // Pure generic index/attribute resolution against OfferSet (Zero OfferId hardcode)
   private resolveOfferFromOffers(phrase: string, offers?: OfferDefinition[]): {
     status: 'RESOLVED' | 'OFFER_UNAVAILABLE' | 'AMBIGUOUS_OFFER' | 'NO_MATCH';
     offerId?: string;
@@ -238,41 +247,32 @@ export class VoiceChannel {
 
     const text = phrase.trim().toLowerCase();
 
-    // Natural index references:
-    const isFirst = text.includes('первый') || text.includes('первую') || text.includes('первого') || text.includes('1');
-    const isSecond = text.includes('второй') || text.includes('вторую') || text.includes('второго') || text.includes('2');
-    const isThird = text.includes('третий') || text.includes('третью') || text.includes('третьего') || text.includes('3');
-    const isComfort = text.includes('комфорт') && !isFirst && !isThird;
-    const isCheapAmbiguous = text.includes('подешевле') || text.includes('дешевую') || text.includes('машину подешевле');
+    // Natural index extraction
+    let targetIndex: number | undefined;
+    if (text.includes('перв') || text.includes('1')) targetIndex = 1;
+    else if (text.includes('втор') || text.includes('2')) targetIndex = 2;
+    else if (text.includes('трет') || text.includes('3')) targetIndex = 3;
 
-    if (isCheapAmbiguous) {
-      // Find candidate offers sorted by price
+    if (text.includes('подешевле') || text.includes('дешев')) {
       const available = offers.filter(o => o.status === 'AVAILABLE');
       if (available.length > 1) {
         return {
           status: 'AMBIGUOUS_OFFER',
           candidates: available,
-          prompt: 'Есть несколько вариантов. Выберите, пожалуйста, первый, второй или третий?'
+          prompt: 'Есть несколько подходящих вариантов. Выберите, пожалуйста: первый, второй или третий?'
         };
       }
     }
 
     let targetOffer: OfferDefinition | undefined;
-    if (isFirst) {
-      targetOffer = offers.find(o => o.index === 1 || o.offerId === 'OFFER-A');
-    } else if (isSecond) {
-      targetOffer = offers.find(o => o.index === 2 || o.offerId === 'OFFER-B');
-    } else if (isThird) {
-      targetOffer = offers.find(o => o.index === 3 || o.offerId === 'OFFER-C');
-    } else if (isComfort) {
-      targetOffer = offers.find(o => o.vehicleType.toLowerCase() === 'comfort');
+    if (targetIndex !== undefined) {
+      targetOffer = offers.find(o => o.index === targetIndex);
+    } else {
+      // Attribute match (e.g. comfort vehicleType)
+      targetOffer = offers.find(o => o.vehicleType && text.includes(o.vehicleType.toLowerCase()));
     }
 
     if (!targetOffer) {
-      // Check for non-existent offers (e.g., "четвертую", "4")
-      if (text.includes('четверт') || text.includes('4') || text.includes('пятую')) {
-        return { status: 'NO_MATCH' };
-      }
       return { status: 'NO_MATCH' };
     }
 
@@ -281,6 +281,67 @@ export class VoiceChannel {
     }
 
     return { status: 'RESOLVED', offerId: targetOffer.offerId, offer: targetOffer };
+  }
+
+  // Pure generic evaluation of query/comparison scenarios based entirely on scenario.evaluation descriptor
+  private evaluateScenarioQuery(sc: ScenarioDefinition, offers: OfferDefinition[]): any {
+    const evalConfig = sc.evaluation;
+    if (!evalConfig) {
+      return { status: 'RESOLVED', intent: sc.intent, scenarioId: sc.id };
+    }
+
+    if (evalConfig.kind === 'compare' && evalConfig.attribute) {
+      const attr = evalConfig.attribute as keyof OfferDefinition;
+      const available = [...offers].filter(o => o.status === 'AVAILABLE');
+      if (available.length === 0) return { status: 'NO_MATCH' };
+
+      available.sort((a, b) => {
+        const valA = Number(a[attr]) || 0;
+        const valB = Number(b[attr]) || 0;
+        return evalConfig.order === 'max' ? valB - valA : valA - valB;
+      });
+
+      const best = available[0];
+      let responseText = evalConfig.responseTemplate || '';
+      responseText = responseText
+        .replace('{{offerId}}', best.offerId)
+        .replace('{{index}}', String(best.index))
+        .replace('{{value}}', String(best[attr]))
+        .replace('{{etaMinutes}}', String(best.etaMinutes))
+        .replace('{{price}}', String(best.price));
+
+      return {
+        status: 'OFFER_COMPARISON_RESOLVED',
+        intent: sc.intent,
+        comparisonAttribute: evalConfig.attribute.toUpperCase(),
+        bestOfferId: best.offerId,
+        [evalConfig.attribute]: best[attr],
+        response: responseText
+      };
+    }
+
+    if (evalConfig.kind === 'query_attribute' && evalConfig.targetIndex !== undefined) {
+      const target = offers.find(o => o.index === evalConfig.targetIndex);
+      if (!target) return { status: 'NO_MATCH' };
+
+      let responseText = evalConfig.responseTemplate || '';
+      responseText = responseText
+        .replace('{{offerId}}', target.offerId)
+        .replace('{{vehicleType}}', target.vehicleType)
+        .replace('{{distanceMeters}}', String(target.distanceKm * 1000));
+
+      return {
+        status: 'OFFER_QUERY_RESOLVED',
+        intent: sc.intent,
+        offerId: target.offerId,
+        vehicleType: target.vehicleType,
+        isComfort: target.vehicleType.toLowerCase() === 'comfort',
+        distanceKm: target.distanceKm,
+        response: responseText
+      };
+    }
+
+    return { status: 'RESOLVED', intent: sc.intent, scenarioId: sc.id };
   }
 
   public async handleIncomingVoice(phrase: string, identity: SessionIdentity): Promise<any> {
@@ -317,92 +378,69 @@ export class VoiceChannel {
       return { status: 'NO_MATCH' };
     }
 
-    // 2. Dynamic Offer Comparison & Query Handling (BLOCKER-1 & BLOCKER-2)
-    const activeWaiting = this.dialogueManager.listContexts(identity).filter(c => c.status === 'WAITING_FOR_SLOT');
-    const currentOffers = activeWaiting.length > 0 && activeWaiting[0].offers ? activeWaiting[0].offers : this.defaultOffers;
-
-    if (currentOffers && currentOffers.length > 0) {
-      // Comparison questions:
-      if (text.includes('быстрее')) {
-        const fastest = [...currentOffers].filter(o => o.status === 'AVAILABLE').sort((a, b) => a.etaMinutes - b.etaMinutes)[0];
-        return {
-          status: 'OFFER_COMPARISON_RESOLVED',
-          intent: 'COMPARE_OFFERS_ETA',
-          comparisonAttribute: 'ETA',
-          bestOfferId: fastest?.offerId,
-          etaMinutes: fastest?.etaMinutes,
-          response: `Быстрее всего ${fastest?.offerId === 'OFFER-A' ? 'первый вариант' : fastest?.offerId} — ${fastest?.etaMinutes} минуты.`
-        };
-      }
-
-      if (text.includes('дешевле')) {
-        const cheapest = [...currentOffers].filter(o => o.status === 'AVAILABLE').sort((a, b) => a.price - b.price)[0];
-        return {
-          status: 'OFFER_COMPARISON_RESOLVED',
-          intent: 'COMPARE_OFFERS_PRICE',
-          comparisonAttribute: 'PRICE',
-          bestOfferId: cheapest?.offerId,
-          price: cheapest?.price,
-          response: `Дешевле всего ${cheapest?.offerId === 'OFFER-C' ? 'третий вариант' : cheapest?.offerId} — ${cheapest?.price}.`
-        };
-      }
-
-      if (text.includes('комфорт') && (text.includes('второй') || text.includes('это'))) {
-        const target = currentOffers.find(o => o.index === 2 || o.offerId === 'OFFER-B');
-        return {
-          status: 'OFFER_QUERY_RESOLVED',
-          intent: 'QUERY_OFFER_COMFORT',
-          offerId: target?.offerId,
-          vehicleType: target?.vehicleType,
-          isComfort: target?.vehicleType.toLowerCase() === 'comfort',
-          response: `Да, второй вариант — ${target?.vehicleType}.`
-        };
-      }
-
-      if (text.includes('далеко') && (text.includes('второй') || text.includes('водитель'))) {
-        const target = currentOffers.find(o => o.index === 2 || o.offerId === 'OFFER-B');
-        return {
-          status: 'OFFER_QUERY_RESOLVED',
-          intent: 'QUERY_OFFER_DISTANCE',
-          offerId: target?.offerId,
-          distanceKm: target?.distanceKm,
-          response: `Он находится в ${target ? target.distanceKm * 1000 : 0} метрах.`
-        };
-      }
-    }
-
-    // 3. Dynamic Offer Selection (Natural references resolution against OfferSet)
-    if (activeWaiting.length > 0 && currentOffers && currentOffers.length > 0) {
-      const offerResolution = this.resolveOfferFromOffers(text, currentOffers);
-
-      if (offerResolution.status === 'AMBIGUOUS_OFFER') {
-        return {
-          status: 'AMBIGUOUS_SLOT',
-          candidates: offerResolution.candidates?.map(c => ({ slotName: 'selectedOfferId', value: c.offerId, scenarioId: 'sc-select-passenger-offer' })),
-          clarificationPrompt: offerResolution.prompt
-        };
-      }
-
-      if (offerResolution.status === 'OFFER_UNAVAILABLE') {
-        return {
-          status: 'OFFER_UNAVAILABLE',
-          offerId: offerResolution.offerId,
-          message: `Предложение ${offerResolution.offerId} более недоступно.`
-        };
-      }
-
-      if (offerResolution.status === 'RESOLVED' && offerResolution.offerId) {
-        const activeCtx = activeWaiting[0];
-        const fillRes = await this.dialogueManager.fillSlot('selectedOfferId', offerResolution.offerId, activeCtx.contextId, identity);
-        if (fillRes.success) {
-          return fillRes.data;
-        }
-      }
-    }
-
-    // 4. Intent Resolution (Initial creation)
+    // 2. Intent Resolution
     const intentRes = this.resolveIntent(text);
 
+    // BLOCKER-1 & BLOCKER-2: Pure declarative comparison evaluation with Multi-Context Ambiguity Guard
+    if (intentRes.status === 'RESOLVED' && intentRes.scenario.evaluation) {
+      const activeWaiting = this.dialogueManager.listContexts(identity).filter(c => c.status === 'WAITING_FOR_SLOT');
+
+      if (activeWaiting.length > 1) {
+        return {
+          status: 'AMBIGUOUS_CONTEXT',
+          candidateContextIds: activeWaiting.map(c => c.contextId)
+        };
+      }
+
+      const currentOffers = activeWaiting.length === 1 && activeWaiting[0].offers ? activeWaiting[0].offers : this.defaultOffers;
+      if (currentOffers && currentOffers.length > 0) {
+        return this.evaluateScenarioQuery(intentRes.scenario, currentOffers);
+      }
+    }
+
+    // 3. Dynamic Offer Selection against active Context OfferSet
+    const activeWaiting = this.dialogueManager.listContexts(identity).filter(c => c.status === 'WAITING_FOR_SLOT');
+    if (activeWaiting.length === 1) {
+      const currentOffers = activeWaiting[0].offers || this.defaultOffers;
+      if (currentOffers && currentOffers.length > 0) {
+        const offerResolution = this.resolveOfferFromOffers(text, currentOffers);
+
+        if (offerResolution.status === 'AMBIGUOUS_OFFER') {
+          return {
+            status: 'AMBIGUOUS_SLOT',
+            candidates: offerResolution.candidates?.map(c => ({ slotName: 'selectedOfferId', value: c.offerId, scenarioId: 'sc-select-passenger-offer' })),
+            clarificationPrompt: offerResolution.prompt
+          };
+        }
+
+        if (offerResolution.status === 'OFFER_UNAVAILABLE') {
+          return {
+            status: 'OFFER_UNAVAILABLE',
+            offerId: offerResolution.offerId,
+            message: `Предложение ${offerResolution.offerId} более недоступно.`
+          };
+        }
+
+        if (offerResolution.status === 'RESOLVED' && offerResolution.offerId) {
+          const activeCtx = activeWaiting[0];
+          const fillRes = await this.dialogueManager.fillSlot('selectedOfferId', offerResolution.offerId, activeCtx.contextId, identity);
+          if (fillRes.success) {
+            return fillRes.data;
+          }
+        }
+      }
+    } else if (activeWaiting.length > 1) {
+      // Check if user is referencing an offer while having multiple contexts without specifying context
+      const isIndexReference = text.includes('перв') || text.includes('втор') || text.includes('трет') || text.includes('подешев');
+      if (isIndexReference) {
+        return {
+          status: 'AMBIGUOUS_CONTEXT',
+          candidateContextIds: activeWaiting.map(c => c.contextId)
+        };
+      }
+    }
+
+    // 4. Initial Context Creation from Scenario
     if (intentRes.status === 'RESOLVED') {
       const sc = intentRes.scenario;
       const emitStep = sc.steps.find(st => st.kind === 'emit');
