@@ -3,6 +3,17 @@ export interface SessionIdentity {
   sessionId: string;
 }
 
+export interface OfferDefinition {
+  offerId: string;
+  index: number; // 1, 2, 3...
+  driver: string;
+  vehicleType: string;
+  etaMinutes: number;
+  price: number;
+  distanceKm: number;
+  status: 'AVAILABLE' | 'UNAVAILABLE';
+}
+
 export interface DialogueContext {
   contextId: string;
   version: number;
@@ -19,6 +30,7 @@ export interface DialogueContext {
   scenarioId?: string;
   clarificationPrompts?: Record<string, string>;
   clarificationPrompt?: string;
+  offers?: OfferDefinition[];
 }
 
 export type ExecutionStatus = 'PENDING' | 'DISPATCHING' | 'SUCCEEDED' | 'FAILED' | 'UNKNOWN';
@@ -142,7 +154,12 @@ export class DialogueStateManager {
     if (!ctx || ctx.ownerId !== identity.ownerId || ctx.sessionId !== identity.sessionId) {
       return null;
     }
-    return { ...ctx, slots: { ...ctx.slots }, missingSlots: [...ctx.missingSlots] };
+    return {
+      ...ctx,
+      slots: { ...ctx.slots },
+      missingSlots: [...ctx.missingSlots],
+      offers: ctx.offers ? [...ctx.offers.map(o => ({ ...o }))] : undefined
+    };
   }
 
   public getContext(contextId: string, identity: SessionIdentity): DialogueContext | undefined {
@@ -152,14 +169,24 @@ export class DialogueStateManager {
     if (ctx.ownerId !== identity.ownerId || ctx.sessionId !== identity.sessionId) {
       return undefined;
     }
-    return { ...ctx, slots: { ...ctx.slots }, missingSlots: [...ctx.missingSlots] };
+    return {
+      ...ctx,
+      slots: { ...ctx.slots },
+      missingSlots: [...ctx.missingSlots],
+      offers: ctx.offers ? [...ctx.offers.map(o => ({ ...o }))] : undefined
+    };
   }
 
   public listContexts(identity: SessionIdentity): DialogueContext[] {
     this.validateIdentity(identity);
     return Array.from(this.contexts.values())
       .filter(c => c.ownerId === identity.ownerId && c.sessionId === identity.sessionId)
-      .map(c => ({ ...c, slots: { ...c.slots }, missingSlots: [...c.missingSlots] }));
+      .map(c => ({
+        ...c,
+        slots: { ...c.slots },
+        missingSlots: [...c.missingSlots],
+        offers: c.offers ? [...c.offers.map(o => ({ ...o }))] : undefined
+      }));
   }
 
   public activateContext(contextId: string, identity: SessionIdentity): boolean {
@@ -169,6 +196,18 @@ export class DialogueStateManager {
       return false;
     }
     this.activeContextId = contextId;
+    return true;
+  }
+
+  public setOffersForContext(contextId: string, offers: OfferDefinition[], identity: SessionIdentity): boolean {
+    this.validateIdentity(identity);
+    const ctx = this.contexts.get(contextId);
+    if (!ctx || ctx.ownerId !== identity.ownerId || ctx.sessionId !== identity.sessionId) {
+      return false;
+    }
+    ctx.offers = [...offers.map(o => ({ ...o }))];
+    ctx.version += 1;
+    ctx.updatedAt = Date.now();
     return true;
   }
 
@@ -232,7 +271,6 @@ export class DialogueStateManager {
     }).catch(err => {
       return { success: false as const, error: 'MUTATION_REJECTED' as const, message: err?.message || 'Unknown error' };
     }).finally(() => {
-      // HIGH-6: Clean up queue memory after completion if no new promises attached
       if (this.contextMutationQueues.get(contextId) === mutationPromise) {
         this.contextMutationQueues.delete(contextId);
       }
@@ -268,7 +306,8 @@ export class DialogueStateManager {
     actionType: string,
     clarificationPrompts: Record<string, string>,
     identity: SessionIdentity,
-    scenarioId?: string
+    scenarioId?: string,
+    initialOffers?: OfferDefinition[]
   ): DialogueContext {
     this.validateIdentity(identity);
     if (!actionType) {
@@ -287,7 +326,12 @@ export class DialogueStateManager {
         );
         if (existing) {
           this.activeContextId = existing.contextId;
-          return { ...existing, slots: { ...existing.slots }, missingSlots: [...existing.missingSlots] };
+          return {
+            ...existing,
+            slots: { ...existing.slots },
+            missingSlots: [...existing.missingSlots],
+            offers: existing.offers ? [...existing.offers.map(o => ({ ...o }))] : undefined
+          };
         }
       }
     }
@@ -321,7 +365,8 @@ export class DialogueStateManager {
       actionType,
       scenarioId,
       clarificationPrompts,
-      clarificationPrompt: firstMissing ? clarificationPrompts[firstMissing] : undefined
+      clarificationPrompt: firstMissing ? clarificationPrompts[firstMissing] : undefined,
+      offers: initialOffers ? [...initialOffers.map(o => ({ ...o }))] : undefined
     };
 
     this.contexts.set(contextId, newContext);
@@ -331,7 +376,12 @@ export class DialogueStateManager {
       this.scheduleTtlTimer(contextId, this.defaultTtlMs);
     }
 
-    return { ...newContext, slots: { ...newContext.slots }, missingSlots: [...newContext.missingSlots] };
+    return {
+      ...newContext,
+      slots: { ...newContext.slots },
+      missingSlots: [...newContext.missingSlots],
+      offers: newContext.offers ? [...newContext.offers.map(o => ({ ...o }))] : undefined
+    };
   }
 
   public resolveRouting(
@@ -414,7 +464,12 @@ export class DialogueStateManager {
       }
 
       return {
-        result: { ...ctx, slots: { ...ctx.slots }, missingSlots: [...ctx.missingSlots] }
+        result: {
+          ...ctx,
+          slots: { ...ctx.slots },
+          missingSlots: [...ctx.missingSlots],
+          offers: ctx.offers ? [...ctx.offers.map(o => ({ ...o }))] : undefined
+        }
       };
     });
   }
@@ -461,7 +516,6 @@ export class DialogueStateManager {
     });
   }
 
-  // BLOCKER-4 & HIGH-5: Domain-agnostic declarative system events
   public async handleSystemEvent(
     contextId: string,
     event: SystemEventDescriptor | string,
@@ -499,7 +553,12 @@ export class DialogueStateManager {
         result: {
           handled: true,
           eventType: descriptor.type,
-          context: { ...ctx, slots: { ...ctx.slots }, missingSlots: [...ctx.missingSlots] }
+          context: {
+            ...ctx,
+            slots: { ...ctx.slots },
+            missingSlots: [...ctx.missingSlots],
+            offers: ctx.offers ? [...ctx.offers.map(o => ({ ...o }))] : undefined
+          }
         }
       };
     });
@@ -557,7 +616,6 @@ export class DialogueStateManager {
     return execution;
   }
 
-  // BLOCKER-1: Action Dispatch is fully held inside the per-context serialization queue
   public async dispatchAction(
     executionId: string,
     payload: Record<string, any>,
@@ -595,7 +653,6 @@ export class DialogueStateManager {
 
     const contextId = execution.contextId;
 
-    // Enqueue entire dispatch lifecycle (Option B) into the context queue
     const prevPromise = this.contextMutationQueues.get(contextId) || Promise.resolve();
 
     const dispatchPromise = prevPromise.then(async () => {
@@ -640,7 +697,12 @@ export class DialogueStateManager {
         try {
           const result = await this.actionDispatcher(
             { type: execution.actionType, payload: execution.payload },
-            { ...ctx, slots: { ...ctx.slots }, missingSlots: [...ctx.missingSlots] },
+            {
+              ...ctx,
+              slots: { ...ctx.slots },
+              missingSlots: [...ctx.missingSlots],
+              offers: ctx.offers ? [...ctx.offers.map(o => ({ ...o }))] : undefined
+            },
             execution
           );
 
