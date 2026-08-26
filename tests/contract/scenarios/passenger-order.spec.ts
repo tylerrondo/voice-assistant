@@ -90,8 +90,23 @@ test.describe('CONTRACT: SC-PASS-001 Passenger Order Multi-turn Dialogue Suite',
     expect(dm.getExecutionLogs(sessionPassengerA).length).toBe(0);
   });
 
-  test('CONTRACT-06: Slot ambiguity → zero execution', async () => {
+  test('CONTRACT-06: Slot ambiguity → возвращает AMBIGUOUS_SLOT с декларативным промптом и zero execution (BLOCKER-1 & BLOCKER-2)', async () => {
+    // 1. Инициация контекста без destination
     await vc.handleIncomingVoice('заказать такси', sessionPassengerA);
+    const ctxBefore = dm.getActiveState(sessionPassengerA);
+    expect(ctxBefore?.slots.destination).toBeUndefined();
+
+    // 2. Фраза «в терминал» матчит и terminal_north, и terminal_south с равным priority
+    const ambiguityRes = await vc.handleIncomingVoice('в терминал', sessionPassengerA);
+
+    expect(ambiguityRes.status).toBe('AMBIGUOUS_SLOT');
+    expect(ambiguityRes.candidates.length).toBe(2);
+    expect(ambiguityRes.clarificationPrompt).toBe('Уточните, пожалуйста, куда именно вы хотите поехать?');
+
+    // Context остается неизменным и 0 executions
+    const ctxAfter = dm.getActiveState(sessionPassengerA);
+    expect(ctxAfter?.slots.destination).toBeUndefined();
+    expect(ctxAfter?.status).toBe('WAITING_FOR_SLOT');
     expect(dm.getExecutionLogs(sessionPassengerA).length).toBe(0);
     expect(dispatcherCalls).toBe(0);
   });
