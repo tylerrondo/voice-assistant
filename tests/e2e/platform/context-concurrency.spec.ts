@@ -18,7 +18,7 @@ test.describe('E2E: PLATFORM-016 Concurrency Control Suite', () => {
     await fileInput.setInputFiles(scenarioFilePath);
   }
 
-  test('E2E-RACE-01: Voice x System Event race deterministically serializes without lost updates', async ({ page }) => {
+  test('E2E-RACE-01: Voice x Declarative System Event race deterministically serializes', async ({ page }) => {
     await setupApp(page);
 
     const result = await page.evaluate(async () => {
@@ -31,11 +31,11 @@ test.describe('E2E: PLATFORM-016 Concurrency Control Suite', () => {
 
       const [voiceRes, sysRes] = await Promise.all([
         vc.handleIncomingVoice('картой', identity),
-        dm.handleSystemEvent(ctx.contextId, 'ORDER_CANCELLED', {}, identity)
+        dm.handleSystemEvent(ctx.contextId, { type: 'DRIVER_CANCEL', targetTransition: 'CANCEL' }, identity)
       ]);
 
       const finalCtx = dm.getContext(ctx.contextId, identity);
-      return { finalCtx, logs: dm.getExecutionLogs(identity) };
+      return { finalCtx, logs: dm.getExecutionLogs(identity), voiceRes, sysRes };
     });
 
     expect(result.finalCtx.version).toBeGreaterThanOrEqual(2);
@@ -86,7 +86,7 @@ test.describe('E2E: PLATFORM-016 Concurrency Control Suite', () => {
     expect(result.status).toBe('EXPIRED');
   });
 
-  test('E2E-RACE-04: Action completion x System Finish race', async ({ page }) => {
+  test('E2E-RACE-04: Action completion x Declarative System Finish race with full queue lock', async ({ page }) => {
     await setupApp(page);
 
     const result = await page.evaluate(async () => {
@@ -99,14 +99,15 @@ test.describe('E2E: PLATFORM-016 Concurrency Control Suite', () => {
 
       const [dispRes, sysRes] = await Promise.all([
         dm.dispatchAction(ex.executionId, { paymentMethod: 'CARD' }, identity),
-        dm.handleSystemEvent(ctx.contextId, 'TRIP_FINISHED', {}, identity)
+        dm.handleSystemEvent(ctx.contextId, { type: 'EXTERNAL_FINISH', targetTransition: 'COMPLETE' }, identity)
       ]);
 
-      return { finalCtx: dm.getContext(ctx.contextId, identity), dispRes };
+      return { finalCtx: dm.getContext(ctx.contextId, identity), dispRes, sysRes };
     });
 
     expect(result.finalCtx.status).toBe('COMPLETED');
     expect(result.dispRes.status).toBe('SUCCEEDED');
+    expect(result.finalCtx.version).toBeGreaterThanOrEqual(3);
   });
 
   test('E2E-RACE-05: Concurrent operations on 2 independent contexts execute without interference', async ({ page }) => {
