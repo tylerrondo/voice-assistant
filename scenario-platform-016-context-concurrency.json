@@ -1,0 +1,44 @@
+{
+  "version": 2,
+  "id": "scenario-set-platform-016-context-concurrency",
+  "name": "Platform Context Concurrency Control & State Mutation Specification",
+  "description": "Спецификация для проверки атомарной Per-Context сериализации, версионирования CAS, разрешения гонок Voice x System Events x TTL и отсутствия lost updates.",
+  "scenarios": [
+    {
+      "id": "sc-order-payment-race",
+      "name": "Конкурентное заполнение слота оплаты и отмены заказа",
+      "activation": {
+        "type": "voice",
+        "value": "voice.order-payment"
+      },
+      "aliases": ["заказ", "оплата"],
+      "priority": 100,
+      "intent": "ORDER_PAYMENT",
+      "requiredSlots": ["paymentMethod"],
+      "slotExtractors": {
+        "paymentMethod": {
+          "type": "enum",
+          "mapping": {
+            "CARD": ["картой", "карта", "card"],
+            "CASH": ["наличными", "наличка", "cash"]
+          },
+          "priority": 100
+        }
+      },
+      "steps": [
+        {
+          "kind": "emit",
+          "event": {
+            "type": "order.payment.completed",
+            "payload": {
+              "paymentMethod": "{{slots.paymentMethod}}"
+            }
+          }
+        },
+        {
+          "kind": "end"
+        }
+      ]
+    }
+  ]
+}
