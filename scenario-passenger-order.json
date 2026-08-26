@@ -1,0 +1,106 @@
+{
+  "version": 1,
+  "id": "scenario-set-passenger-order-001",
+  "name": "Passenger Taxi Order Multi-turn Voice Dialogue",
+  "description": "Декларативная спецификация эталонного пассажирского сценария заказа такси с уточнениями, изменением слотов и подтверждением",
+  "scenarios": [
+    {
+      "id": "sc-passenger-create-order",
+      "name": "Голосовое создание заказа такси пассажиром",
+      "activation": {
+        "type": "voice",
+        "value": "voice.taxi-order"
+      },
+      "aliases": [
+        "мне нужно в",
+        "заказать такси",
+        "поехали в",
+        "хочу в",
+        "такси"
+      ],
+      "priority": 100,
+      "intent": "CREATE_TAXI_ORDER",
+      "requiredSlots": [
+        "destination",
+        "pickup",
+        "passengerCount",
+        "vehicleType",
+        "confirmation"
+      ],
+      "slotExtractors": {
+        "destination": {
+          "type": "enum",
+          "mapping": {
+            "airport": ["аэропорт", "аэропорта", "airport", "шереметьево", "домодедово", "внуково"],
+            "center": ["центр", "центра", "center", "красная площадь", "тверская"],
+            "station": ["вокзал", "вокзала", "станция", "station"]
+          },
+          "priority": 100
+        },
+        "pickup": {
+          "type": "enum",
+          "mapping": {
+            "CURRENT_LOCATION": ["отсюда", "здесь", "от текущего местоположения", "текущее", "тут"],
+            "home": ["из дома", "дом", "от дома"],
+            "work": ["с работы", "работа", "от офиса"]
+          },
+          "priority": 100
+        },
+        "passengerCount": {
+          "type": "enum",
+          "mapping": {
+            "1": ["один", "одна", "одного", "1"],
+            "2": ["двое", "два", "двух", "2"],
+            "3": ["трое", "три", "трех", "трёх", "3"],
+            "4": ["четверо", "четыре", "четырёх", "4"]
+          },
+          "priority": 100
+        },
+        "vehicleType": {
+          "type": "enum",
+          "mapping": {
+            "comfort": ["комфорт", "комфорт плюс", "comfort"],
+            "standard": ["обычную", "обычное", "эконом", "стандарт", "standard", "обычное такси"],
+            "business": ["бизнес", "business", "премиум"]
+          },
+          "priority": 100
+        },
+        "confirmation": {
+          "type": "enum",
+          "mapping": {
+            "CONFIRMED": ["да", "заказать", "подтверждаю", "давай", "поехали", "верно"],
+            "REJECTED": ["нет", "не надо", "отмена заказа", "отбой"]
+          },
+          "priority": 100
+        }
+      },
+      "clarificationPrompts": {
+        "destination": "Куда вы хотите поехать?",
+        "pickup": "Откуда вас забрать?",
+        "passengerCount": "Сколько пассажиров?",
+        "vehicleType": "Доступны обычное такси и комфорт. Что выбрать?",
+        "confirmation": "Заказать поездку?"
+      },
+      "ambiguityPrompt": {
+        "template": "Уточните, пожалуйста, куда именно вы хотите поехать?"
+      },
+      "steps": [
+        {
+          "kind": "emit",
+          "event": {
+            "type": "passenger.order.created",
+            "payload": {
+              "destination": "{{slots.destination}}",
+              "pickup": "{{slots.pickup}}",
+              "passengerCount": "{{slots.passengerCount}}",
+              "vehicleType": "{{slots.vehicleType}}"
+            }
+          }
+        },
+        {
+          "kind": "end"
+        }
+      ]
+    }
+  ]
+}
