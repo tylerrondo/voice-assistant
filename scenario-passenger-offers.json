@@ -1,0 +1,130 @@
+{
+  "version": 1,
+  "id": "scenario-set-passenger-offers-002",
+  "name": "Passenger Multi-Offer Dialogue and Selection Scenario",
+  "description": "Декларативная спецификация диалога сравнения предложений, ответов на информационные вопросы и выбора оффера пассажиром",
+  "scenarios": [
+    {
+      "id": "sc-compare-fastest",
+      "name": "Вопрос о самом быстром предложении",
+      "activation": {
+        "type": "voice",
+        "value": "voice.compare-fastest"
+      },
+      "aliases": ["какой быстрее", "кто быстрее", "быстрее всего", "самый быстрый"],
+      "priority": 100,
+      "intent": "COMPARE_OFFERS_ETA",
+      "steps": [
+        {
+          "kind": "end"
+        }
+      ]
+    },
+    {
+      "id": "sc-compare-cheapest",
+      "name": "Вопрос о самом дешевом предложении",
+      "activation": {
+        "type": "voice",
+        "value": "voice.compare-cheapest"
+      },
+      "aliases": ["какой дешевле", "кто дешевле", "дешевле всего", "самый дешевый"],
+      "priority": 100,
+      "intent": "COMPARE_OFFERS_PRICE",
+      "steps": [
+        {
+          "kind": "end"
+        }
+      ]
+    },
+    {
+      "id": "sc-query-offer-comfort",
+      "name": "Вопрос о типе автомобиля второго оффера",
+      "activation": {
+        "type": "voice",
+        "value": "voice.query-offer-comfort"
+      },
+      "aliases": ["а второй это комфорт", "второй комфорт", "вторая машина комфорт"],
+      "priority": 100,
+      "intent": "QUERY_OFFER_COMFORT",
+      "steps": [
+        {
+          "kind": "end"
+        }
+      ]
+    },
+    {
+      "id": "sc-query-offer-distance",
+      "name": "Вопрос о расстоянии до машины",
+      "activation": {
+        "type": "voice",
+        "value": "voice.query-offer-distance"
+      },
+      "aliases": ["а далеко находится второй водитель", "далеко второй", "где второй"],
+      "priority": 100,
+      "intent": "QUERY_OFFER_DISTANCE",
+      "steps": [
+        {
+          "kind": "end"
+        }
+      ]
+    },
+    {
+      "id": "sc-select-passenger-offer",
+      "name": "Выбор конкретного предложения и подтверждение",
+      "activation": {
+        "type": "voice",
+        "value": "voice.select-offer"
+      },
+      "aliases": ["тогда давайте", "давайте", "выбираю", "выбрать", "хочу"],
+      "priority": 90,
+      "intent": "SELECT_OFFER",
+      "requiredSlots": [
+        "selectedOfferId",
+        "confirmation"
+      ],
+      "slotExtractors": {
+        "selectedOfferId": {
+          "type": "enum",
+          "mapping": {
+            "OFFER-A": ["первый", "первую", "первого", "первый вариант", "1"],
+            "OFFER-B": ["второй", "вторую", "второго", "второй вариант", "2", "комфорт"],
+            "OFFER-C": ["третий", "третью", "третьего", "третий вариант", "3", "за девяносто", "за 90"],
+            "OFFER_CHEAP_AMBIGUOUS_1": ["машину подешевле", "подешевле", "дешевую"],
+            "OFFER_CHEAP_AMBIGUOUS_2": ["машину подешевле", "подешевле", "дешевую"]
+          },
+          "priority": 100
+        },
+        "confirmation": {
+          "type": "enum",
+          "mapping": {
+            "CONFIRMED": ["да", "подтверждаю", "давай", "заказывай", "поехали"],
+            "REJECTED": ["нет", "не надо", "отбой"]
+          },
+          "priority": 100
+        }
+      },
+      "clarificationPrompts": {
+        "selectedOfferId": "Какой из предложенных вариантов вы хотите выбрать?",
+        "confirmation": "Подтвердить выбор предложения?"
+      },
+      "ambiguityPrompt": {
+        "template": "Есть несколько подходящих вариантов. Выберите, пожалуйста: первый, второй или третий?"
+      },
+      "steps": [
+        {
+          "kind": "emit",
+          "event": {
+            "type": "passenger.offer.selected",
+            "payload": {
+              "orderId": 5001,
+              "offerId": "{{slots.selectedOfferId}}"
+            }
+          }
+        },
+        {
+          "kind": "end"
+        }
+      ]
+    }
+  ]
+}
