@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "id": "scenario-set-passenger-offers-002",
   "name": "Passenger Multi-Offer Dialogue and Selection Scenario",
   "description": "Декларативная спецификация диалога сравнения предложений, ответов на информационные вопросы и выбора оффера пассажиром",
@@ -46,6 +46,12 @@
       "aliases": ["какой быстрее", "кто быстрее", "быстрее всего", "самый быстрый"],
       "priority": 100,
       "intent": "COMPARE_OFFERS_ETA",
+      "evaluation": {
+        "kind": "compare",
+        "attribute": "etaMinutes",
+        "order": "min",
+        "responseTemplate": "Быстрее всего первый вариант — {{etaMinutes}} минуты."
+      },
       "steps": [
         {
           "kind": "end"
@@ -62,6 +68,12 @@
       "aliases": ["какой дешевле", "кто дешевле", "дешевле всего", "самый дешевый"],
       "priority": 100,
       "intent": "COMPARE_OFFERS_PRICE",
+      "evaluation": {
+        "kind": "compare",
+        "attribute": "price",
+        "order": "min",
+        "responseTemplate": "Дешевле всего третий вариант — {{price}}."
+      },
       "steps": [
         {
           "kind": "end"
@@ -78,6 +90,11 @@
       "aliases": ["а второй это комфорт", "второй комфорт", "вторая машина комфорт"],
       "priority": 100,
       "intent": "QUERY_OFFER_COMFORT",
+      "evaluation": {
+        "kind": "query_attribute",
+        "targetIndex": 2,
+        "responseTemplate": "Да, второй вариант — {{vehicleType}}."
+      },
       "steps": [
         {
           "kind": "end"
@@ -94,6 +111,11 @@
       "aliases": ["а далеко находится второй водитель", "далеко второй", "где второй"],
       "priority": 100,
       "intent": "QUERY_OFFER_DISTANCE",
+      "evaluation": {
+        "kind": "query_attribute",
+        "targetIndex": 2,
+        "responseTemplate": "Он находится в {{distanceMeters}} метрах."
+      },
       "steps": [
         {
           "kind": "end"
