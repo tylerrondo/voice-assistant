@@ -88,7 +88,7 @@ test.describe('E2E: SC-PASS-002 Canonical Multi-Offer Dialogue Suite', () => {
     expect(result.step4Execs).toBe(0);
     expect(result.step5Execs).toBe(0);
 
-    // Deep assertions on actual comparison responses (HIGH-4)
+    // Deep assertions on actual comparison responses
     expect(result.step1Res.status).toBe('OFFER_COMPARISON_RESOLVED');
     expect(result.step1Res.bestOfferId).toBe('OFFER-A');
     expect(result.step1Res.etaMinutes).toBe(4);
