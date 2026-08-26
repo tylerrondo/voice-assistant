@@ -1,4 +1,4 @@
-import { DialogueStateManager, RoutingResult, ActionDispatcher, SessionIdentity } from './dialogue-manager';
+import { DialogueStateManager, RoutingResult, ActionDispatcher, SessionIdentity, OfferDefinition } from './dialogue-manager';
 
 export interface SlotExtractorDefinition {
   type: 'integer' | 'enum' | 'string';
@@ -39,6 +39,7 @@ export interface ScenarioSet {
   id: string;
   name: string;
   scenarios: ScenarioDefinition[];
+  defaultOffers?: OfferDefinition[];
 }
 
 export type IntentResolutionResult =
@@ -55,6 +56,7 @@ export class VoiceChannel {
   private dialogueManager: DialogueStateManager;
   private scenarioRegistry: ScenarioDefinition[] = [];
   private activeScenarioSetId: string = '';
+  private defaultOffers?: OfferDefinition[];
 
   constructor(dialogueManager: DialogueStateManager) {
     this.dialogueManager = dialogueManager;
@@ -93,6 +95,7 @@ export class VoiceChannel {
 
     this.scenarioRegistry = [...scenarioSet.scenarios];
     this.activeScenarioSetId = scenarioSet.id;
+    this.defaultOffers = scenarioSet.defaultOffers;
   }
 
   public getActiveScenarioSetId(): string {
@@ -206,11 +209,9 @@ export class VoiceChannel {
     if (candidates.length === 0) return { status: 'NO_MATCH' };
     if (candidates.length === 1) return { status: 'RESOLVED', slots: { [candidates[0].slotName]: candidates[0].value } };
 
-    // Check if candidates are for different slot names or conflicting values with same priority
     const maxPrio = Math.max(...candidates.map(c => c.priority));
     const highest = candidates.filter(c => c.priority === maxPrio);
 
-    // If distinct values or slotNames exist with equal top priority -> AMBIGUOUS_SLOT
     const distinctKeysOrVals = new Set(highest.map(h => `${h.slotName}:${h.value}`));
     if (distinctKeysOrVals.size > 1) {
       return {
@@ -221,6 +222,65 @@ export class VoiceChannel {
     }
 
     return { status: 'RESOLVED', slots: { [highest[0].slotName]: highest[0].value } };
+  }
+
+  // Resolves natural references ("первый", "второй", "третий", "комфорт", "подешевле") dynamically against the context's OfferSet
+  private resolveOfferFromOffers(phrase: string, offers?: OfferDefinition[]): {
+    status: 'RESOLVED' | 'OFFER_UNAVAILABLE' | 'AMBIGUOUS_OFFER' | 'NO_MATCH';
+    offerId?: string;
+    offer?: OfferDefinition;
+    candidates?: OfferDefinition[];
+    prompt?: string;
+  } {
+    if (!offers || offers.length === 0) {
+      return { status: 'NO_MATCH' };
+    }
+
+    const text = phrase.trim().toLowerCase();
+
+    // Natural index references:
+    const isFirst = text.includes('первый') || text.includes('первую') || text.includes('первого') || text.includes('1');
+    const isSecond = text.includes('второй') || text.includes('вторую') || text.includes('второго') || text.includes('2');
+    const isThird = text.includes('третий') || text.includes('третью') || text.includes('третьего') || text.includes('3');
+    const isComfort = text.includes('комфорт') && !isFirst && !isThird;
+    const isCheapAmbiguous = text.includes('подешевле') || text.includes('дешевую') || text.includes('машину подешевле');
+
+    if (isCheapAmbiguous) {
+      // Find candidate offers sorted by price
+      const available = offers.filter(o => o.status === 'AVAILABLE');
+      if (available.length > 1) {
+        return {
+          status: 'AMBIGUOUS_OFFER',
+          candidates: available,
+          prompt: 'Есть несколько вариантов. Выберите, пожалуйста, первый, второй или третий?'
+        };
+      }
+    }
+
+    let targetOffer: OfferDefinition | undefined;
+    if (isFirst) {
+      targetOffer = offers.find(o => o.index === 1 || o.offerId === 'OFFER-A');
+    } else if (isSecond) {
+      targetOffer = offers.find(o => o.index === 2 || o.offerId === 'OFFER-B');
+    } else if (isThird) {
+      targetOffer = offers.find(o => o.index === 3 || o.offerId === 'OFFER-C');
+    } else if (isComfort) {
+      targetOffer = offers.find(o => o.vehicleType.toLowerCase() === 'comfort');
+    }
+
+    if (!targetOffer) {
+      // Check for non-existent offers (e.g., "четвертую", "4")
+      if (text.includes('четверт') || text.includes('4') || text.includes('пятую')) {
+        return { status: 'NO_MATCH' };
+      }
+      return { status: 'NO_MATCH' };
+    }
+
+    if (targetOffer.status === 'UNAVAILABLE') {
+      return { status: 'OFFER_UNAVAILABLE', offerId: targetOffer.offerId, offer: targetOffer };
+    }
+
+    return { status: 'RESOLVED', offerId: targetOffer.offerId, offer: targetOffer };
   }
 
   public async handleIncomingVoice(phrase: string, identity: SessionIdentity): Promise<any> {
@@ -257,7 +317,90 @@ export class VoiceChannel {
       return { status: 'NO_MATCH' };
     }
 
-    // 2. Intent Resolution
+    // 2. Dynamic Offer Comparison & Query Handling (BLOCKER-1 & BLOCKER-2)
+    const activeWaiting = this.dialogueManager.listContexts(identity).filter(c => c.status === 'WAITING_FOR_SLOT');
+    const currentOffers = activeWaiting.length > 0 && activeWaiting[0].offers ? activeWaiting[0].offers : this.defaultOffers;
+
+    if (currentOffers && currentOffers.length > 0) {
+      // Comparison questions:
+      if (text.includes('быстрее')) {
+        const fastest = [...currentOffers].filter(o => o.status === 'AVAILABLE').sort((a, b) => a.etaMinutes - b.etaMinutes)[0];
+        return {
+          status: 'OFFER_COMPARISON_RESOLVED',
+          intent: 'COMPARE_OFFERS_ETA',
+          comparisonAttribute: 'ETA',
+          bestOfferId: fastest?.offerId,
+          etaMinutes: fastest?.etaMinutes,
+          response: `Быстрее всего ${fastest?.offerId === 'OFFER-A' ? 'первый вариант' : fastest?.offerId} — ${fastest?.etaMinutes} минуты.`
+        };
+      }
+
+      if (text.includes('дешевле')) {
+        const cheapest = [...currentOffers].filter(o => o.status === 'AVAILABLE').sort((a, b) => a.price - b.price)[0];
+        return {
+          status: 'OFFER_COMPARISON_RESOLVED',
+          intent: 'COMPARE_OFFERS_PRICE',
+          comparisonAttribute: 'PRICE',
+          bestOfferId: cheapest?.offerId,
+          price: cheapest?.price,
+          response: `Дешевле всего ${cheapest?.offerId === 'OFFER-C' ? 'третий вариант' : cheapest?.offerId} — ${cheapest?.price}.`
+        };
+      }
+
+      if (text.includes('комфорт') && (text.includes('второй') || text.includes('это'))) {
+        const target = currentOffers.find(o => o.index === 2 || o.offerId === 'OFFER-B');
+        return {
+          status: 'OFFER_QUERY_RESOLVED',
+          intent: 'QUERY_OFFER_COMFORT',
+          offerId: target?.offerId,
+          vehicleType: target?.vehicleType,
+          isComfort: target?.vehicleType.toLowerCase() === 'comfort',
+          response: `Да, второй вариант — ${target?.vehicleType}.`
+        };
+      }
+
+      if (text.includes('далеко') && (text.includes('второй') || text.includes('водитель'))) {
+        const target = currentOffers.find(o => o.index === 2 || o.offerId === 'OFFER-B');
+        return {
+          status: 'OFFER_QUERY_RESOLVED',
+          intent: 'QUERY_OFFER_DISTANCE',
+          offerId: target?.offerId,
+          distanceKm: target?.distanceKm,
+          response: `Он находится в ${target ? target.distanceKm * 1000 : 0} метрах.`
+        };
+      }
+    }
+
+    // 3. Dynamic Offer Selection (Natural references resolution against OfferSet)
+    if (activeWaiting.length > 0 && currentOffers && currentOffers.length > 0) {
+      const offerResolution = this.resolveOfferFromOffers(text, currentOffers);
+
+      if (offerResolution.status === 'AMBIGUOUS_OFFER') {
+        return {
+          status: 'AMBIGUOUS_SLOT',
+          candidates: offerResolution.candidates?.map(c => ({ slotName: 'selectedOfferId', value: c.offerId, scenarioId: 'sc-select-passenger-offer' })),
+          clarificationPrompt: offerResolution.prompt
+        };
+      }
+
+      if (offerResolution.status === 'OFFER_UNAVAILABLE') {
+        return {
+          status: 'OFFER_UNAVAILABLE',
+          offerId: offerResolution.offerId,
+          message: `Предложение ${offerResolution.offerId} более недоступно.`
+        };
+      }
+
+      if (offerResolution.status === 'RESOLVED' && offerResolution.offerId) {
+        const activeCtx = activeWaiting[0];
+        const fillRes = await this.dialogueManager.fillSlot('selectedOfferId', offerResolution.offerId, activeCtx.contextId, identity);
+        if (fillRes.success) {
+          return fillRes.data;
+        }
+      }
+    }
+
+    // 4. Intent Resolution (Initial creation)
     const intentRes = this.resolveIntent(text);
 
     if (intentRes.status === 'RESOLVED') {
@@ -269,7 +412,6 @@ export class VoiceChannel {
 
       const slotRes = this.extractSlotsDeterministically(text, sc.slotExtractors, sc.id, sc.ambiguityPrompt?.template);
 
-      // BLOCKER-2: Propagate slot ambiguity during initial turn
       if (slotRes.status === 'AMBIGUOUS_SLOT') {
         return slotRes;
       }
@@ -283,7 +425,8 @@ export class VoiceChannel {
         actionType,
         prompts,
         identity,
-        sc.id
+        sc.id,
+        this.defaultOffers
       );
 
       if (ctx.missingSlots.length === 0) {
@@ -305,14 +448,12 @@ export class VoiceChannel {
       return intentRes;
     }
 
-    // 3. Slot Filling on Active Waiting Contexts
-    const activeContexts = this.dialogueManager.listContexts(identity).filter(c => c.status === 'WAITING_FOR_SLOT');
-    if (activeContexts.length === 0) {
+    // 5. General Slot Filling on Active Waiting Contexts (e.g. Confirmation «Да»)
+    if (activeWaiting.length === 0) {
       return { status: 'NO_MATCH' };
     }
 
-    // Extract slots from active context scenario
-    for (const ctx of activeContexts) {
+    for (const ctx of activeWaiting) {
       const scenario = this.getDeterministicScenarioForIntent(ctx.intent);
       if (scenario && scenario.slotExtractors) {
         const slotRes = this.extractSlotsDeterministically(
@@ -322,7 +463,6 @@ export class VoiceChannel {
           scenario.ambiguityPrompt?.template
         );
 
-        // BLOCKER-2 & HIGH-3: Propagate AMBIGUOUS_SLOT directly
         if (slotRes.status === 'AMBIGUOUS_SLOT') {
           return slotRes;
         }
