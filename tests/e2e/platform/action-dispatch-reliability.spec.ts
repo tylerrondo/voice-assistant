@@ -2,9 +2,14 @@ import { test, expect } from '@playwright/test';
 
 test.describe('E2E: PLATFORM-015 Production Action Dispatch Reliability Suite', () => {
 
-  test('E2E-RELIABILITY-01: End-to-end Voice -> VoiceChannel -> DialogueManager -> Production Execution Boundary', async ({ page }) => {
-    await page.goto('http://localhost:3000');
+  test('E2E-RELIABILITY-01: End-to-end Voice -> VoiceChannel -> DialogueManager -> FSM Execution Engine', async ({ page }) => {
+    // Inject authenticated identity into browser session context before load
+    await page.addInitScript(() => {
+      (window as any).__AUTH_OWNER_ID__ = 'verified-driver-001';
+      (window as any).__AUTH_SESSION_ID__ = 'verified-session-001';
+    });
 
+    await page.goto('http://localhost:3000');
     await page.waitForSelector('#voice-app-ready', { timeout: 10000 });
 
     const result = await page.evaluate(async () => {
@@ -21,7 +26,7 @@ test.describe('E2E: PLATFORM-015 Production Action Dispatch Reliability Suite', 
       // 1. Voice phrase triggers VoiceChannel
       const voiceRes = await vc.handleIncomingVoice('заказ 1001', identity);
 
-      // 2. Execution automatically dispatched through real execution boundary
+      // 2. Execution automatically processed by PlatformFsmExecutionBoundary
       const executions = dm.getExecutionLogs(identity);
       const execution = executions.length > 0 ? executions[executions.length - 1] : null;
 
@@ -35,7 +40,7 @@ test.describe('E2E: PLATFORM-015 Production Action Dispatch Reliability Suite', 
     expect(result.execution).not.toBeNull();
     expect(result.execution?.status).toBe('SUCCEEDED');
     expect(result.execution?.attempt).toBe(1);
-    expect(result.execution?.idempotencyKey).toContain('order.accepted');
+    expect(result.execution?.payload?.orderId).toBe(1001);
   });
 
 });
