@@ -5,6 +5,7 @@ export interface SessionIdentity {
 
 export interface DialogueContext {
   contextId: string;
+  version: number;
   ownerId: string;
   sessionId: string;
   intent: string;
@@ -69,6 +70,10 @@ export type RoutingResult =
   | { status: 'NO_MATCH' }
   | { status: 'CONTEXT_ACCESS_DENIED' };
 
+export type MutationResult<T> =
+  | { success: true; data: T; version: number }
+  | { success: false; error: 'CONTEXT_VERSION_CONFLICT' | 'TERMINAL_STATE' | 'CONTEXT_NOT_FOUND' | 'ACCESS_DENIED' | 'MUTATION_REJECTED'; message: string };
+
 export class DialogueStateManager {
   private contexts: Map<string, DialogueContext> = new Map();
   private activeContextId: string | null = null;
@@ -79,6 +84,9 @@ export class DialogueStateManager {
   private retryPolicy: RetryPolicy;
   private timerMap: Map<string, any> = new Map();
   private enableAutoExpiryScheduler: boolean;
+
+  // PLATFORM-016: Per-Context Serialization Promise Chains (No global mutex!)
+  private contextMutationQueues: Map<string, Promise<any>> = new Map();
 
   constructor(configOrTimeout: DialogueManagerConfig | number = {}) {
     if (typeof configOrTimeout === 'number') {
@@ -108,6 +116,7 @@ export class DialogueStateManager {
     this.contexts.clear();
     this.activeContextId = null;
     this.executions.clear();
+    this.contextMutationQueues.clear();
   }
 
   private validateIdentity(identity: SessionIdentity): void {
@@ -127,7 +136,7 @@ export class DialogueStateManager {
     if (!ctx || ctx.ownerId !== identity.ownerId || ctx.sessionId !== identity.sessionId) {
       return null;
     }
-    return ctx;
+    return { ...ctx, slots: { ...ctx.slots }, missingSlots: [...ctx.missingSlots] };
   }
 
   public getContext(contextId: string, identity: SessionIdentity): DialogueContext | undefined {
@@ -137,14 +146,14 @@ export class DialogueStateManager {
     if (ctx.ownerId !== identity.ownerId || ctx.sessionId !== identity.sessionId) {
       return undefined;
     }
-    return ctx;
+    return { ...ctx, slots: { ...ctx.slots }, missingSlots: [...ctx.missingSlots] };
   }
 
   public listContexts(identity: SessionIdentity): DialogueContext[] {
     this.validateIdentity(identity);
-    return Array.from(this.contexts.values()).filter(
-      c => c.ownerId === identity.ownerId && c.sessionId === identity.sessionId
-    );
+    return Array.from(this.contexts.values())
+      .filter(c => c.ownerId === identity.ownerId && c.sessionId === identity.sessionId)
+      .map(c => ({ ...c, slots: { ...c.slots }, missingSlots: [...c.missingSlots] }));
   }
 
   public activateContext(contextId: string, identity: SessionIdentity): boolean {
@@ -157,6 +166,71 @@ export class DialogueStateManager {
     return true;
   }
 
+  // --- PLATFORM-016: Per-Context Serialization & Atomic CAS Engine ---
+
+  public async executeSerializedMutation<T>(
+    contextId: string,
+    expectedVersion: number | undefined,
+    identity: SessionIdentity,
+    mutationFn: (ctx: DialogueContext) => Promise<{ result: T; targetStatus?: DialogueContext['status'] } | null>
+  ): Promise<MutationResult<T>> {
+    this.validateIdentity(identity);
+
+    const prevPromise = this.contextMutationQueues.get(contextId) || Promise.resolve();
+
+    const mutationPromise = prevPromise.then(async () => {
+      const ctx = this.contexts.get(contextId);
+      if (!ctx) {
+        return { success: false as const, error: 'CONTEXT_NOT_FOUND' as const, message: `Context "${contextId}" not found` };
+      }
+
+      if (ctx.ownerId !== identity.ownerId || ctx.sessionId !== identity.sessionId) {
+        return { success: false as const, error: 'ACCESS_DENIED' as const, message: 'Cross-session context mutation is prohibited' };
+      }
+
+      // Optimistic CAS version check
+      if (expectedVersion !== undefined && ctx.version !== expectedVersion) {
+        return {
+          success: false as const,
+          error: 'CONTEXT_VERSION_CONFLICT' as const,
+          message: `Version conflict for context "${contextId}". Expected: ${expectedVersion}, Current: ${ctx.version}`
+        };
+      }
+
+      // Terminal State Protection: No mutation allowed once in terminal state
+      if (['COMPLETED', 'CANCELLED', 'EXPIRED'].includes(ctx.status)) {
+        return {
+          success: false as const,
+          error: 'TERMINAL_STATE' as const,
+          message: `Context "${contextId}" is in terminal state "${ctx.status}" and cannot be resurrected or modified`
+        };
+      }
+
+      const outcome = await mutationFn(ctx);
+      if (!outcome) {
+        return { success: false as const, error: 'MUTATION_REJECTED' as const, message: 'Mutation rejected by predicate' };
+      }
+
+      // Atomic version increment & timestamp update
+      ctx.version += 1;
+      ctx.updatedAt = Date.now();
+      if (outcome.targetStatus) {
+        ctx.status = outcome.targetStatus;
+      }
+
+      return {
+        success: true as const,
+        data: outcome.result,
+        version: ctx.version
+      };
+    }).catch(err => {
+      return { success: false as const, error: 'MUTATION_REJECTED' as const, message: err?.message || 'Unknown error' };
+    });
+
+    this.contextMutationQueues.set(contextId, mutationPromise);
+    return mutationPromise;
+  }
+
   private scheduleTtlTimer(contextId: string, ttlMs: number): void {
     if (!this.enableAutoExpiryScheduler) return;
 
@@ -165,7 +239,11 @@ export class DialogueStateManager {
     }
 
     const timer = setTimeout(() => {
-      this.expireContext(contextId);
+      const ctx = this.contexts.get(contextId);
+      if (ctx) {
+        const identity: SessionIdentity = { ownerId: ctx.ownerId, sessionId: ctx.sessionId };
+        this.expireContext(contextId, identity);
+      }
       this.timerMap.delete(contextId);
     }, ttlMs);
 
@@ -198,7 +276,7 @@ export class DialogueStateManager {
         );
         if (existing) {
           this.activeContextId = existing.contextId;
-          return existing;
+          return { ...existing, slots: { ...existing.slots }, missingSlots: [...existing.missingSlots] };
         }
       }
     }
@@ -219,6 +297,7 @@ export class DialogueStateManager {
     const firstMissing = missingSlots[0];
     const newContext: DialogueContext = {
       contextId,
+      version: 1,
       ownerId: identity.ownerId,
       sessionId: identity.sessionId,
       intent,
@@ -241,7 +320,7 @@ export class DialogueStateManager {
       this.scheduleTtlTimer(contextId, this.defaultTtlMs);
     }
 
-    return newContext;
+    return { ...newContext, slots: { ...newContext.slots }, missingSlots: [...newContext.missingSlots] };
   }
 
   public resolveRouting(
@@ -291,82 +370,126 @@ export class DialogueStateManager {
     return { status: 'NO_MATCH' };
   }
 
-  public fillSlot(
+  // PLATFORM-016: Serialized slot filling with version tracking
+  public async fillSlot(
     slotName: string,
     value: any,
     contextId: string,
-    identity: SessionIdentity
-  ): DialogueContext | { status: 'CONTEXT_ACCESS_DENIED' } | null {
-    this.validateIdentity(identity);
+    identity: SessionIdentity,
+    expectedVersion?: number
+  ): Promise<MutationResult<DialogueContext>> {
     const targetId = contextId || this.activeContextId;
-    if (!targetId) return null;
-
-    const ctx = this.contexts.get(targetId);
-    if (!ctx) return null;
-
-    if (ctx.ownerId !== identity.ownerId || ctx.sessionId !== identity.sessionId) {
-      return { status: 'CONTEXT_ACCESS_DENIED' };
+    if (!targetId) {
+      return { success: false, error: 'CONTEXT_NOT_FOUND', message: 'No target contextId specified' };
     }
 
-    if (ctx.status !== 'WAITING_FOR_SLOT') return null;
+    return this.executeSerializedMutation(targetId, expectedVersion, identity, async (ctx) => {
+      if (ctx.status !== 'WAITING_FOR_SLOT') {
+        return null;
+      }
 
-    ctx.slots[slotName] = value;
-    ctx.missingSlots = ctx.missingSlots.filter(s => s !== slotName);
-    ctx.updatedAt = Date.now();
+      ctx.slots[slotName] = value;
+      ctx.missingSlots = ctx.missingSlots.filter(s => s !== slotName);
 
-    if (ctx.missingSlots.length === 0) {
-      ctx.clarificationPrompt = undefined;
+      if (ctx.missingSlots.length === 0) {
+        ctx.clarificationPrompt = undefined;
+        if (this.timerMap.has(ctx.contextId)) {
+          clearTimeout(this.timerMap.get(ctx.contextId));
+          this.timerMap.delete(ctx.contextId);
+        }
+      } else {
+        const nextMissing = ctx.missingSlots[0];
+        ctx.clarificationPrompt = ctx.clarificationPrompts?.[nextMissing] || `Укажите ${nextMissing}`;
+        this.scheduleTtlTimer(ctx.contextId, this.defaultTtlMs);
+      }
+
+      return {
+        result: { ...ctx, slots: { ...ctx.slots }, missingSlots: [...ctx.missingSlots] }
+      };
+    });
+  }
+
+  // PLATFORM-016: Serialized cancellation
+  public async cancelContext(
+    contextId: string,
+    identity: SessionIdentity,
+    expectedVersion?: number
+  ): Promise<MutationResult<boolean>> {
+    const targetId = contextId || this.activeContextId;
+    if (!targetId) {
+      return { success: false, error: 'CONTEXT_NOT_FOUND', message: 'No target contextId specified' };
+    }
+
+    return this.executeSerializedMutation(targetId, expectedVersion, identity, async (ctx) => {
       if (this.timerMap.has(ctx.contextId)) {
         clearTimeout(this.timerMap.get(ctx.contextId));
         this.timerMap.delete(ctx.contextId);
       }
-    } else {
-      const nextMissing = ctx.missingSlots[0];
-      ctx.clarificationPrompt = ctx.clarificationPrompts?.[nextMissing] || `Укажите ${nextMissing}`;
-      this.scheduleTtlTimer(ctx.contextId, this.defaultTtlMs);
-    }
-
-    return ctx;
+      return {
+        result: true,
+        targetStatus: 'CANCELLED'
+      };
+    });
   }
 
-  public cancelContext(
+  // PLATFORM-016: Serialized TTL Expiry
+  public async expireContext(
     contextId: string,
-    identity: SessionIdentity
-  ): boolean | { status: 'CONTEXT_ACCESS_DENIED' } {
-    this.validateIdentity(identity);
-    const targetId = contextId || this.activeContextId;
-    if (!targetId) return false;
-
-    const ctx = this.contexts.get(targetId);
-    if (!ctx) return false;
-
-    if (ctx.ownerId !== identity.ownerId || ctx.sessionId !== identity.sessionId) {
-      return { status: 'CONTEXT_ACCESS_DENIED' };
-    }
-
-    ctx.status = 'CANCELLED';
-    ctx.updatedAt = Date.now();
-    if (this.timerMap.has(ctx.contextId)) {
-      clearTimeout(this.timerMap.get(ctx.contextId));
-      this.timerMap.delete(ctx.contextId);
-    }
-    return true;
+    identity: SessionIdentity,
+    expectedVersion?: number
+  ): Promise<MutationResult<boolean>> {
+    return this.executeSerializedMutation(contextId, expectedVersion, identity, async (ctx) => {
+      if (ctx.status !== 'WAITING_FOR_SLOT') {
+        return null;
+      }
+      if (this.timerMap.has(contextId)) {
+        clearTimeout(this.timerMap.get(contextId));
+        this.timerMap.delete(contextId);
+      }
+      return {
+        result: true,
+        targetStatus: 'EXPIRED'
+      };
+    });
   }
 
-  public expireContext(contextId: string): boolean {
-    const ctx = this.contexts.get(contextId);
-    if (!ctx || ctx.status !== 'WAITING_FOR_SLOT') return false;
+  // PLATFORM-016: Serialized Generic System Event Ingestion (Domain-Agnostic)
+  public async handleSystemEvent(
+    contextId: string,
+    eventType: string,
+    eventPayload: Record<string, any>,
+    identity: SessionIdentity,
+    expectedVersion?: number
+  ): Promise<MutationResult<{ handled: boolean; eventType: string; context: DialogueContext }>> {
+    return this.executeSerializedMutation(contextId, expectedVersion, identity, async (ctx) => {
+      const isTerminalCancel = ['CANCEL', 'CANCELLED', 'ORDER_CANCELLED', 'ABORT'].includes(eventType.toUpperCase());
+      const isTerminalFinish = ['FINISH', 'TRIP_FINISHED', 'ORDER_FINISHED', 'TERMINATE'].includes(eventType.toUpperCase());
 
-    ctx.status = 'EXPIRED';
-    ctx.updatedAt = Date.now();
-    if (this.timerMap.has(contextId)) {
-      clearTimeout(this.timerMap.get(contextId));
-      this.timerMap.delete(contextId);
-    }
-    return true;
+      if (isTerminalCancel) {
+        if (this.timerMap.has(ctx.contextId)) {
+          clearTimeout(this.timerMap.get(ctx.contextId));
+          this.timerMap.delete(ctx.contextId);
+        }
+        ctx.status = 'CANCELLED';
+      } else if (isTerminalFinish) {
+        if (this.timerMap.has(ctx.contextId)) {
+          clearTimeout(this.timerMap.get(ctx.contextId));
+          this.timerMap.delete(ctx.contextId);
+        }
+        ctx.status = 'COMPLETED';
+      }
+
+      return {
+        result: {
+          handled: true,
+          eventType,
+          context: { ...ctx, slots: { ...ctx.slots }, missingSlots: [...ctx.missingSlots] }
+        }
+      };
+    });
   }
 
-  // --- PLATFORM-015: Action Dispatch Reliability Layer ---
+  // --- PLATFORM-015/016: Action Dispatch & Reliability Engine ---
 
   public createExecution(
     ctx: DialogueContext,
@@ -435,27 +558,22 @@ export class DialogueStateManager {
       throw new Error('SECURITY_VIOLATION: Cannot dispatch cross-session execution');
     }
 
-    // Payload Immutability check
     if (JSON.stringify(execution.payload) !== JSON.stringify(payload)) {
       throw new Error('CONTRACT_VIOLATION: Payload cannot be mutated for same executionId');
     }
 
-    // Idempotent duplicate check: already completed
     if (execution.status === 'SUCCEEDED') {
       return { status: 'SUCCEEDED', executionId: execution.executionId, attempt: execution.attempt };
     }
 
-    // HIGH-6: Terminal FAILED execution cannot be directly re-dispatched
     if (execution.status === 'FAILED') {
       throw new Error(`CONTRACT_VIOLATION: Cannot dispatch terminal FAILED execution "${executionId}". A new executionId must be created.`);
     }
 
-    // HIGH-4 & HIGH-7: UNKNOWN execution requires explicit reconciliation before retry
     if (execution.status === 'UNKNOWN') {
       throw new Error(`CONTRACT_VIOLATION: Execution "${executionId}" is in UNKNOWN state. Explicit reconciliation is required before retry.`);
     }
 
-    // Concurrent duplicate handling
     if (execution.status === 'DISPATCHING') {
       return { status: 'UNKNOWN', executionId: execution.executionId, errorCode: 'ALREADY_IN_PROGRESS', attempt: execution.attempt };
     }
@@ -464,6 +582,12 @@ export class DialogueStateManager {
     if (!ctx) {
       throw new Error(`CONTRACT_VIOLATION: Context "${execution.contextId}" not found`);
     }
+
+    // PLATFORM-016: Serialized Dispatch State Transition
+    await this.executeSerializedMutation(ctx.contextId, undefined, identity, async (c) => {
+      c.status = 'DISPATCHING';
+      return { result: true };
+    });
 
     let currentAttempt = execution.attempt;
     let lastResult: DispatchResult = { status: 'UNKNOWN', executionId, errorCode: 'INIT', attempt: currentAttempt };
@@ -474,14 +598,14 @@ export class DialogueStateManager {
       execution.status = 'DISPATCHING';
       execution.updatedAt = Date.now();
 
-      ctx.status = 'DISPATCHING';
-      ctx.updatedAt = Date.now();
-
       if (!this.actionDispatcher) {
         execution.status = 'FAILED';
         execution.errorCode = 'DISPATCHER_NOT_CONFIGURED';
         execution.updatedAt = Date.now();
-        ctx.status = 'WAITING_FOR_SLOT';
+        await this.executeSerializedMutation(ctx.contextId, undefined, identity, async (c) => {
+          c.status = 'WAITING_FOR_SLOT';
+          return { result: true };
+        });
         return {
           status: 'FAILED',
           executionId: execution.executionId,
@@ -497,12 +621,14 @@ export class DialogueStateManager {
           execution
         );
 
-        // HIGH-5: Strict validation of returned execution identity & attempt
         if (result.executionId !== execution.executionId || result.attempt !== execution.attempt) {
           execution.status = 'FAILED';
           execution.errorCode = 'DISPATCHER_IDENTITY_MISMATCH';
-          ctx.status = 'WAITING_FOR_SLOT';
-          throw new Error(`CONTRACT_VIOLATION: ActionDispatcher returned mismatched identity. Expected executionId=${execution.executionId}, attempt=${execution.attempt}; Received executionId=${result.executionId}, attempt=${result.attempt}`);
+          await this.executeSerializedMutation(ctx.contextId, undefined, identity, async (c) => {
+            c.status = 'WAITING_FOR_SLOT';
+            return { result: true };
+          });
+          throw new Error(`CONTRACT_VIOLATION: ActionDispatcher returned mismatched identity.`);
         }
 
         lastResult = result;
@@ -510,7 +636,10 @@ export class DialogueStateManager {
 
         if (result.status === 'SUCCEEDED') {
           execution.status = 'SUCCEEDED';
-          ctx.status = 'COMPLETED';
+          await this.executeSerializedMutation(ctx.contextId, undefined, identity, async (c) => {
+            c.status = 'COMPLETED';
+            return { result: true };
+          });
           return result;
         }
 
@@ -518,7 +647,10 @@ export class DialogueStateManager {
           execution.errorCode = result.errorCode;
           if (!this.retryPolicy.retryableErrors.includes(result.errorCode)) {
             execution.status = 'FAILED';
-            ctx.status = 'WAITING_FOR_SLOT';
+            await this.executeSerializedMutation(ctx.contextId, undefined, identity, async (c) => {
+              c.status = 'WAITING_FOR_SLOT';
+              return { result: true };
+            });
             return result;
           }
         }
@@ -526,7 +658,10 @@ export class DialogueStateManager {
         if (result.status === 'UNKNOWN') {
           execution.status = 'UNKNOWN';
           execution.errorCode = result.errorCode;
-          ctx.status = 'WAITING_FOR_SLOT';
+          await this.executeSerializedMutation(ctx.contextId, undefined, identity, async (c) => {
+            c.status = 'WAITING_FOR_SLOT';
+            return { result: true };
+          });
           return result;
         }
       } catch (err: any) {
@@ -539,7 +674,10 @@ export class DialogueStateManager {
 
         if (!this.retryPolicy.retryableErrors.includes(code)) {
           execution.status = 'FAILED';
-          ctx.status = 'WAITING_FOR_SLOT';
+          await this.executeSerializedMutation(ctx.contextId, undefined, identity, async (c) => {
+            c.status = 'WAITING_FOR_SLOT';
+            return { result: true };
+          });
           return lastResult;
         }
       }
@@ -547,21 +685,26 @@ export class DialogueStateManager {
 
     execution.status = lastResult.status === 'SUCCEEDED' ? 'SUCCEEDED' : 'FAILED';
     if (execution.status === 'SUCCEEDED') {
-      ctx.status = 'COMPLETED';
+      await this.executeSerializedMutation(ctx.contextId, undefined, identity, async (c) => {
+        c.status = 'COMPLETED';
+        return { result: true };
+      });
     } else {
-      ctx.status = 'WAITING_FOR_SLOT';
+      await this.executeSerializedMutation(ctx.contextId, undefined, identity, async (c) => {
+        c.status = 'WAITING_FOR_SLOT';
+        return { result: true };
+      });
       execution.errorCode = lastResult.errorCode || 'MAX_RETRIES_EXCEEDED';
     }
     return lastResult;
   }
 
-  // HIGH-4 & HIGH-7: Explicit reconciliation policy for UNKNOWN execution state
-  public reconcileExecution(
+  public async reconcileExecution(
     executionId: string,
     resolvedStatus: 'SUCCEEDED' | 'FAILED',
     identity: SessionIdentity,
     errorCode?: string
-  ): ActionExecution {
+  ): Promise<ActionExecution> {
     this.validateIdentity(identity);
     const execution = this.executions.get(executionId);
     if (!execution) {
@@ -582,12 +725,10 @@ export class DialogueStateManager {
 
     const ctx = this.contexts.get(execution.contextId);
     if (ctx) {
-      if (resolvedStatus === 'SUCCEEDED') {
-        ctx.status = 'COMPLETED';
-      } else {
-        ctx.status = 'WAITING_FOR_SLOT';
-      }
-      ctx.updatedAt = Date.now();
+      await this.executeSerializedMutation(ctx.contextId, undefined, identity, async (c) => {
+        c.status = resolvedStatus === 'SUCCEEDED' ? 'COMPLETED' : 'WAITING_FOR_SLOT';
+        return { result: true };
+      });
     }
 
     return execution;
@@ -600,13 +741,13 @@ export class DialogueStateManager {
     if (exec.ownerId !== identity.ownerId || exec.sessionId !== identity.sessionId) {
       return undefined;
     }
-    return exec;
+    return { ...exec, payload: { ...exec.payload } };
   }
 
   public getExecutionLogs(identity: SessionIdentity): ActionExecution[] {
     this.validateIdentity(identity);
-    return Array.from(this.executions.values()).filter(
-      l => l.ownerId === identity.ownerId && l.sessionId === identity.sessionId
-    );
+    return Array.from(this.executions.values())
+      .filter(l => l.ownerId === identity.ownerId && l.sessionId === identity.sessionId)
+      .map(l => ({ ...l, payload: { ...l.payload } }));
   }
 }
