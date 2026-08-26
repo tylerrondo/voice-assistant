@@ -1,4 +1,4 @@
-import { DialogueStateManager, RoutingResult, ActionDispatcher, SessionIdentity, OfferDefinition } from './dialogue-manager';
+import { DialogueStateManager, RoutingResult, ActionDispatcher, SessionIdentity, OfferDefinition, DialogueContext } from './dialogue-manager';
 
 export interface SlotExtractorDefinition {
   type: 'integer' | 'enum' | 'string';
@@ -16,7 +16,7 @@ export interface ScenarioStep {
 }
 
 export interface ScenarioQueryEvaluation {
-  kind: 'compare' | 'query_attribute' | 'select_reference';
+  kind: 'compare' | 'query_attribute';
   attribute?: string;
   order?: 'min' | 'max';
   targetIndex?: number;
@@ -48,7 +48,6 @@ export interface ScenarioSet {
   id: string;
   name: string;
   scenarios: ScenarioDefinition[];
-  defaultOffers?: OfferDefinition[];
 }
 
 export type IntentResolutionResult =
@@ -65,7 +64,6 @@ export class VoiceChannel {
   private dialogueManager: DialogueStateManager;
   private scenarioRegistry: ScenarioDefinition[] = [];
   private activeScenarioSetId: string = '';
-  private defaultOffers?: OfferDefinition[];
 
   constructor(dialogueManager: DialogueStateManager) {
     this.dialogueManager = dialogueManager;
@@ -104,7 +102,6 @@ export class VoiceChannel {
 
     this.scenarioRegistry = [...scenarioSet.scenarios];
     this.activeScenarioSetId = scenarioSet.id;
-    this.defaultOffers = scenarioSet.defaultOffers;
   }
 
   public getActiveScenarioSetId(): string {
@@ -233,57 +230,7 @@ export class VoiceChannel {
     return { status: 'RESOLVED', slots: { [highest[0].slotName]: highest[0].value } };
   }
 
-  // Pure generic index/attribute resolution against OfferSet (Zero OfferId hardcode)
-  private resolveOfferFromOffers(phrase: string, offers?: OfferDefinition[]): {
-    status: 'RESOLVED' | 'OFFER_UNAVAILABLE' | 'AMBIGUOUS_OFFER' | 'NO_MATCH';
-    offerId?: string;
-    offer?: OfferDefinition;
-    candidates?: OfferDefinition[];
-    prompt?: string;
-  } {
-    if (!offers || offers.length === 0) {
-      return { status: 'NO_MATCH' };
-    }
-
-    const text = phrase.trim().toLowerCase();
-
-    // Natural index extraction
-    let targetIndex: number | undefined;
-    if (text.includes('перв') || text.includes('1')) targetIndex = 1;
-    else if (text.includes('втор') || text.includes('2')) targetIndex = 2;
-    else if (text.includes('трет') || text.includes('3')) targetIndex = 3;
-
-    if (text.includes('подешевле') || text.includes('дешев')) {
-      const available = offers.filter(o => o.status === 'AVAILABLE');
-      if (available.length > 1) {
-        return {
-          status: 'AMBIGUOUS_OFFER',
-          candidates: available,
-          prompt: 'Есть несколько подходящих вариантов. Выберите, пожалуйста: первый, второй или третий?'
-        };
-      }
-    }
-
-    let targetOffer: OfferDefinition | undefined;
-    if (targetIndex !== undefined) {
-      targetOffer = offers.find(o => o.index === targetIndex);
-    } else {
-      // Attribute match (e.g. comfort vehicleType)
-      targetOffer = offers.find(o => o.vehicleType && text.includes(o.vehicleType.toLowerCase()));
-    }
-
-    if (!targetOffer) {
-      return { status: 'NO_MATCH' };
-    }
-
-    if (targetOffer.status === 'UNAVAILABLE') {
-      return { status: 'OFFER_UNAVAILABLE', offerId: targetOffer.offerId, offer: targetOffer };
-    }
-
-    return { status: 'RESOLVED', offerId: targetOffer.offerId, offer: targetOffer };
-  }
-
-  // Pure generic evaluation of query/comparison scenarios based entirely on scenario.evaluation descriptor
+  // Pure generic evaluation of query/comparison descriptors with safe null/undefined/NaN handling (HIGH-3)
   private evaluateScenarioQuery(sc: ScenarioDefinition, offers: OfferDefinition[]): any {
     const evalConfig = sc.evaluation;
     if (!evalConfig) {
@@ -292,16 +239,31 @@ export class VoiceChannel {
 
     if (evalConfig.kind === 'compare' && evalConfig.attribute) {
       const attr = evalConfig.attribute as keyof OfferDefinition;
-      const available = [...offers].filter(o => o.status === 'AVAILABLE');
-      if (available.length === 0) return { status: 'NO_MATCH' };
 
-      available.sort((a, b) => {
-        const valA = Number(a[attr]) || 0;
-        const valB = Number(b[attr]) || 0;
+      // Safe filtering of valid numeric values (HIGH-3: no silent coercion of null/undefined/NaN to 0)
+      const validOffers = [...offers].filter(o => {
+        if (o.status !== 'AVAILABLE') return false;
+        const val = o[attr];
+        if (val === null || val === undefined || val === '') return false;
+        const num = Number(val);
+        return !isNaN(num) && isFinite(num);
+      });
+
+      if (validOffers.length === 0) {
+        return {
+          status: 'INVALID_OFFER_DATA',
+          intent: sc.intent,
+          message: `Attribute "${evalConfig.attribute}" is missing or invalid in available candidate offers.`
+        };
+      }
+
+      validOffers.sort((a, b) => {
+        const valA = Number(a[attr]);
+        const valB = Number(b[attr]);
         return evalConfig.order === 'max' ? valB - valA : valA - valB;
       });
 
-      const best = available[0];
+      const best = validOffers[0];
       let responseText = evalConfig.responseTemplate || '';
       responseText = responseText
         .replace('{{offerId}}', best.offerId)
@@ -344,6 +306,53 @@ export class VoiceChannel {
     return { status: 'RESOLVED', intent: sc.intent, scenarioId: sc.id };
   }
 
+  // Resolves slot extractions dynamically against context offers with zero language or domain hardcode (BLOCKER-1)
+  private resolveOffersFromExtractedSlots(
+    extractedSlots: Record<string, any>,
+    offers: OfferDefinition[],
+    ambiguityPrompt?: string
+  ): {
+    status: 'RESOLVED' | 'OFFER_UNAVAILABLE' | 'AMBIGUOUS_SLOT' | 'NO_MATCH';
+    offerId?: string;
+    offer?: OfferDefinition;
+    candidates?: any[];
+    prompt?: string;
+  } {
+    // 1. Ambiguous Selection Criteria (e.g. CHEAPEST across multiple options)
+    if (extractedSlots.ambiguousSelectionCriteria) {
+      const available = offers.filter(o => o.status === 'AVAILABLE');
+      if (available.length > 1) {
+        return {
+          status: 'AMBIGUOUS_SLOT',
+          candidates: available.map(c => ({ slotName: 'selectedOfferId', value: c.offerId, scenarioId: 'sc-select-passenger-offer' })),
+          prompt: ambiguityPrompt
+        };
+      }
+    }
+
+    let targetOffer: OfferDefinition | undefined;
+
+    // 2. Index-based resolution (e.g. targetOfferIndex = "1" | "2" | "3")
+    if (extractedSlots.targetOfferIndex !== undefined) {
+      const idx = Number(extractedSlots.targetOfferIndex);
+      targetOffer = offers.find(o => o.index === idx);
+    }
+    // 3. Attribute-based resolution (e.g. targetVehicleType = "comfort")
+    else if (extractedSlots.targetVehicleType !== undefined) {
+      targetOffer = offers.find(o => o.vehicleType && o.vehicleType.toLowerCase() === String(extractedSlots.targetVehicleType).toLowerCase());
+    }
+
+    if (!targetOffer) {
+      return { status: 'NO_MATCH' };
+    }
+
+    if (targetOffer.status === 'UNAVAILABLE') {
+      return { status: 'OFFER_UNAVAILABLE', offerId: targetOffer.offerId, offer: targetOffer };
+    }
+
+    return { status: 'RESOLVED', offerId: targetOffer.offerId, offer: targetOffer };
+  }
+
   public async handleIncomingVoice(phrase: string, identity: SessionIdentity): Promise<any> {
     if (!identity || !identity.ownerId || !identity.sessionId) {
       throw new Error('CONTRACT_VIOLATION: SessionIdentity is strictly required for handleIncomingVoice');
@@ -381,9 +390,16 @@ export class VoiceChannel {
     // 2. Intent Resolution
     const intentRes = this.resolveIntent(text);
 
-    // BLOCKER-1 & BLOCKER-2: Pure declarative comparison evaluation with Multi-Context Ambiguity Guard
+    // BLOCKER-2: Pure declarative comparison evaluation against active contexts. ZERO defaultOffers fallback!
     if (intentRes.status === 'RESOLVED' && intentRes.scenario.evaluation) {
       const activeWaiting = this.dialogueManager.listContexts(identity).filter(c => c.status === 'WAITING_FOR_SLOT');
+
+      if (activeWaiting.length === 0) {
+        return {
+          status: 'CONTEXT_REQUIRED',
+          message: 'No active offer context found for comparison query'
+        };
+      }
 
       if (activeWaiting.length > 1) {
         return {
@@ -392,51 +408,75 @@ export class VoiceChannel {
         };
       }
 
-      const currentOffers = activeWaiting.length === 1 && activeWaiting[0].offers ? activeWaiting[0].offers : this.defaultOffers;
-      if (currentOffers && currentOffers.length > 0) {
-        return this.evaluateScenarioQuery(intentRes.scenario, currentOffers);
+      const currentCtx = activeWaiting[0];
+      if (!currentCtx.offers || currentCtx.offers.length === 0) {
+        return { status: 'NO_MATCH' };
       }
+
+      return this.evaluateScenarioQuery(intentRes.scenario, currentCtx.offers);
     }
 
-    // 3. Dynamic Offer Selection against active Context OfferSet
+    // 3. Dynamic Offer Selection using declarative slot extractors (BLOCKER-1 & BLOCKER-2)
     const activeWaiting = this.dialogueManager.listContexts(identity).filter(c => c.status === 'WAITING_FOR_SLOT');
+
     if (activeWaiting.length === 1) {
-      const currentOffers = activeWaiting[0].offers || this.defaultOffers;
-      if (currentOffers && currentOffers.length > 0) {
-        const offerResolution = this.resolveOfferFromOffers(text, currentOffers);
+      const activeCtx = activeWaiting[0];
+      const scenario = this.getDeterministicScenarioForIntent(activeCtx.intent);
 
-        if (offerResolution.status === 'AMBIGUOUS_OFFER') {
-          return {
-            status: 'AMBIGUOUS_SLOT',
-            candidates: offerResolution.candidates?.map(c => ({ slotName: 'selectedOfferId', value: c.offerId, scenarioId: 'sc-select-passenger-offer' })),
-            clarificationPrompt: offerResolution.prompt
-          };
+      if (scenario && scenario.slotExtractors && activeCtx.offers && activeCtx.offers.length > 0) {
+        const slotRes = this.extractSlotsDeterministically(
+          text,
+          scenario.slotExtractors,
+          scenario.id,
+          scenario.ambiguityPrompt?.template
+        );
+
+        if (slotRes.status === 'AMBIGUOUS_SLOT') {
+          return slotRes;
         }
 
-        if (offerResolution.status === 'OFFER_UNAVAILABLE') {
-          return {
-            status: 'OFFER_UNAVAILABLE',
-            offerId: offerResolution.offerId,
-            message: `Предложение ${offerResolution.offerId} более недоступно.`
-          };
-        }
+        if (slotRes.status === 'RESOLVED' && Object.keys(slotRes.slots).length > 0) {
+          const offerResolution = this.resolveOffersFromExtractedSlots(
+            slotRes.slots,
+            activeCtx.offers,
+            scenario.ambiguityPrompt?.template
+          );
 
-        if (offerResolution.status === 'RESOLVED' && offerResolution.offerId) {
-          const activeCtx = activeWaiting[0];
-          const fillRes = await this.dialogueManager.fillSlot('selectedOfferId', offerResolution.offerId, activeCtx.contextId, identity);
-          if (fillRes.success) {
-            return fillRes.data;
+          if (offerResolution.status === 'AMBIGUOUS_SLOT') {
+            return {
+              status: 'AMBIGUOUS_SLOT',
+              candidates: offerResolution.candidates,
+              clarificationPrompt: offerResolution.prompt
+            };
+          }
+
+          if (offerResolution.status === 'OFFER_UNAVAILABLE') {
+            return {
+              status: 'OFFER_UNAVAILABLE',
+              offerId: offerResolution.offerId,
+              message: `Предложение ${offerResolution.offerId} более недоступно.`
+            };
+          }
+
+          if (offerResolution.status === 'RESOLVED' && offerResolution.offerId) {
+            const fillRes = await this.dialogueManager.fillSlot('selectedOfferId', offerResolution.offerId, activeCtx.contextId, identity);
+            if (fillRes.success) {
+              return fillRes.data;
+            }
           }
         }
       }
     } else if (activeWaiting.length > 1) {
-      // Check if user is referencing an offer while having multiple contexts without specifying context
-      const isIndexReference = text.includes('перв') || text.includes('втор') || text.includes('трет') || text.includes('подешев');
-      if (isIndexReference) {
-        return {
-          status: 'AMBIGUOUS_CONTEXT',
-          candidateContextIds: activeWaiting.map(c => c.contextId)
-        };
+      // Check if user is referencing slots while having multiple contexts without specifying context
+      const anyScenario = this.scenarioRegistry.find(s => s.slotExtractors);
+      if (anyScenario?.slotExtractors) {
+        const testSlot = this.extractSlotsDeterministically(text, anyScenario.slotExtractors, anyScenario.id);
+        if (testSlot.status === 'RESOLVED' && (testSlot.slots.targetOfferIndex !== undefined || testSlot.slots.ambiguousSelectionCriteria !== undefined)) {
+          return {
+            status: 'AMBIGUOUS_CONTEXT',
+            candidateContextIds: activeWaiting.map(c => c.contextId)
+          };
+        }
       }
     }
 
@@ -463,8 +503,7 @@ export class VoiceChannel {
         actionType,
         prompts,
         identity,
-        sc.id,
-        this.defaultOffers
+        sc.id
       );
 
       if (ctx.missingSlots.length === 0) {
@@ -509,7 +548,9 @@ export class VoiceChannel {
           const extractedSlots = slotRes.slots;
           let mutationRes: any;
           for (const [slotKey, slotVal] of Object.entries(extractedSlots)) {
-            mutationRes = await this.dialogueManager.fillSlot(slotKey, slotVal, ctx.contextId, identity);
+            if (slotKey === 'confirmation') {
+              mutationRes = await this.dialogueManager.fillSlot(slotKey, slotVal, ctx.contextId, identity);
+            }
           }
 
           if (mutationRes && mutationRes.success) {
