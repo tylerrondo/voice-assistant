@@ -43,7 +43,7 @@ test.describe('E2E: PLATFORM-016 Concurrency Control Suite', () => {
     expect(result.logs.length).toBeLessThanOrEqual(1);
   });
 
-  test('E2E-RACE-02: Voice x Cancel race prevents resurrection of cancelled context', async ({ page }) => {
+  test('E2E-RACE-02: Voice x Cancel race prevents resurrection of cancelled context with zero side-effects', async ({ page }) => {
     await setupApp(page);
 
     const result = await page.evaluate(async () => {
@@ -56,12 +56,14 @@ test.describe('E2E: PLATFORM-016 Concurrency Control Suite', () => {
 
       await dm.cancelContext(ctx.contextId, identity);
       const voiceRes = await vc.handleIncomingVoice('картой', identity);
+      const logs = dm.getExecutionLogs(identity);
 
-      return { finalCtx: dm.getContext(ctx.contextId, identity), voiceRes };
+      return { finalCtx: dm.getContext(ctx.contextId, identity), voiceRes, executionLogsCount: logs.length };
     });
 
     expect(result.finalCtx.status).toBe('CANCELLED');
     expect(result.finalCtx.slots.paymentMethod).toBeUndefined();
+    expect(result.executionLogsCount).toBe(0); // Proves zero side effects on loser
   });
 
   test('E2E-RACE-03: Voice x TTL Expiry race maintains strict terminal isolation', async ({ page }) => {
@@ -80,10 +82,12 @@ test.describe('E2E: PLATFORM-016 Concurrency Control Suite', () => {
         vc.handleIncomingVoice('наличными', identity)
       ]);
 
-      return dm.getContext(ctx.contextId, identity);
+      const logs = dm.getExecutionLogs(identity);
+      return { finalCtx: dm.getContext(ctx.contextId, identity), executionLogsCount: logs.length };
     });
 
-    expect(result.status).toBe('EXPIRED');
+    expect(result.finalCtx.status).toBe('EXPIRED');
+    expect(result.executionLogsCount).toBe(0);
   });
 
   test('E2E-RACE-04: Action completion x Declarative System Finish race with full queue lock', async ({ page }) => {
@@ -102,12 +106,13 @@ test.describe('E2E: PLATFORM-016 Concurrency Control Suite', () => {
         dm.handleSystemEvent(ctx.contextId, { type: 'EXTERNAL_FINISH', targetTransition: 'COMPLETE' }, identity)
       ]);
 
-      return { finalCtx: dm.getContext(ctx.contextId, identity), dispRes, sysRes };
+      return { finalCtx: dm.getContext(ctx.contextId, identity), dispRes, sysRes, logs: dm.getExecutionLogs(identity) };
     });
 
     expect(result.finalCtx.status).toBe('COMPLETED');
     expect(result.dispRes.status).toBe('SUCCEEDED');
     expect(result.finalCtx.version).toBeGreaterThanOrEqual(3);
+    expect(result.logs.length).toBe(1);
   });
 
   test('E2E-RACE-05: Concurrent operations on 2 independent contexts execute without interference', async ({ page }) => {
