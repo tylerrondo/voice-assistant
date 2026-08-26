@@ -6,17 +6,19 @@
 
 ---
 
-## 2. Архитектурная модель сериализации (Per-Context Serialization Queue & CAS)
+## 2. Архитектурная модель сериализации (Per-Context Serialization Queue & Full Dispatch Locking)
 
-Вместо глобального mutex, блокирующего всю платформу, реализована **Per-Context Serialization Promise Chain** в сочетании с оптимистическим версионированием **CAS (`version: number`)**:
+Реализована модель **Option B — Full Per-Context Execution & Mutation Queueing** в сочетании с оптимистическим версионированием **CAS (`version: number`)**:
 
 1. **Изоляция независимых контекстов:**  
-   Каждый `contextId` имеет свою независимую цепочку `contextMutationQueues.get(contextId)`. Мутации в `Context A` и `Context B` выполняются параллельно без взаимных блокировок.
-2. **Атомарная инкрементация версий:**  
-   Любое изменение состояния (`fillSlot`, `cancelContext`, `expireContext`, `handleSystemEvent`, `dispatchAction`, `reconcileExecution`) выполняется через атомарную функцию `executeSerializedMutation`. При каждом успешном изменении `version` увеличивается на 1.
-3. **Контроль конфликта версий (`CONTEXT_VERSION_CONFLICT`):**  
-   Если передан `expectedVersion` и он не совпадает с текущим `version`, операция детерминированно отклоняется со статусом `CONTEXT_VERSION_CONFLICT` (Lost updates исключены).
-4. **Защита терминальных состояний (`TERMINAL_STATE`):**  
-   После перехода контекста в `COMPLETED`, `CANCELLED` или `EXPIRED`, любые последующие мутации отклоняются ошибкой `TERMINAL_STATE`.
-5. **Разрешение гонок (Voice x System Events x TTL):**  
-   Все конкурирующие события попадают в FIFO-очередь своего контекста. Первое терминальное событие переводит контекст в терминальный статус, а все последующие конкурирующие события детерминированно отбрасываются без повторного side-effect.
+   Каждый `contextId` имеет изолированную Promise-цепочку `contextMutationQueues.get(contextId)`. Мутации в `Context A` и `Context B` выполняются параллельно без взаимных блокировок.
+2. **Включение Action Dispatch в очередь (Full Lifecycle Lock):**  
+   Вызов `dispatchAction()` захватывает очередь контекста на всё время выполнения (включая асинхронный вызов `actionDispatcher`). Любые параллельно поступающие события (`Cancel`, `TTL`, `SystemEvent`) встают в очередь и обрабатываются строго после завершения текущего Dispatch.
+3. **Детерминированные правила разрешения гонок (Race Winners):**
+   - **Order Dispatch $\to$ Cancel:** Dispatch завершается `SUCCEEDED` $\to$ контекст переходит в `COMPLETED`. Следующий в очереди `Cancel` видит терминальный статус `COMPLETED` и отклоняется с ошибкой `TERMINAL_STATE`.
+   - **Order Cancel $\to$ Dispatch:** `Cancel` переводит контекст в `CANCELLED`. Следующий в очереди `Dispatch` немедленно отклоняется `CONTRACT_VIOLATION: Context is already in terminal status "CANCELLED"` без произведения внешнего side effect.
+   - **TTL $\to$ Action / Action $\to$ TTL:** Аналогично разрешается по порядку попадания в очередь без возникновения промежуточных состояний.
+4. **Декларативные системные события:**  
+   `handleSystemEvent(contextId, eventDescriptor, identity)` принимает декларативное описание `{ type, targetTransition: 'COMPLETE' | 'CANCEL' | 'NONE' }`. Неизвестные события (`NONE`) не вызывают мутаций и возвращают `SYSTEM_EVENT_NOT_HANDLED`.
+5. **Очистка очередей (GC Lifecycle):**  
+   После завершения последнего Promise в очереди контекста запись из `contextMutationQueues` автоматически удаляется.
