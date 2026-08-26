@@ -52,7 +52,6 @@ test.describe('CONTRACT: PLATFORM-016 Concurrency Control Suite', () => {
 
     await dm.fillSlot('slotA', 'valA', ctx.contextId, sessionA); // version becomes 2
 
-    // Attempting update with stale expectedVersion = 1
     const staleRes = await dm.fillSlot('slotA', 'staleVal', ctx.contextId, sessionA, 1);
     expect(staleRes.success).toBe(false);
     expect(staleRes.error).toBe('CONTEXT_VERSION_CONFLICT');
@@ -78,12 +77,12 @@ test.describe('CONTRACT: PLATFORM-016 Concurrency Control Suite', () => {
     expect(fetched?.slots.slotA).toBeUndefined();
   });
 
-  test('CONTRACT-05: Race Voice (fillSlot) x System Event (CANCELLED)', async () => {
+  test('CONTRACT-05: Race Voice (fillSlot) x System Event with declarative transition', async () => {
     const dm = new DialogueStateManager();
     const ctx = dm.createContext('PAYMENT', {}, ['slotA'], 'payment.action', {}, sessionA);
 
     const [resSystem, resVoice] = await Promise.all([
-      dm.handleSystemEvent(ctx.contextId, 'ORDER_CANCELLED', {}, sessionA),
+      dm.handleSystemEvent(ctx.contextId, { type: 'EXTERNAL_CANCEL', targetTransition: 'CANCEL' }, sessionA),
       dm.fillSlot('slotA', 'card', ctx.contextId, sessionA)
     ]);
 
@@ -95,29 +94,40 @@ test.describe('CONTRACT: PLATFORM-016 Concurrency Control Suite', () => {
     expect(fetched?.status).toBe('CANCELLED');
   });
 
-  test('CONTRACT-06: Race Cancel x Action Completion produces exactly one terminal state', async () => {
-    let attempts = 0;
-    const dm = new DialogueStateManager({
+  test('CONTRACT-06: Race Dispatch x Cancel proves deterministic winner in both arrival orders', async () => {
+    // Case 1: Dispatch arrives first -> completes -> subsequent cancel is rejected
+    const dm1 = new DialogueStateManager({
       actionDispatcher: async (ev, ctx, ex) => {
-        attempts++;
         await new Promise(r => setTimeout(r, 20));
         return { status: 'SUCCEEDED', executionId: ex.executionId, attempt: ex.attempt };
       }
     });
+    const ctx1 = dm1.createContext('PAYMENT', { slotA: 'valA' }, ['slotA'], 'payment.action', {}, sessionA);
+    const ex1 = dm1.createExecution(ctx1, sessionA);
 
-    const ctx = dm.createContext('PAYMENT', { slotA: 'valA' }, ['slotA'], 'payment.action', {}, sessionA);
-    const ex = dm.createExecution(ctx, sessionA);
+    const pDispatch = dm1.dispatchAction(ex1.executionId, { slotA: 'valA' }, sessionA);
+    const pCancel = dm1.cancelContext(ctx1.contextId, sessionA);
 
-    const [dispatchRes, cancelRes] = await Promise.all([
-      dm.dispatchAction(ex.executionId, { slotA: 'valA' }, sessionA),
-      dm.cancelContext(ctx.contextId, sessionA)
-    ]);
+    const [dispRes1, cancelRes1] = await Promise.all([pDispatch, pCancel]);
+    expect(dispRes1.status).toBe('SUCCEEDED');
+    expect(cancelRes1.success).toBe(false);
+    expect(cancelRes1.error).toBe('TERMINAL_STATE');
+    expect(dm1.getContext(ctx1.contextId, sessionA)?.status).toBe('COMPLETED');
 
-    expect(dispatchRes.status).toBe('SUCCEEDED');
-    expect(cancelRes.success).toBe(true);
+    // Case 2: Cancel arrives first -> cancels -> subsequent dispatch throws CONTRACT_VIOLATION
+    const dm2 = new DialogueStateManager({
+      actionDispatcher: async (ev, ctx, ex) => ({ status: 'SUCCEEDED', executionId: ex.executionId, attempt: ex.attempt })
+    });
+    const ctx2 = dm2.createContext('PAYMENT', { slotA: 'valA' }, ['slotA'], 'payment.action', {}, sessionA);
+    const ex2 = dm2.createExecution(ctx2, sessionA);
 
-    const fetched = dm.getContext(ctx.contextId, sessionA);
-    expect(['COMPLETED', 'CANCELLED']).toContain(fetched?.status);
+    const cancelFirst = dm2.cancelContext(ctx2.contextId, sessionA);
+    const dispatchSecond = dm2.dispatchAction(ex2.executionId, { slotA: 'valA' }, sessionA);
+
+    const cancelRes2 = await cancelFirst;
+    expect(cancelRes2.success).toBe(true);
+    await expect(dispatchSecond).rejects.toThrow(/CONTRACT_VIOLATION.*terminal status "CANCELLED"/);
+    expect(dm2.getContext(ctx2.contextId, sessionA)?.status).toBe('CANCELLED');
   });
 
   test('CONTRACT-07: Race TTL expiry x Action completion', async () => {
@@ -132,7 +142,7 @@ test.describe('CONTRACT: PLATFORM-016 Concurrency Control Suite', () => {
 
     const [expiryRes, dispatchRes] = await Promise.all([
       dm.expireContext(ctx.contextId, sessionA),
-      dm.dispatchAction(ex.executionId, { slotA: 'valA' }, sessionA)
+      dm.dispatchAction(ex.executionId, { slotA: 'valA' }, sessionA).catch(e => ({ status: 'REJECTED', error: e.message }))
     ]);
 
     expect(expiryRes.success).toBe(true);
@@ -140,18 +150,18 @@ test.describe('CONTRACT: PLATFORM-016 Concurrency Control Suite', () => {
     expect(fetched?.status).toBe('EXPIRED');
   });
 
-  test('CONTRACT-08: Race TTL expiry x Cancel produces deterministic single terminal state', async () => {
+  test('CONTRACT-08: Unhandled system events do not mutate context state or bump version (HIGH-5)', async () => {
     const dm = new DialogueStateManager();
     const ctx = dm.createContext('PAYMENT', {}, ['slotA'], 'payment.action', {}, sessionA);
+    expect(ctx.version).toBe(1);
 
-    const [res1, res2] = await Promise.all([
-      dm.expireContext(ctx.contextId, sessionA),
-      dm.cancelContext(ctx.contextId, sessionA)
-    ]);
+    const res = await dm.handleSystemEvent(ctx.contextId, { type: 'SOME_UNKNOWN_NOTIFICATION', targetTransition: 'NONE' }, sessionA);
+    expect(res.success).toBe(false);
+    expect(res.error).toBe('SYSTEM_EVENT_NOT_HANDLED');
 
-    expect(res1.success || res2.success).toBe(true);
     const fetched = dm.getContext(ctx.contextId, sessionA);
-    expect(['EXPIRED', 'CANCELLED']).toContain(fetched?.status);
+    expect(fetched?.version).toBe(1);
+    expect(fetched?.status).toBe('WAITING_FOR_SLOT');
   });
 
   test('CONTRACT-09: Independent contexts do not block each other', async () => {
