@@ -2,10 +2,9 @@ import { test, expect } from '@playwright/test';
 
 test.describe('E2E: PLATFORM-015 Production Action Dispatch Reliability Suite', () => {
 
-  test('E2E-RELIABILITY-01: End-to-end Voice -> VoiceChannel -> DialogueManager -> Production Composition Dispatcher', async ({ page }) => {
+  test('E2E-RELIABILITY-01: End-to-end Voice -> VoiceChannel -> DialogueManager -> Production Execution Boundary', async ({ page }) => {
     await page.goto('http://localhost:3000');
 
-    // Wait for the production application to mount
     await page.waitForSelector('#voice-app-ready', { timeout: 10000 });
 
     const result = await page.evaluate(async () => {
@@ -22,7 +21,7 @@ test.describe('E2E: PLATFORM-015 Production Action Dispatch Reliability Suite', 
       // 1. Voice phrase triggers VoiceChannel
       const voiceRes = await vc.handleIncomingVoice('заказ 1001', identity);
 
-      // 2. Retrieve the active execution that was automatically dispatched by production dispatcher
+      // 2. Execution automatically dispatched through real execution boundary
       const executions = dm.getExecutionLogs(identity);
       const execution = executions.length > 0 ? executions[executions.length - 1] : null;
 
