@@ -1,8 +1,40 @@
 {
-  "version": 1,
+  "version": 2,
   "id": "scenario-set-passenger-offers-002",
   "name": "Passenger Multi-Offer Dialogue and Selection Scenario",
   "description": "Декларативная спецификация диалога сравнения предложений, ответов на информационные вопросы и выбора оффера пассажиром",
+  "defaultOffers": [
+    {
+      "offerId": "OFFER-A",
+      "index": 1,
+      "driver": "Driver A",
+      "vehicleType": "standard",
+      "etaMinutes": 4,
+      "price": 120,
+      "distanceKm": 1.2,
+      "status": "AVAILABLE"
+    },
+    {
+      "offerId": "OFFER-B",
+      "index": 2,
+      "driver": "Driver B",
+      "vehicleType": "comfort",
+      "etaMinutes": 6,
+      "price": 150,
+      "distanceKm": 0.4,
+      "status": "AVAILABLE"
+    },
+    {
+      "offerId": "OFFER-C",
+      "index": 3,
+      "driver": "Driver C",
+      "vehicleType": "standard",
+      "etaMinutes": 9,
+      "price": 90,
+      "distanceKm": 2.1,
+      "status": "AVAILABLE"
+    }
+  ],
   "scenarios": [
     {
       "id": "sc-compare-fastest",
@@ -83,17 +115,6 @@
         "confirmation"
       ],
       "slotExtractors": {
-        "selectedOfferId": {
-          "type": "enum",
-          "mapping": {
-            "OFFER-A": ["первый", "первую", "первого", "первый вариант", "1"],
-            "OFFER-B": ["второй", "вторую", "второго", "второй вариант", "2", "комфорт"],
-            "OFFER-C": ["третий", "третью", "третьего", "третий вариант", "3", "за девяносто", "за 90"],
-            "OFFER_CHEAP_AMBIGUOUS_1": ["машину подешевле", "подешевле", "дешевую"],
-            "OFFER_CHEAP_AMBIGUOUS_2": ["машину подешевле", "подешевле", "дешевую"]
-          },
-          "priority": 100
-        },
         "confirmation": {
           "type": "enum",
           "mapping": {
