@@ -3,171 +3,84 @@
   "id": "scenario-set-passenger-offers-002",
   "name": "Passenger Multi-Offer Dialogue and Selection Scenario",
   "description": "Декларативная спецификация диалога сравнения предложений, ответов на информационные вопросы и выбора оффера пассажиром",
-  "defaultOffers": [
-    {
-      "offerId": "OFFER-A",
-      "index": 1,
-      "driver": "Driver A",
-      "vehicleType": "standard",
-      "etaMinutes": 4,
-      "price": 120,
-      "distanceKm": 1.2,
-      "status": "AVAILABLE"
-    },
-    {
-      "offerId": "OFFER-B",
-      "index": 2,
-      "driver": "Driver B",
-      "vehicleType": "comfort",
-      "etaMinutes": 6,
-      "price": 150,
-      "distanceKm": 0.4,
-      "status": "AVAILABLE"
-    },
-    {
-      "offerId": "OFFER-C",
-      "index": 3,
-      "driver": "Driver C",
-      "vehicleType": "standard",
-      "etaMinutes": 9,
-      "price": 90,
-      "distanceKm": 2.1,
-      "status": "AVAILABLE"
-    }
-  ],
   "scenarios": [
     {
-      "id": "sc-compare-fastest",
-      "name": "Вопрос о самом быстром предложении",
-      "activation": {
-        "type": "voice",
-        "value": "voice.compare-fastest"
-      },
-      "aliases": ["какой быстрее", "кто быстрее", "быстрее всего", "самый быстрый"],
-      "priority": 100,
-      "intent": "COMPARE_OFFERS_ETA",
-      "evaluation": {
-        "kind": "compare",
+      "id": "sc-compare-eta",
+      "intent": "compare_offers",
+      "triggerPhrases": [
+        "кто приедет быстрее",
+        "какая машина ближе",
+        "самый быстрый вариант",
+        "кто быстрее"
+      ],
+      "query": {
         "attribute": "etaMinutes",
-        "order": "min",
-        "responseTemplate": "Быстрее всего первый вариант — {{etaMinutes}} минуты."
+        "mode": "min"
       },
-      "steps": [
-        {
-          "kind": "end"
-        }
-      ]
+      "responseTemplate": "Быстрее всего {{index}}-й вариант — приедет через {{etaMinutes}} мин."
     },
     {
-      "id": "sc-compare-cheapest",
-      "name": "Вопрос о самом дешевом предложении",
-      "activation": {
-        "type": "voice",
-        "value": "voice.compare-cheapest"
-      },
-      "aliases": ["какой дешевле", "кто дешевле", "дешевле всего", "самый дешевый"],
-      "priority": 100,
-      "intent": "COMPARE_OFFERS_PRICE",
-      "evaluation": {
-        "kind": "compare",
+      "id": "sc-compare-price",
+      "intent": "compare_offers",
+      "triggerPhrases": [
+        "какой дешевле",
+        "самый дешёвый вариант",
+        "кто дешевле",
+        "какая машина дешевле"
+      ],
+      "query": {
         "attribute": "price",
-        "order": "min",
-        "responseTemplate": "Дешевле всего третий вариант — {{price}}."
+        "mode": "min"
       },
-      "steps": [
-        {
-          "kind": "end"
-        }
-      ]
-    },
-    {
-      "id": "sc-query-offer-comfort",
-      "name": "Вопрос о типе автомобиля второго оффера",
-      "activation": {
-        "type": "voice",
-        "value": "voice.query-offer-comfort"
-      },
-      "aliases": ["а второй это комфорт", "второй комфорт", "вторая машина комфорт"],
-      "priority": 100,
-      "intent": "QUERY_OFFER_COMFORT",
-      "evaluation": {
-        "kind": "query_attribute",
-        "targetIndex": 2,
-        "responseTemplate": "Да, второй вариант — {{vehicleType}}."
-      },
-      "steps": [
-        {
-          "kind": "end"
-        }
-      ]
-    },
-    {
-      "id": "sc-query-offer-distance",
-      "name": "Вопрос о расстоянии до машины",
-      "activation": {
-        "type": "voice",
-        "value": "voice.query-offer-distance"
-      },
-      "aliases": ["а далеко находится второй водитель", "далеко второй", "где второй"],
-      "priority": 100,
-      "intent": "QUERY_OFFER_DISTANCE",
-      "evaluation": {
-        "kind": "query_attribute",
-        "targetIndex": 2,
-        "responseTemplate": "Он находится в {{distanceMeters}} метрах."
-      },
-      "steps": [
-        {
-          "kind": "end"
-        }
-      ]
+      "responseTemplate": "Дешевле всего {{index}}-й вариант — {{price}} руб."
     },
     {
       "id": "sc-select-passenger-offer",
-      "name": "Выбор конкретного предложения и подтверждение",
-      "activation": {
-        "type": "voice",
-        "value": "voice.select-offer"
-      },
-      "aliases": ["тогда давайте", "давайте", "выбираю", "выбрать", "хочу"],
-      "priority": 90,
-      "intent": "SELECT_OFFER",
-      "requiredSlots": [
-        "selectedOfferId",
-        "confirmation"
+      "intent": "select_offer",
+      "triggerPhrases": [
+        "тогда давайте второй",
+        "выбираю второй вариант",
+        "поеду на втором",
+        "беру первый",
+        "давайте первый",
+        "давайте третий",
+        "выбираю комфорт",
+        "поеду на комфорте",
+        "да"
       ],
       "slotExtractors": {
         "confirmation": {
           "type": "enum",
-          "mapping": {
-            "CONFIRMED": ["да", "подтверждаю", "давай", "заказывай", "поехали"],
-            "REJECTED": ["нет", "не надо", "отбой"]
-          },
-          "priority": 100
-        }
-      },
-      "clarificationPrompts": {
-        "selectedOfferId": "Какой из предложенных вариантов вы хотите выбрать?",
-        "confirmation": "Подтвердить выбор предложения?"
-      },
-      "ambiguityPrompt": {
-        "template": "Есть несколько подходящих вариантов. Выберите, пожалуйста: первый, второй или третий?"
-      },
-      "steps": [
-        {
-          "kind": "emit",
-          "event": {
-            "type": "passenger.offer.selected",
-            "payload": {
-              "orderId": 5001,
-              "offerId": "{{slots.selectedOfferId}}"
-            }
-          }
+          "values": ["да", "согласен", "подтверждаю", "беру", "поеду"],
+          "patterns": ["\\b(да|согласен|подтверждаю|беру|поеду)\\b"]
         },
-        {
-          "kind": "end"
+        "targetOfferIndex": {
+          "type": "integer",
+          "rules": [
+            { "pattern": "\\bперв(ый|ого|ому|ом)\\b|\\b1\\b", "value": 1 },
+            { "pattern": "\\bвтор(ой|ого|ому|ом)\\b|\\b2\\b", "value": 2 },
+            { "pattern": "\\bтрет(ий|ьего|ьему|ьем)\\b|\\b3\\b", "value": 3 },
+            { "pattern": "\\bчетверт(ый|ого|ому|ом)\\b|\\b4\\b", "value": 4 }
+          ]
+        },
+        "targetVehicleType": {
+          "type": "string",
+          "rules": [
+            { "pattern": "\\b(комфорт|комфорта|комфорте)\\b", "value": "comfort" },
+            { "pattern": "\\b(эконом|эконома|экономе|стандарт)\\b", "value": "standard" },
+            { "pattern": "\\b(бизнес|бизнеса|бизнесе)\\b", "value": "business" }
+          ]
+        },
+        "ambiguousSelectionCriteria": {
+          "type": "string",
+          "rules": [
+            { "pattern": "\\b(быстр(ый|ее)|ближ(е|айший))\\b", "value": "fastest" },
+            { "pattern": "\\b(дешев(ый|ле)|экономн(ый|ее))\\b", "value": "cheapest" }
+          ]
         }
-      ]
+      },
+      "action": "ASSIGN_SELECTED_OFFER",
+      "responseTemplate": "Вы выбрали {{index}}-й вариант ({{vehicleType}}). Машина прибудет через {{etaMinutes}} мин."
     }
   ]
 }
