@@ -1,5 +1,5 @@
 {
-  "version": 3,
+  "version": 4,
   "id": "scenario-set-passenger-offers-002",
   "name": "Passenger Multi-Offer Dialogue and Selection Scenario",
   "description": "Декларативная спецификация диалога сравнения предложений, ответов на информационные вопросы и выбора оффера пассажиром",
@@ -102,6 +102,9 @@
         "поеду на комфорте",
         "давайте машину подешевле",
         "давайте машину побыстрее",
+        "нет, тогда первый",
+        "нет, лучше первый",
+        "нет, лучше второй",
         "второй",
         "третий",
         "первый"
@@ -110,7 +113,10 @@
       "slotExtractors": {
         "confirmation": {
           "type": "enum",
-          "patterns": ["\\b(да|согласен|подтверждаю|верно)\\b"]
+          "rules": [
+            { "pattern": "\\b(да|согласен|подтверждаю|верно)\\b", "value": "CONFIRMED" },
+            { "pattern": "\\b(нет|отмена|не надо|не хочу)\\b", "value": "REJECTED" }
+          ]
         },
         "targetOfferIndex": {
           "type": "integer",
