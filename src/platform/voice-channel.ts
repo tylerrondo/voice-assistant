@@ -305,13 +305,11 @@ export class VoiceChannel {
       }
       responseText = responseText.replace(/{{distanceMeters}}/g, String(distanceMeters));
 
-      // Pure generic attribute return: NO taxi-specific isComfort
+      // Strictly domain-agnostic return
       return {
         status: 'OFFER_QUERY_RESOLVED',
         intent: sc.intent,
         offerId: target.offerId,
-        vehicleType: target.vehicleType,
-        distanceKm: target.distanceKm,
         attributes: { ...target, distanceMeters },
         response: responseText
       };
@@ -473,7 +471,6 @@ export class VoiceChannel {
     // 4. Dynamic Offer Selection using declarative slot extractors
     if (activeWaiting.length === 1) {
       const activeCtx = activeWaiting[0];
-      // Zero hardcode: look up scenario dynamically by intent or context.scenarioId
       const scenario = this.getDeterministicScenarioForIntent(activeCtx.intent) 
         || (activeCtx.scenarioId ? this.scenarioRegistry.find(s => s.id === activeCtx.scenarioId) : undefined);
 
