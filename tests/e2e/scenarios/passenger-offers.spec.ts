@@ -97,11 +97,12 @@ test.describe('E2E: SC-PASS-002 Canonical Multi-Offer Dialogue Suite', () => {
     expect(result.step2Res.bestOfferId).toBe('OFFER-C');
     expect(result.step2Res.price).toBe(90);
 
+    // Domain-agnostic assertions: checking attributes, no taxi-specific isComfort
     expect(result.step3Res.status).toBe('OFFER_QUERY_RESOLVED');
-    expect(result.step3Res.isComfort).toBe(true);
+    expect(result.step3Res.attributes.vehicleType).toBe('comfort');
 
     expect(result.step5Info.status).toBe('OFFER_QUERY_RESOLVED');
-    expect(result.step5Info.distanceKm).toBe(0.4);
+    expect(result.step5Info.attributes.distanceKm).toBe(0.4);
 
     // Exactly one logical execution produced on confirmation
     expect(result.finalLogsCount).toBe(1);
