@@ -305,7 +305,6 @@ export class VoiceChannel {
       }
       responseText = responseText.replace(/{{distanceMeters}}/g, String(distanceMeters));
 
-      // Strictly domain-agnostic return
       return {
         status: 'OFFER_QUERY_RESOLVED',
         intent: sc.intent,
@@ -318,7 +317,7 @@ export class VoiceChannel {
     return { status: 'RESOLVED', intent: sc.intent, scenarioId: sc.id };
   }
 
-  // Resolves slot extractions dynamically against context offers (Zero Scenario ID Hardcode)
+  // Resolves slot extractions dynamically against context offers
   private resolveOffersFromExtractedSlots(
     extractedSlots: Record<string, any>,
     offers: OfferDefinition[],
@@ -445,13 +444,26 @@ export class VoiceChannel {
       }
     }
 
-    // 3. Confirmation Handling ("Да") on Active Waiting Contexts
-    const isConfirmation = /^(да|согласен|подтверждаю|верно)$/i.test(text);
+    // 3. Confirmation and Rejection Handling on Active Waiting Contexts
+    const isPureConfirmation = /^(да|согласен|подтверждаю|верно)$/i.test(text);
+    const isPureRejection = /^(нет|не\s*надо|не\s*хочу)$/i.test(text);
     const activeWaiting = this.dialogueManager.listContexts(identity).filter(c => c.status === 'WAITING_FOR_SLOT');
 
-    if (isConfirmation && activeWaiting.length === 1) {
+    if (activeWaiting.length === 1) {
       const activeCtx = activeWaiting[0];
-      if (activeCtx.slots.selectedOfferId) {
+
+      // Pure Rejection ("нет"): keep context active and DO NOT trigger execution
+      if (isPureRejection) {
+        return {
+          status: 'SELECTION_REJECTED',
+          contextId: activeCtx.contextId,
+          selectedOfferId: activeCtx.slots.selectedOfferId,
+          message: 'Выбор не подтвержден. Вы можете выбрать другой вариант.'
+        };
+      }
+
+      // Pure Confirmation ("да"): fill confirmation and dispatch logical execution
+      if (isPureConfirmation && activeCtx.slots.selectedOfferId) {
         const fillRes = await this.dialogueManager.fillSlot('confirmation', 'CONFIRMED', activeCtx.contextId, identity);
         if (fillRes.success) {
           const updatedCtx = fillRes.data;
@@ -468,7 +480,7 @@ export class VoiceChannel {
       }
     }
 
-    // 4. Dynamic Offer Selection using declarative slot extractors
+    // 4. Dynamic Offer Selection / Replacement using declarative slot extractors
     if (activeWaiting.length === 1) {
       const activeCtx = activeWaiting[0];
       const scenario = this.getDeterministicScenarioForIntent(activeCtx.intent) 
@@ -511,6 +523,7 @@ export class VoiceChannel {
           }
 
           if (offerResolution.status === 'RESOLVED' && offerResolution.offerId) {
+            // Replacement: overwrites previous selectedOfferId and keeps confirmation required
             const fillRes = await this.dialogueManager.fillSlot('selectedOfferId', offerResolution.offerId, activeCtx.contextId, identity);
             if (fillRes.success) {
               return fillRes.data;
