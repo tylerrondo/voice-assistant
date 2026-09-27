@@ -18,7 +18,7 @@
         "attribute": "etaMinutes",
         "mode": "min"
       },
-      "responseTemplate": "Быстрее всего {{index}}-й вариант (первый вариант — {{etaMinutes}} минуты)"
+      "responseTemplate": "Быстрее всего {{index}}-й вариант — {{etaMinutes}} мин."
     },
     {
       "id": "sc-compare-price",
@@ -34,7 +34,7 @@
         "attribute": "price",
         "mode": "min"
       },
-      "responseTemplate": "Дешевле всего {{index}}-й вариант (третий вариант — {{price}})"
+      "responseTemplate": "Дешевле всего {{index}}-й вариант — {{price}} руб."
     },
     {
       "id": "sc-query-comfort",
