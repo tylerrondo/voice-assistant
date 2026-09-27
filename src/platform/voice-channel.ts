@@ -112,7 +112,6 @@ export class VoiceChannel {
       }
     }
 
-    // Har bir ro'yxatdan o'tkazishda yangi ssenariylarni to'ldirish yoki yangilash
     for (const sc of scenarioSet.scenarios) {
       const idx = this.scenarioRegistry.findIndex(s => s.id === sc.id);
       if (idx >= 0) {
@@ -532,7 +531,6 @@ export class VoiceChannel {
 
           // C. Pure Confirmation from Declarative Rule: "confirmation" === "CONFIRMED"
           if (extracted.confirmation === 'CONFIRMED') {
-            // Context has only confirmation left to be satisfied
             const remainingNonConfirm = activeCtx.missingSlots.filter(s => s !== 'confirmation');
             if (remainingNonConfirm.length === 0) {
               const fillRes = await this.dialogueManager.fillSlot('confirmation', 'CONFIRMED', activeCtx.contextId, identity);
