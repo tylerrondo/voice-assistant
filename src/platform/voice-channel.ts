@@ -444,49 +444,15 @@ export class VoiceChannel {
       }
     }
 
-    // 3. Confirmation and Rejection Handling on Active Waiting Contexts
-    const isPureConfirmation = /^(да|согласен|подтверждаю|верно)$/i.test(text);
-    const isPureRejection = /^(нет|не\s*надо|не\s*хочу)$/i.test(text);
+    // 3. Declarative Active Context Processing (Confirmation, Rejection, Selection, Replacement)
     const activeWaiting = this.dialogueManager.listContexts(identity).filter(c => c.status === 'WAITING_FOR_SLOT');
 
-    if (activeWaiting.length === 1) {
-      const activeCtx = activeWaiting[0];
-
-      // Pure Rejection ("нет"): keep context active and DO NOT trigger execution
-      if (isPureRejection) {
-        return {
-          status: 'SELECTION_REJECTED',
-          contextId: activeCtx.contextId,
-          selectedOfferId: activeCtx.slots.selectedOfferId,
-          message: 'Выбор не подтвержден. Вы можете выбрать другой вариант.'
-        };
-      }
-
-      // Pure Confirmation ("да"): fill confirmation and dispatch logical execution
-      if (isPureConfirmation && activeCtx.slots.selectedOfferId) {
-        const fillRes = await this.dialogueManager.fillSlot('confirmation', 'CONFIRMED', activeCtx.contextId, identity);
-        if (fillRes.success) {
-          const updatedCtx = fillRes.data;
-          const exec = this.dialogueManager.createExecution(updatedCtx, identity);
-          const dispatchRes = await this.dialogueManager.dispatchAction(exec.executionId, updatedCtx.slots, identity);
-          return {
-            status: dispatchRes.status,
-            contextId: updatedCtx.contextId,
-            executionId: exec.executionId,
-            attempt: dispatchRes.attempt,
-            context: this.dialogueManager.getContext(updatedCtx.contextId, identity)
-          };
-        }
-      }
-    }
-
-    // 4. Dynamic Offer Selection / Replacement using declarative slot extractors
     if (activeWaiting.length === 1) {
       const activeCtx = activeWaiting[0];
       const scenario = this.getDeterministicScenarioForIntent(activeCtx.intent) 
         || (activeCtx.scenarioId ? this.scenarioRegistry.find(s => s.id === activeCtx.scenarioId) : undefined);
 
-      if (scenario && scenario.slotExtractors && activeCtx.offers && activeCtx.offers.length > 0) {
+      if (scenario && scenario.slotExtractors) {
         const slotRes = this.extractSlotsDeterministically(
           text,
           scenario.slotExtractors,
@@ -499,34 +465,67 @@ export class VoiceChannel {
         }
 
         if (slotRes.status === 'RESOLVED' && Object.keys(slotRes.slots).length > 0) {
-          const offerResolution = this.resolveOffersFromExtractedSlots(
-            slotRes.slots,
-            activeCtx.offers,
-            scenario.id,
-            scenario.ambiguityPrompt?.template
-          );
+          const extracted = slotRes.slots;
 
-          if (offerResolution.status === 'AMBIGUOUS_SLOT') {
+          // A. Selection / Replacement: If offer index or vehicle type was extracted (e.g., "нет, тогда первый")
+          if (extracted.targetOfferIndex !== undefined || extracted.targetVehicleType !== undefined || extracted.ambiguousSelectionCriteria !== undefined) {
+            if (activeCtx.offers && activeCtx.offers.length > 0) {
+              const offerResolution = this.resolveOffersFromExtractedSlots(
+                extracted,
+                activeCtx.offers,
+                scenario.id,
+                scenario.ambiguityPrompt?.template
+              );
+
+              if (offerResolution.status === 'AMBIGUOUS_SLOT') {
+                return {
+                  status: 'AMBIGUOUS_SLOT',
+                  candidates: offerResolution.candidates,
+                  clarificationPrompt: offerResolution.prompt
+                };
+              }
+
+              if (offerResolution.status === 'OFFER_UNAVAILABLE') {
+                return {
+                  status: 'OFFER_UNAVAILABLE',
+                  offerId: offerResolution.offerId,
+                  message: `Предложение ${offerResolution.offerId} более недоступно.`
+                };
+              }
+
+              if (offerResolution.status === 'RESOLVED' && offerResolution.offerId) {
+                const fillRes = await this.dialogueManager.fillSlot('selectedOfferId', offerResolution.offerId, activeCtx.contextId, identity);
+                if (fillRes.success) {
+                  return fillRes.data;
+                }
+              }
+            }
+          }
+
+          // B. Pure Rejection from Declarative Rule: "confirmation" == "REJECTED"
+          if (extracted.confirmation === 'REJECTED') {
             return {
-              status: 'AMBIGUOUS_SLOT',
-              candidates: offerResolution.candidates,
-              clarificationPrompt: offerResolution.prompt
+              status: 'SELECTION_REJECTED',
+              contextId: activeCtx.contextId,
+              selectedOfferId: activeCtx.slots.selectedOfferId,
+              message: 'Выбор не подтвержден. Вы можете выбрать другой вариант.'
             };
           }
 
-          if (offerResolution.status === 'OFFER_UNAVAILABLE') {
-            return {
-              status: 'OFFER_UNAVAILABLE',
-              offerId: offerResolution.offerId,
-              message: `Предложение ${offerResolution.offerId} более недоступно.`
-            };
-          }
-
-          if (offerResolution.status === 'RESOLVED' && offerResolution.offerId) {
-            // Replacement: overwrites previous selectedOfferId and keeps confirmation required
-            const fillRes = await this.dialogueManager.fillSlot('selectedOfferId', offerResolution.offerId, activeCtx.contextId, identity);
+          // C. Pure Confirmation from Declarative Rule: "confirmation" == "CONFIRMED"
+          if (extracted.confirmation === 'CONFIRMED' && activeCtx.slots.selectedOfferId) {
+            const fillRes = await this.dialogueManager.fillSlot('confirmation', 'CONFIRMED', activeCtx.contextId, identity);
             if (fillRes.success) {
-              return fillRes.data;
+              const updatedCtx = fillRes.data;
+              const exec = this.dialogueManager.createExecution(updatedCtx, identity);
+              const dispatchRes = await this.dialogueManager.dispatchAction(exec.executionId, updatedCtx.slots, identity);
+              return {
+                status: dispatchRes.status,
+                contextId: updatedCtx.contextId,
+                executionId: exec.executionId,
+                attempt: dispatchRes.attempt,
+                context: this.dialogueManager.getContext(updatedCtx.contextId, identity)
+              };
             }
           }
         }
@@ -544,7 +543,7 @@ export class VoiceChannel {
       }
     }
 
-    // 5. Initial Context Creation from Scenario
+    // 4. Initial Context Creation from Scenario
     if (intentRes.status === 'RESOLVED') {
       const sc = intentRes.scenario;
       const emitStep = sc.steps?.find(st => st.kind === 'emit');
