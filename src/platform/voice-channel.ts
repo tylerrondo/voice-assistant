@@ -1,8 +1,23 @@
-import { DialogueStateManager, RoutingResult, ActionDispatcher, SessionIdentity, OfferDefinition, DialogueContext } from './dialogue-manager';
+import {
+  DialogueStateManager,
+  ActionDispatcher,
+  type SessionIdentity,
+  type OfferDefinition,
+  type DialogueContext,
+  type RoutingResult
+} from './dialogue-manager';
+
+export interface SlotRule {
+  pattern: string;
+  value: any;
+}
 
 export interface SlotExtractorDefinition {
   type: 'integer' | 'enum' | 'string';
   pattern?: string;
+  values?: string[];
+  patterns?: string[];
+  rules?: SlotRule[];
   mapping?: Record<string, string[]>;
   priority?: number;
 }
@@ -25,11 +40,12 @@ export interface ScenarioQueryEvaluation {
 
 export interface ScenarioDefinition {
   id: string;
-  name: string;
-  activation: {
+  name?: string;
+  activation?: {
     type: 'voice';
     value: string;
   };
+  triggerPhrases?: string[];
   aliases?: string[];
   priority?: number;
   intent: string;
@@ -40,13 +56,19 @@ export interface ScenarioDefinition {
     template: string;
   };
   evaluation?: ScenarioQueryEvaluation;
-  steps: ScenarioStep[];
+  query?: {
+    attribute: string;
+    mode: 'min' | 'max';
+  };
+  responseTemplate?: string;
+  steps?: ScenarioStep[];
 }
 
 export interface ScenarioSet {
   version: number;
   id: string;
   name: string;
+  description?: string;
   scenarios: ScenarioDefinition[];
 }
 
@@ -75,7 +97,6 @@ export class VoiceChannel {
     }
 
     const seenIds = new Set<string>();
-    const seenTriggers = new Set<string>();
 
     for (const sc of scenarioSet.scenarios) {
       if (!sc.id || typeof sc.id !== 'string') {
@@ -88,15 +109,6 @@ export class VoiceChannel {
 
       if (!sc.intent || typeof sc.intent !== 'string') {
         throw new Error(`CONTRACT_VIOLATION: Scenario "${sc.id}" missing intent`);
-      }
-
-      const allTriggers = [sc.activation.value, ...(sc.aliases || [])];
-      for (const trig of allTriggers) {
-        const norm = trig.trim().toLowerCase();
-        if (seenTriggers.has(norm)) {
-          throw new Error(`CONTRACT_VIOLATION: Trigger collision detected for "${norm}" in scenario "${sc.id}"`);
-        }
-        seenTriggers.add(norm);
       }
     }
 
@@ -128,11 +140,14 @@ export class VoiceChannel {
     const matchingScenarios: ScenarioDefinition[] = [];
 
     for (const sc of this.scenarioRegistry) {
-      const allTriggers = [sc.activation.value, ...(sc.aliases || [])];
-      const matches = allTriggers.some(trig => {
-        const clean = trig.replace(/^voice\./, '').replace(/[-_]/g, ' ').toLowerCase();
-        const words = clean.split(/\s+/);
-        return words.every(w => text.includes(w));
+      const triggers: string[] = [];
+      if (sc.activation?.value) triggers.push(sc.activation.value);
+      if (Array.isArray(sc.triggerPhrases)) triggers.push(...sc.triggerPhrases);
+      if (Array.isArray(sc.aliases)) triggers.push(...sc.aliases);
+
+      const matches = triggers.some(trig => {
+        const clean = trig.replace(/^voice\./, '').replace(/[-_]/g, ' ').toLowerCase().trim();
+        return text.includes(clean) || clean.split(/\s+/).every(w => text.includes(w));
       });
 
       if (matches) {
@@ -175,72 +190,70 @@ export class VoiceChannel {
       return { status: 'RESOLVED', slots: {} };
     }
 
-    const candidates: Array<{ slotName: string; value: any; priority: number; scenarioId: string }> = [];
+    const resolvedSlots: Record<string, any> = {};
 
     for (const [slotKey, extractor] of Object.entries(extractors)) {
-      if (extractor.type === 'integer' && extractor.pattern) {
-        const match = text.match(new RegExp(extractor.pattern));
-        if (match) {
-          candidates.push({
-            slotName: slotKey,
-            value: parseInt(match[0], 10),
-            priority: extractor.priority ?? 0,
-            scenarioId
-          });
-        }
-      } else if (extractor.type === 'enum' && extractor.mapping) {
-        for (const [enumValue, synonyms] of Object.entries(extractor.mapping)) {
-          if (synonyms.some(synonym => text.includes(synonym.toLowerCase()))) {
-            candidates.push({
-              slotName: slotKey,
-              value: enumValue,
-              priority: extractor.priority ?? 0,
-              scenarioId
-            });
+      // 1. Rule-based extraction (rules: [{ pattern, value }])
+      if (extractor.rules && Array.isArray(extractor.rules)) {
+        for (const rule of extractor.rules) {
+          if (new RegExp(rule.pattern, 'i').test(text)) {
+            resolvedSlots[slotKey] = rule.value;
+            break;
           }
         }
-      } else if (extractor.type === 'string' && extractor.pattern) {
-        const match = text.match(new RegExp(extractor.pattern));
+      }
+      // 2. Enum with patterns or mapping
+      else if (extractor.type === 'enum') {
+        if (extractor.patterns && Array.isArray(extractor.patterns)) {
+          for (const pat of extractor.patterns) {
+            const match = text.match(new RegExp(pat, 'i'));
+            if (match) {
+              resolvedSlots[slotKey] = match[0].toLowerCase();
+              break;
+            }
+          }
+        } else if (extractor.mapping) {
+          for (const [enumValue, synonyms] of Object.entries(extractor.mapping)) {
+            if (synonyms.some(synonym => text.includes(synonym.toLowerCase()))) {
+              resolvedSlots[slotKey] = enumValue;
+              break;
+            }
+          }
+        }
+      }
+      // 3. Integer extraction
+      else if (extractor.type === 'integer' && extractor.pattern) {
+        const match = text.match(new RegExp(extractor.pattern, 'i'));
         if (match) {
-          candidates.push({
-            slotName: slotKey,
-            value: match[0],
-            priority: extractor.priority ?? 0,
-            scenarioId
-          });
+          resolvedSlots[slotKey] = parseInt(match[0], 10);
+        }
+      }
+      // 4. String extraction
+      else if (extractor.type === 'string' && extractor.pattern) {
+        const match = text.match(new RegExp(extractor.pattern, 'i'));
+        if (match) {
+          resolvedSlots[slotKey] = match[0];
         }
       }
     }
 
-    if (candidates.length === 0) return { status: 'NO_MATCH' };
-    if (candidates.length === 1) return { status: 'RESOLVED', slots: { [candidates[0].slotName]: candidates[0].value } };
-
-    const maxPrio = Math.max(...candidates.map(c => c.priority));
-    const highest = candidates.filter(c => c.priority === maxPrio);
-
-    const distinctKeysOrVals = new Set(highest.map(h => `${h.slotName}:${h.value}`));
-    if (distinctKeysOrVals.size > 1) {
-      return {
-        status: 'AMBIGUOUS_SLOT',
-        candidates: highest.map(h => ({ slotName: h.slotName, value: h.value, scenarioId: h.scenarioId })),
-        clarificationPrompt: ambiguityPromptTemplate
-      };
+    if (Object.keys(resolvedSlots).length === 0) {
+      return { status: 'NO_MATCH' };
     }
 
-    return { status: 'RESOLVED', slots: { [highest[0].slotName]: highest[0].value } };
+    return { status: 'RESOLVED', slots: resolvedSlots };
   }
 
-  // Pure generic evaluation of query/comparison descriptors with safe null/undefined/NaN handling (HIGH-3)
+  // Pure generic evaluation of query/comparison descriptors (HIGH-4: Domain-Agnostic, ZERO taxi semantics)
   private evaluateScenarioQuery(sc: ScenarioDefinition, offers: OfferDefinition[]): any {
-    const evalConfig = sc.evaluation;
-    if (!evalConfig) {
-      return { status: 'RESOLVED', intent: sc.intent, scenarioId: sc.id };
-    }
+    const attribute = sc.evaluation?.attribute || sc.query?.attribute;
+    const mode = sc.evaluation?.order || sc.query?.mode || 'min';
+    const template = sc.evaluation?.responseTemplate || sc.responseTemplate || '';
 
-    if (evalConfig.kind === 'compare' && evalConfig.attribute) {
-      const attr = evalConfig.attribute as keyof OfferDefinition;
+    if (attribute) {
+      const attr = attribute as keyof OfferDefinition;
 
-      // Safe filtering of valid numeric values (HIGH-3: no silent coercion of null/undefined/NaN to 0)
+      // Safe filtering of valid numeric values (HIGH-3)
       const validOffers = [...offers].filter(o => {
         if (o.status !== 'AVAILABLE') return false;
         const val = o[attr];
@@ -253,52 +266,47 @@ export class VoiceChannel {
         return {
           status: 'INVALID_OFFER_DATA',
           intent: sc.intent,
-          message: `Attribute "${evalConfig.attribute}" is missing or invalid in available candidate offers.`
+          message: `Attribute "${attribute}" is missing or invalid in available candidate offers.`
         };
       }
 
       validOffers.sort((a, b) => {
         const valA = Number(a[attr]);
         const valB = Number(b[attr]);
-        return evalConfig.order === 'max' ? valB - valA : valA - valB;
+        return mode === 'max' ? valB - valA : valA - valB;
       });
 
       const best = validOffers[0];
-      let responseText = evalConfig.responseTemplate || '';
-      responseText = responseText
-        .replace('{{offerId}}', best.offerId)
-        .replace('{{index}}', String(best.index))
-        .replace('{{value}}', String(best[attr]))
-        .replace('{{etaMinutes}}', String(best.etaMinutes))
-        .replace('{{price}}', String(best.price));
+      let responseText = template;
+      for (const [key, value] of Object.entries(best)) {
+        responseText = responseText.replace(new RegExp(`{{${key}}}`, 'g'), String(value));
+      }
 
       return {
         status: 'OFFER_COMPARISON_RESOLVED',
         intent: sc.intent,
-        comparisonAttribute: evalConfig.attribute.toUpperCase(),
+        comparisonAttribute: attribute.toUpperCase(),
         bestOfferId: best.offerId,
-        [evalConfig.attribute]: best[attr],
+        [attribute]: best[attr],
         response: responseText
       };
     }
 
-    if (evalConfig.kind === 'query_attribute' && evalConfig.targetIndex !== undefined) {
-      const target = offers.find(o => o.index === evalConfig.targetIndex);
+    if (sc.evaluation?.kind === 'query_attribute' && sc.evaluation.targetIndex !== undefined) {
+      const target = offers.find(o => o.index === sc.evaluation?.targetIndex);
       if (!target) return { status: 'NO_MATCH' };
 
-      let responseText = evalConfig.responseTemplate || '';
-      responseText = responseText
-        .replace('{{offerId}}', target.offerId)
-        .replace('{{vehicleType}}', target.vehicleType)
-        .replace('{{distanceMeters}}', String(target.distanceKm * 1000));
+      let responseText = template;
+      for (const [key, value] of Object.entries(target)) {
+        responseText = responseText.replace(new RegExp(`{{${key}}}`, 'g'), String(value));
+      }
 
+      // HIGH-4 Fix: Generic evaluator returns pure attributes, NO taxi-specific "isComfort"
       return {
         status: 'OFFER_QUERY_RESOLVED',
         intent: sc.intent,
         offerId: target.offerId,
-        vehicleType: target.vehicleType,
-        isComfort: target.vehicleType.toLowerCase() === 'comfort',
-        distanceKm: target.distanceKm,
+        attributes: { ...target },
         response: responseText
       };
     }
@@ -318,7 +326,7 @@ export class VoiceChannel {
     candidates?: any[];
     prompt?: string;
   } {
-    // 1. Ambiguous Selection Criteria (e.g. CHEAPEST across multiple options)
+    // 1. Ambiguous Selection Criteria (e.g. fastest / cheapest across multiple options)
     if (extractedSlots.ambiguousSelectionCriteria) {
       const available = offers.filter(o => o.status === 'AVAILABLE');
       if (available.length > 1) {
@@ -332,7 +340,7 @@ export class VoiceChannel {
 
     let targetOffer: OfferDefinition | undefined;
 
-    // 2. Index-based resolution (e.g. targetOfferIndex = "1" | "2" | "3")
+    // 2. Index-based resolution (e.g. targetOfferIndex = 2 -> OFFER-B)
     if (extractedSlots.targetOfferIndex !== undefined) {
       const idx = Number(extractedSlots.targetOfferIndex);
       targetOffer = offers.find(o => o.index === idx);
@@ -390,8 +398,8 @@ export class VoiceChannel {
     // 2. Intent Resolution
     const intentRes = this.resolveIntent(text);
 
-    // BLOCKER-2: Pure declarative comparison evaluation against active contexts. ZERO defaultOffers fallback!
-    if (intentRes.status === 'RESOLVED' && intentRes.scenario.evaluation) {
+    // Comparison evaluation against active contexts. ZERO defaultOffers fallback!
+    if (intentRes.status === 'RESOLVED' && (intentRes.scenario.evaluation || intentRes.scenario.query)) {
       const activeWaiting = this.dialogueManager.listContexts(identity).filter(c => c.status === 'WAITING_FOR_SLOT');
 
       if (activeWaiting.length === 0) {
@@ -467,7 +475,6 @@ export class VoiceChannel {
         }
       }
     } else if (activeWaiting.length > 1) {
-      // Check if user is referencing slots while having multiple contexts without specifying context
       const anyScenario = this.scenarioRegistry.find(s => s.slotExtractors);
       if (anyScenario?.slotExtractors) {
         const testSlot = this.extractSlotsDeterministically(text, anyScenario.slotExtractors, anyScenario.id);
@@ -483,7 +490,7 @@ export class VoiceChannel {
     // 4. Initial Context Creation from Scenario
     if (intentRes.status === 'RESOLVED') {
       const sc = intentRes.scenario;
-      const emitStep = sc.steps.find(st => st.kind === 'emit');
+      const emitStep = sc.steps?.find(st => st.kind === 'emit');
       const actionType = emitStep?.event?.type || '';
       const requiredSlots = sc.requiredSlots || [];
       const prompts = sc.clarificationPrompts || {};
@@ -525,7 +532,7 @@ export class VoiceChannel {
       return intentRes;
     }
 
-    // 5. General Slot Filling on Active Waiting Contexts (e.g. Confirmation «Да»)
+    // 5. General Slot Filling on Active Waiting Contexts
     if (activeWaiting.length === 0) {
       return { status: 'NO_MATCH' };
     }
