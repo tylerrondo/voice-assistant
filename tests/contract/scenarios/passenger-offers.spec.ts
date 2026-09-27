@@ -86,7 +86,9 @@ test.describe('CONTRACT: SC-PASS-002 Multi-Offer Dialogue & Selection Suite', ()
 
     expect(res.status).toBe('OFFER_QUERY_RESOLVED');
     expect(res.offerId).toBe('OFFER-B');
-    expect(res.vehicleType).toBe('comfort');
+    expect(res.attributes.vehicleType).toBe('comfort');
+    expect((res as any).vehicleType).toBeUndefined();
+    expect((res as any).isComfort).toBeUndefined();
     expect(dm.getExecutionLogs(sessionPassengerA).length).toBe(0);
     expect(dispatcherCalls).toBe(0);
   });
@@ -222,7 +224,8 @@ test.describe('CONTRACT: SC-PASS-002 Multi-Offer Dialogue & Selection Suite', ()
     expect(dm.getActiveState(sessionPassengerA)?.slots.selectedOfferId).toBe('OFFER-B');
 
     const res = await vc.handleIncomingVoice('а далеко находится второй водитель', sessionPassengerA);
-    expect(res.distanceKm).toBe(0.4);
+    expect(res.attributes.distanceKm).toBe(0.4);
+    expect((res as any).distanceKm).toBeUndefined();
 
     const ctx = dm.getActiveState(sessionPassengerA);
     expect(ctx?.slots.selectedOfferId).toBe('OFFER-B');
