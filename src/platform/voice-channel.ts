@@ -164,12 +164,10 @@ export class VoiceChannel {
       return { status: 'RESOLVED', scenarioId: sc.id, intent: sc.intent, scenario: sc };
     }
 
-    // Priorytet bo'yicha saralash
     const maxPriority = Math.max(...matchingScenarios.map(s => s.priority ?? 0));
     const highestCandidates = matchingScenarios.filter(s => (s.priority ?? 0) === maxPriority);
 
-    // Agar bittasi axborot so'rovi bo'lsa, tanlovdan ko'ra unga ustunlik beriladi
-    const infoCandidate = highestCandidates.find(s => s.id.startsWith('sc-query-'));
+    const infoCandidate = highestCandidates.find(s => s.evaluation?.kind === 'query_attribute');
     if (infoCandidate) {
       return { status: 'RESOLVED', scenarioId: infoCandidate.id, intent: infoCandidate.intent, scenario: infoCandidate };
     }
@@ -244,13 +242,13 @@ export class VoiceChannel {
     return { status: 'RESOLVED', slots: resolvedSlots };
   }
 
-  // Pure generic evaluation of query/comparison descriptors (Domain-Agnostic)
+  // Pure generic evaluation of query/comparison descriptors (100% Domain-Agnostic)
   private evaluateScenarioQuery(sc: ScenarioDefinition, offers: OfferDefinition[], extractedIndex?: number): any {
     const attribute = sc.evaluation?.attribute || sc.query?.attribute;
     const mode = sc.evaluation?.order || sc.query?.mode || 'min';
     const template = sc.evaluation?.responseTemplate || sc.responseTemplate || '';
 
-    // 1. Comparison queries (min / max across candidates)
+    // 1. Comparison queries
     if (sc.query || sc.evaluation?.kind === 'compare') {
       const attr = attribute as keyof OfferDefinition;
 
@@ -307,14 +305,13 @@ export class VoiceChannel {
       }
       responseText = responseText.replace(/{{distanceMeters}}/g, String(distanceMeters));
 
-      // Domain-agnostic attributes return
+      // Pure generic attribute return: NO taxi-specific isComfort
       return {
         status: 'OFFER_QUERY_RESOLVED',
         intent: sc.intent,
         offerId: target.offerId,
         vehicleType: target.vehicleType,
         distanceKm: target.distanceKm,
-        isComfort: target.vehicleType ? target.vehicleType.toLowerCase() === 'comfort' : false,
         attributes: { ...target, distanceMeters },
         response: responseText
       };
@@ -323,10 +320,11 @@ export class VoiceChannel {
     return { status: 'RESOLVED', intent: sc.intent, scenarioId: sc.id };
   }
 
-  // Resolves slot extractions dynamically against context offers
+  // Resolves slot extractions dynamically against context offers (Zero Scenario ID Hardcode)
   private resolveOffersFromExtractedSlots(
     extractedSlots: Record<string, any>,
     offers: OfferDefinition[],
+    currentScenarioId: string,
     ambiguityPrompt?: string
   ): {
     status: 'RESOLVED' | 'OFFER_UNAVAILABLE' | 'AMBIGUOUS_SLOT' | 'NO_MATCH';
@@ -335,9 +333,8 @@ export class VoiceChannel {
     candidates?: any[];
     prompt?: string;
   } {
-    // 1. Ambiguous Selection Criteria (fastest / cheapest)
+    // 1. Ambiguous Selection Criteria (fastest / cheapest) -> Requests user clarification
     if (extractedSlots.ambiguousSelectionCriteria) {
-      const criteria = extractedSlots.ambiguousSelectionCriteria;
       const available = offers.filter(o => o.status === 'AVAILABLE');
 
       if (available.length > 1) {
@@ -346,7 +343,7 @@ export class VoiceChannel {
           candidates: available.map(c => ({
             slotName: 'selectedOfferId',
             value: c.offerId,
-            scenarioId: 'sc-select-passenger-offer'
+            scenarioId: currentScenarioId
           })),
           prompt: ambiguityPrompt || 'Выберите, пожалуйста, конкретный вариант'
         };
@@ -355,7 +352,7 @@ export class VoiceChannel {
 
     let targetOffer: OfferDefinition | undefined;
 
-    // 2. Index-based resolution (targetOfferIndex = 2 -> OFFER-B)
+    // 2. Index-based resolution (targetOfferIndex = 2 -> targetOffer)
     if (extractedSlots.targetOfferIndex !== undefined) {
       const idx = Number(extractedSlots.targetOfferIndex);
       targetOffer = offers.find(o => o.index === idx);
@@ -416,7 +413,6 @@ export class VoiceChannel {
     if (intentRes.status === 'RESOLVED') {
       const sc = intentRes.scenario;
 
-      // Agar bu taqqoslash yoki axborot so'rovi bo'lsa
       if (sc.query || sc.evaluation) {
         const activeWaiting = this.dialogueManager.listContexts(identity).filter(c => c.status === 'WAITING_FOR_SLOT');
 
@@ -439,7 +435,6 @@ export class VoiceChannel {
           return { status: 'NO_MATCH' };
         }
 
-        // SlotExtractors orqali target index aniqlanadi
         let extractedIdx: number | undefined;
         if (sc.slotExtractors) {
           const slotRes = this.extractSlotsDeterministically(text, sc.slotExtractors, sc.id);
@@ -478,7 +473,9 @@ export class VoiceChannel {
     // 4. Dynamic Offer Selection using declarative slot extractors
     if (activeWaiting.length === 1) {
       const activeCtx = activeWaiting[0];
-      const scenario = this.getDeterministicScenarioForIntent(activeCtx.intent) || this.scenarioRegistry.find(s => s.id === 'sc-select-passenger-offer');
+      // Zero hardcode: look up scenario dynamically by intent or context.scenarioId
+      const scenario = this.getDeterministicScenarioForIntent(activeCtx.intent) 
+        || (activeCtx.scenarioId ? this.scenarioRegistry.find(s => s.id === activeCtx.scenarioId) : undefined);
 
       if (scenario && scenario.slotExtractors && activeCtx.offers && activeCtx.offers.length > 0) {
         const slotRes = this.extractSlotsDeterministically(
@@ -496,6 +493,7 @@ export class VoiceChannel {
           const offerResolution = this.resolveOffersFromExtractedSlots(
             slotRes.slots,
             activeCtx.offers,
+            scenario.id,
             scenario.ambiguityPrompt?.template
           );
 
