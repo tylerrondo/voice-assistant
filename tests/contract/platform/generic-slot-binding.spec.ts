@@ -1,4 +1,6 @@
 import { test, expect } from '@playwright/test';
+import * as fs from 'fs';
+import * as path from 'path';
 import { DialogueStateManager } from '../../../src/platform/dialogue-manager';
 import { VoiceChannel, type ScenarioSet } from '../../../src/platform/voice-channel';
 
@@ -313,7 +315,6 @@ test.describe('CONTRACT: SC-PLATFORM-002 Generic Slot Binding Portability Suite'
       {},
       sessionUserA,
       'select-item'
-      // offers array omitted completely
     );
 
     expect(ctx.offers).toBeUndefined();
@@ -322,6 +323,25 @@ test.describe('CONTRACT: SC-PLATFORM-002 Generic Slot Binding Portability Suite'
     await vc.handleIncomingVoice('confirm', sessionUserA);
 
     expect(dm.getExecutionLogs(sessionUserA).length).toBe(1);
+  });
+
+  test('GENERIC-09: Архитектурная верификация — в VoiceChannel отсутствуют специальные slot names', () => {
+    const vcPath = path.resolve(__dirname, '../../../src/platform/voice-channel.ts');
+    const vcContent = fs.readFileSync(vcPath, 'utf8');
+
+    // Проверяем, что в коде VoiceChannel нет хардкода специальных доменных имен слотов
+    const forbiddenSlots = [
+      'targetOfferIndex',
+      'targetVehicleType',
+      'ambiguousSelectionCriteria',
+      'selectedItemId',
+      'selectedServiceId'
+    ];
+
+    for (const forbidden of forbiddenSlots) {
+      expect(vcContent).not.toContain(`'${forbidden}'`);
+      expect(vcContent).not.toContain(`"${forbidden}"`);
+    }
   });
 
 });
