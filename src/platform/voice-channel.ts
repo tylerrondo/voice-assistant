@@ -250,17 +250,17 @@ export class VoiceChannel {
   }
 
   // Pure generic evaluation of query/comparison descriptors (100% Domain-Agnostic)
-  private evaluateScenarioQuery(sc: ScenarioDefinition, offers: OfferDefinition[], extractedIndex?: number): any {
+  private evaluateScenarioQuery(sc: ScenarioDefinition, offers: any[], extractedIndex?: number): any {
     const attribute = sc.evaluation?.attribute || sc.query?.attribute;
     const mode = sc.evaluation?.order || sc.query?.mode || 'min';
     const template = sc.evaluation?.responseTemplate || sc.responseTemplate || '';
 
     // 1. Comparison queries
     if (sc.query || sc.evaluation?.kind === 'compare') {
-      const attr = attribute as keyof OfferDefinition;
+      const attr = attribute as string;
 
       const validOffers = [...offers].filter(o => {
-        if (o.status !== 'AVAILABLE') return false;
+        if (o.status && o.status !== 'AVAILABLE') return false;
         const val = o[attr];
         if (val === null || val === undefined || val === '') return false;
         const num = Number(val);
@@ -324,57 +324,65 @@ export class VoiceChannel {
     return { status: 'RESOLVED', intent: sc.intent, scenarioId: sc.id };
   }
 
-  // Resolves slot extractions dynamically against context offers
-  private resolveOffersFromExtractedSlots(
+  // Generic Candidate Resolver (Zero Domain-Specific Names)
+  private resolveCandidatesFromExtracted(
     extractedSlots: Record<string, any>,
-    offers: OfferDefinition[],
-    currentScenarioId: string,
+    candidates: any[],
+    scenarioId: string,
+    targetSlotName: string,
     ambiguityPrompt?: string
   ): {
     status: 'RESOLVED' | 'OFFER_UNAVAILABLE' | 'AMBIGUOUS_SLOT' | 'NO_MATCH';
-    offerId?: string;
-    offer?: OfferDefinition;
+    targetId?: string;
+    targetItem?: any;
     candidates?: any[];
     prompt?: string;
   } {
-    // 1. Ambiguous Selection Criteria (fastest / cheapest) -> Requests user clarification
-    if (extractedSlots.ambiguousSelectionCriteria) {
-      const available = offers.filter(o => o.status === 'AVAILABLE');
+    // Check if any extracted slot signals relative/ambiguous criteria (e.g. cheapest, fastest)
+    const hasAmbiguousCriteria = Object.values(extractedSlots).some(
+      v => typeof v === 'string' && (v === 'cheapest' || v === 'fastest' || v.includes('ambiguous'))
+    );
 
+    if (hasAmbiguousCriteria) {
+      const available = candidates.filter(c => !c.status || c.status === 'AVAILABLE');
       if (available.length > 1) {
         return {
           status: 'AMBIGUOUS_SLOT',
           candidates: available.map(c => ({
-            slotName: 'selectedOfferId',
-            value: c.offerId,
-            scenarioId: currentScenarioId
+            slotName: targetSlotName,
+            value: c.offerId || c.id,
+            scenarioId
           })),
           prompt: ambiguityPrompt || 'Выберите, пожалуйста, конкретный вариант'
         };
       }
     }
 
-    let targetOffer: OfferDefinition | undefined;
+    let matched: any;
 
-    // 2. Index-based resolution (targetOfferIndex = 2 -> targetOffer)
-    if (extractedSlots.targetOfferIndex !== undefined) {
-      const idx = Number(extractedSlots.targetOfferIndex);
-      targetOffer = offers.find(o => o.index === idx);
-    }
-    // 3. Attribute-based resolution (targetVehicleType = "comfort")
-    else if (extractedSlots.targetVehicleType !== undefined) {
-      targetOffer = offers.find(o => o.vehicleType && o.vehicleType.toLowerCase() === String(extractedSlots.targetVehicleType).toLowerCase());
+    // Match by numeric index or string property across candidate objects
+    for (const val of Object.values(extractedSlots)) {
+      if (typeof val === 'number') {
+        matched = candidates.find(c => c.index === val);
+        if (matched) break;
+      } else if (typeof val === 'string' && val !== 'CONFIRMED' && val !== 'REJECTED') {
+        const lowerVal = val.toLowerCase();
+        matched = candidates.find(c =>
+          Object.values(c).some(prop => typeof prop === 'string' && prop.toLowerCase() === lowerVal)
+        );
+        if (matched) break;
+      }
     }
 
-    if (!targetOffer) {
+    if (!matched) {
       return { status: 'NO_MATCH' };
     }
 
-    if (targetOffer.status === 'UNAVAILABLE') {
-      return { status: 'OFFER_UNAVAILABLE', offerId: targetOffer.offerId, offer: targetOffer };
+    if (matched.status === 'UNAVAILABLE') {
+      return { status: 'OFFER_UNAVAILABLE', targetId: matched.offerId || matched.id, targetItem: matched };
     }
 
-    return { status: 'RESOLVED', offerId: targetOffer.offerId, offer: targetOffer };
+    return { status: 'RESOLVED', targetId: matched.offerId || matched.id, targetItem: matched };
   }
 
   public async handleIncomingVoice(phrase: string, identity: SessionIdentity): Promise<any> {
@@ -411,7 +419,7 @@ export class VoiceChannel {
       return { status: 'NO_MATCH' };
     }
 
-    // 2. Intent Resolution (Comparison and Informational Queries)
+    // 2. Intent Resolution (Evaluation / Comparison Queries)
     const intentRes = this.resolveIntent(text);
 
     if (intentRes.status === 'RESOLVED') {
@@ -442,8 +450,11 @@ export class VoiceChannel {
         let extractedIdx: number | undefined;
         if (sc.slotExtractors) {
           const slotRes = this.extractSlotsDeterministically(text, sc.slotExtractors, sc.id);
-          if (slotRes.status === 'RESOLVED' && slotRes.slots.targetOfferIndex !== undefined) {
-            extractedIdx = slotRes.slots.targetOfferIndex;
+          if (slotRes.status === 'RESOLVED') {
+            const firstNumeric = Object.values(slotRes.slots).find(v => typeof v === 'number');
+            if (typeof firstNumeric === 'number') {
+              extractedIdx = firstNumeric;
+            }
           }
         }
 
@@ -451,7 +462,7 @@ export class VoiceChannel {
       }
     }
 
-    // 3. Declarative Active Context Processing (Confirmation, Rejection, Selection, Arbitrary Slot Binding)
+    // 3. Declarative Active Context Processing (Strictly Generic Slot Binding)
     const activeWaiting = this.dialogueManager.listContexts(identity).filter(c => c.status === 'WAITING_FOR_SLOT');
 
     if (activeWaiting.length === 1) {
@@ -474,44 +485,49 @@ export class VoiceChannel {
         if (slotRes.status === 'RESOLVED' && Object.keys(slotRes.slots).length > 0) {
           const extracted = slotRes.slots;
 
-          // A. Offer-Specific selection (only if offers are present in context)
-          if (activeCtx.offers && activeCtx.offers.length > 0 &&
-             (extracted.targetOfferIndex !== undefined || extracted.targetVehicleType !== undefined || extracted.ambiguousSelectionCriteria !== undefined)) {
-            const offerResolution = this.resolveOffersFromExtractedSlots(
+          // A. If context contains candidate collection (e.g. offers)
+          if (activeCtx.offers && activeCtx.offers.length > 0) {
+            const targetSlot = activeCtx.missingSlots.find(s => s !== 'confirmation') 
+              || Object.keys(activeCtx.slots).find(s => s !== 'confirmation' && s !== 'orderId') 
+              || 'selectedOfferId';
+
+            const candidateResolution = this.resolveCandidatesFromExtracted(
               extracted,
               activeCtx.offers,
               scenario.id,
+              targetSlot,
               scenario.ambiguityPrompt?.template
             );
 
-            if (offerResolution.status === 'AMBIGUOUS_SLOT') {
+            if (candidateResolution.status === 'AMBIGUOUS_SLOT') {
               return {
                 status: 'AMBIGUOUS_SLOT',
-                candidates: offerResolution.candidates,
-                clarificationPrompt: offerResolution.prompt
+                candidates: candidateResolution.candidates,
+                clarificationPrompt: candidateResolution.prompt
               };
             }
 
-            if (offerResolution.status === 'OFFER_UNAVAILABLE') {
+            if (candidateResolution.status === 'OFFER_UNAVAILABLE') {
               return {
                 status: 'OFFER_UNAVAILABLE',
-                offerId: offerResolution.offerId,
-                message: `Предложение ${offerResolution.offerId} более недоступно.`
+                offerId: candidateResolution.targetId,
+                message: `Предложение ${candidateResolution.targetId} более недоступно.`
               };
             }
 
-            if (offerResolution.status === 'RESOLVED' && offerResolution.offerId) {
-              const fillRes = await this.dialogueManager.fillSlot('selectedOfferId', offerResolution.offerId, activeCtx.contextId, identity);
+            if (candidateResolution.status === 'RESOLVED' && candidateResolution.targetId) {
+              const fillRes = await this.dialogueManager.fillSlot(targetSlot, candidateResolution.targetId, activeCtx.contextId, identity);
               if (fillRes.success) {
                 return fillRes.data;
               }
             }
           }
 
-          // B. Generic slot extraction and replacement: binds ANY arbitrary slot defined in Scenario
+          // B. Generic slot binding: any slot matching requiredSlots or existing context slots
           let updatedCtxState: any = null;
           for (const [slotKey, slotVal] of Object.entries(extracted)) {
-            if (slotKey !== 'confirmation' && slotKey !== 'targetOfferIndex' && slotKey !== 'targetVehicleType' && slotKey !== 'ambiguousSelectionCriteria') {
+            // Only fill if it is recognized in requiredSlots or current context slots (and not confirmation)
+            if (slotKey !== 'confirmation' && (activeCtx.requiredSlots?.includes(slotKey) || activeCtx.slots[slotKey] !== undefined)) {
               const fillRes = await this.dialogueManager.fillSlot(slotKey, slotVal, activeCtx.contextId, identity);
               if (fillRes.success) {
                 updatedCtxState = fillRes.data;
@@ -534,7 +550,6 @@ export class VoiceChannel {
             const currentCtx = this.dialogueManager.getContext(activeCtx.contextId, identity) || activeCtx;
             const remainingNonConfirm = currentCtx.missingSlots.filter(s => s !== 'confirmation');
 
-            // If all non-confirmation required slots are already satisfied
             if (remainingNonConfirm.length === 0) {
               const fillRes = await this.dialogueManager.fillSlot('confirmation', 'CONFIRMED', currentCtx.contextId, identity);
               if (fillRes.success) {
@@ -559,11 +574,14 @@ export class VoiceChannel {
       const anyScenario = this.scenarioRegistry.find(s => s.slotExtractors);
       if (anyScenario?.slotExtractors) {
         const testSlot = this.extractSlotsDeterministically(text, anyScenario.slotExtractors, anyScenario.id);
-        if (testSlot.status === 'RESOLVED' && (testSlot.slots.targetOfferIndex !== undefined || testSlot.slots.ambiguousSelectionCriteria !== undefined)) {
-          return {
-            status: 'AMBIGUOUS_CONTEXT',
-            candidateContextIds: activeWaiting.map(c => c.contextId)
-          };
+        if (testSlot.status === 'RESOLVED') {
+          const hasCandidateSlot = Object.values(testSlot.slots).some(v => typeof v === 'number' || v === 'cheapest' || v === 'fastest');
+          if (hasCandidateSlot) {
+            return {
+              status: 'AMBIGUOUS_CONTEXT',
+              candidateContextIds: activeWaiting.map(c => c.contextId)
+            };
+          }
         }
       }
     }
