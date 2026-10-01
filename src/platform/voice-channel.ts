@@ -451,7 +451,7 @@ export class VoiceChannel {
       }
     }
 
-    // 3. Declarative Active Context Processing (Confirmation, Rejection, Selection, Replacement)
+    // 3. Declarative Active Context Processing (Confirmation, Rejection, Selection, Arbitrary Slot Binding)
     const activeWaiting = this.dialogueManager.listContexts(identity).filter(c => c.status === 'WAITING_FOR_SLOT');
 
     if (activeWaiting.length === 1) {
@@ -474,82 +474,85 @@ export class VoiceChannel {
         if (slotRes.status === 'RESOLVED' && Object.keys(slotRes.slots).length > 0) {
           const extracted = slotRes.slots;
 
-          // A. Selection / Replacement: If candidate index/value extracted
-          if (extracted.targetOfferIndex !== undefined || extracted.targetVehicleType !== undefined || extracted.ambiguousSelectionCriteria !== undefined) {
-            if (activeCtx.offers && activeCtx.offers.length > 0) {
-              const offerResolution = this.resolveOffersFromExtractedSlots(
-                extracted,
-                activeCtx.offers,
-                scenario.id,
-                scenario.ambiguityPrompt?.template
-              );
+          // A. Offer-Specific selection (only if offers are present in context)
+          if (activeCtx.offers && activeCtx.offers.length > 0 &&
+             (extracted.targetOfferIndex !== undefined || extracted.targetVehicleType !== undefined || extracted.ambiguousSelectionCriteria !== undefined)) {
+            const offerResolution = this.resolveOffersFromExtractedSlots(
+              extracted,
+              activeCtx.offers,
+              scenario.id,
+              scenario.ambiguityPrompt?.template
+            );
 
-              if (offerResolution.status === 'AMBIGUOUS_SLOT') {
-                return {
-                  status: 'AMBIGUOUS_SLOT',
-                  candidates: offerResolution.candidates,
-                  clarificationPrompt: offerResolution.prompt
-                };
-              }
+            if (offerResolution.status === 'AMBIGUOUS_SLOT') {
+              return {
+                status: 'AMBIGUOUS_SLOT',
+                candidates: offerResolution.candidates,
+                clarificationPrompt: offerResolution.prompt
+              };
+            }
 
-              if (offerResolution.status === 'OFFER_UNAVAILABLE') {
-                return {
-                  status: 'OFFER_UNAVAILABLE',
-                  offerId: offerResolution.offerId,
-                  message: `Предложение ${offerResolution.offerId} более недоступно.`
-                };
-              }
+            if (offerResolution.status === 'OFFER_UNAVAILABLE') {
+              return {
+                status: 'OFFER_UNAVAILABLE',
+                offerId: offerResolution.offerId,
+                message: `Предложение ${offerResolution.offerId} более недоступно.`
+              };
+            }
 
-              if (offerResolution.status === 'RESOLVED' && offerResolution.offerId) {
-                const fillRes = await this.dialogueManager.fillSlot('selectedOfferId', offerResolution.offerId, activeCtx.contextId, identity);
-                if (fillRes.success) {
-                  return fillRes.data;
-                }
+            if (offerResolution.status === 'RESOLVED' && offerResolution.offerId) {
+              const fillRes = await this.dialogueManager.fillSlot('selectedOfferId', offerResolution.offerId, activeCtx.contextId, identity);
+              if (fillRes.success) {
+                return fillRes.data;
               }
             }
           }
 
-          // A.2 Generic item selection (e.g. selectedItemId, or any target slot defined in extracted slots)
+          // B. Generic slot extraction and replacement: binds ANY arbitrary slot defined in Scenario
+          let updatedCtxState: any = null;
           for (const [slotKey, slotVal] of Object.entries(extracted)) {
             if (slotKey !== 'confirmation' && slotKey !== 'targetOfferIndex' && slotKey !== 'targetVehicleType' && slotKey !== 'ambiguousSelectionCriteria') {
-              if (activeCtx.missingSlots.includes(slotKey) || activeCtx.slots[slotKey] !== undefined) {
-                await this.dialogueManager.fillSlot(slotKey, slotVal, activeCtx.contextId, identity);
+              const fillRes = await this.dialogueManager.fillSlot(slotKey, slotVal, activeCtx.contextId, identity);
+              if (fillRes.success) {
+                updatedCtxState = fillRes.data;
               }
             }
           }
 
-          // B. Pure Rejection from Declarative Rule: "confirmation" === "REJECTED"
+          // C. Rejection: "confirmation" === "REJECTED"
           if (extracted.confirmation === 'REJECTED') {
             return {
               status: 'SELECTION_REJECTED',
               contextId: activeCtx.contextId,
-              selectedOfferId: activeCtx.slots.selectedOfferId,
-              slots: activeCtx.slots,
+              slots: this.dialogueManager.getContext(activeCtx.contextId, identity)?.slots,
               message: 'Выбор не подтвержден. Вы можете выбрать другой вариант.'
             };
           }
 
-          // C. Pure Confirmation from Declarative Rule: "confirmation" === "CONFIRMED"
+          // D. Confirmation: "confirmation" === "CONFIRMED"
           if (extracted.confirmation === 'CONFIRMED') {
-            const remainingNonConfirm = activeCtx.missingSlots.filter(s => s !== 'confirmation');
+            const currentCtx = this.dialogueManager.getContext(activeCtx.contextId, identity) || activeCtx;
+            const remainingNonConfirm = currentCtx.missingSlots.filter(s => s !== 'confirmation');
+
+            // If all non-confirmation required slots are already satisfied
             if (remainingNonConfirm.length === 0) {
-              const fillRes = await this.dialogueManager.fillSlot('confirmation', 'CONFIRMED', activeCtx.contextId, identity);
+              const fillRes = await this.dialogueManager.fillSlot('confirmation', 'CONFIRMED', currentCtx.contextId, identity);
               if (fillRes.success) {
-                const updatedCtx = fillRes.data;
-                const exec = this.dialogueManager.createExecution(updatedCtx, identity);
-                const dispatchRes = await this.dialogueManager.dispatchAction(exec.executionId, updatedCtx.slots, identity);
+                const updated = fillRes.data;
+                const exec = this.dialogueManager.createExecution(updated, identity);
+                const dispatchRes = await this.dialogueManager.dispatchAction(exec.executionId, updated.slots, identity);
                 return {
                   status: dispatchRes.status,
-                  contextId: updatedCtx.contextId,
+                  contextId: updated.contextId,
                   executionId: exec.executionId,
                   attempt: dispatchRes.attempt,
-                  context: this.dialogueManager.getContext(updatedCtx.contextId, identity)
+                  context: this.dialogueManager.getContext(updated.contextId, identity)
                 };
               }
             }
           }
 
-          return this.dialogueManager.getContext(activeCtx.contextId, identity);
+          return updatedCtxState || this.dialogueManager.getContext(activeCtx.contextId, identity);
         }
       }
     } else if (activeWaiting.length > 1) {
