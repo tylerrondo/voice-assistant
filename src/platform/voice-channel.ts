@@ -487,38 +487,40 @@ export class VoiceChannel {
 
           // A. If context contains candidate collection (e.g. offers)
           if (activeCtx.offers && activeCtx.offers.length > 0) {
+            // Strictly determine target slot from declarative context (no hardcoded fallback)
             const targetSlot = activeCtx.missingSlots.find(s => s !== 'confirmation') 
-              || Object.keys(activeCtx.slots).find(s => s !== 'confirmation' && s !== 'orderId') 
-              || 'selectedOfferId';
+              || activeCtx.requiredSlots?.find(s => s !== 'confirmation');
 
-            const candidateResolution = this.resolveCandidatesFromExtracted(
-              extracted,
-              activeCtx.offers,
-              scenario.id,
-              targetSlot,
-              scenario.ambiguityPrompt?.template
-            );
+            if (targetSlot) {
+              const candidateResolution = this.resolveCandidatesFromExtracted(
+                extracted,
+                activeCtx.offers,
+                scenario.id,
+                targetSlot,
+                scenario.ambiguityPrompt?.template
+              );
 
-            if (candidateResolution.status === 'AMBIGUOUS_SLOT') {
-              return {
-                status: 'AMBIGUOUS_SLOT',
-                candidates: candidateResolution.candidates,
-                clarificationPrompt: candidateResolution.prompt
-              };
-            }
+              if (candidateResolution.status === 'AMBIGUOUS_SLOT') {
+                return {
+                  status: 'AMBIGUOUS_SLOT',
+                  candidates: candidateResolution.candidates,
+                  clarificationPrompt: candidateResolution.prompt
+                };
+              }
 
-            if (candidateResolution.status === 'OFFER_UNAVAILABLE') {
-              return {
-                status: 'OFFER_UNAVAILABLE',
-                offerId: candidateResolution.targetId,
-                message: `Предложение ${candidateResolution.targetId} более недоступно.`
-              };
-            }
+              if (candidateResolution.status === 'OFFER_UNAVAILABLE') {
+                return {
+                  status: 'OFFER_UNAVAILABLE',
+                  offerId: candidateResolution.targetId,
+                  message: `Предложение ${candidateResolution.targetId} более недоступно.`
+                };
+              }
 
-            if (candidateResolution.status === 'RESOLVED' && candidateResolution.targetId) {
-              const fillRes = await this.dialogueManager.fillSlot(targetSlot, candidateResolution.targetId, activeCtx.contextId, identity);
-              if (fillRes.success) {
-                return fillRes.data;
+              if (candidateResolution.status === 'RESOLVED' && candidateResolution.targetId) {
+                const fillRes = await this.dialogueManager.fillSlot(targetSlot, candidateResolution.targetId, activeCtx.contextId, identity);
+                if (fillRes.success) {
+                  return fillRes.data;
+                }
               }
             }
           }
@@ -526,7 +528,6 @@ export class VoiceChannel {
           // B. Generic slot binding: any slot matching requiredSlots or existing context slots
           let updatedCtxState: any = null;
           for (const [slotKey, slotVal] of Object.entries(extracted)) {
-            // Only fill if it is recognized in requiredSlots or current context slots (and not confirmation)
             if (slotKey !== 'confirmation' && (activeCtx.requiredSlots?.includes(slotKey) || activeCtx.slots[slotKey] !== undefined)) {
               const fillRes = await this.dialogueManager.fillSlot(slotKey, slotVal, activeCtx.contextId, identity);
               if (fillRes.success) {
