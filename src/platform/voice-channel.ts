@@ -38,6 +38,14 @@ export interface ScenarioQueryEvaluation {
   responseTemplate?: string;
 }
 
+export interface CandidateBindingDefinition {
+  idField?: string;
+  indexField?: string;
+  statusField?: string;
+  unavailableValue?: string;
+  unavailableTemplate?: string;
+}
+
 export interface ScenarioDefinition {
   id: string;
   name?: string;
@@ -51,6 +59,7 @@ export interface ScenarioDefinition {
   intent: string;
   requiredSlots?: string[];
   slotExtractors?: Record<string, SlotExtractorDefinition>;
+  candidateBinding?: CandidateBindingDefinition;
   clarificationPrompts?: Record<string, string>;
   ambiguityPrompt?: {
     template: string;
@@ -71,6 +80,14 @@ export interface ScenarioSet {
   description?: string;
   scenarios: ScenarioDefinition[];
 }
+
+export type CandidateItem = Record<string, unknown>;
+
+export type CandidateResolutionResult =
+  | { status: 'RESOLVED'; targetId: string; targetItem: CandidateItem }
+  | { status: 'CANDIDATE_UNAVAILABLE'; targetId: string; targetItem: CandidateItem; message: string }
+  | { status: 'AMBIGUOUS_SLOT'; candidates: Array<{ slotName: string; value: any; scenarioId: string }>; clarificationPrompt?: string }
+  | { status: 'NO_MATCH' };
 
 export type IntentResolutionResult =
   | { status: 'RESOLVED'; scenarioId: string; intent: string; scenario: ScenarioDefinition }
@@ -250,7 +267,7 @@ export class VoiceChannel {
   }
 
   // Pure generic evaluation of query/comparison descriptors (100% Domain-Agnostic)
-  private evaluateScenarioQuery(sc: ScenarioDefinition, offers: any[], extractedIndex?: number): any {
+  private evaluateScenarioQuery(sc: ScenarioDefinition, candidates: CandidateItem[], extractedIndex?: number): any {
     const attribute = sc.evaluation?.attribute || sc.query?.attribute;
     const mode = sc.evaluation?.order || sc.query?.mode || 'min';
     const template = sc.evaluation?.responseTemplate || sc.responseTemplate || '';
@@ -259,7 +276,7 @@ export class VoiceChannel {
     if (sc.query || sc.evaluation?.kind === 'compare') {
       const attr = attribute as string;
 
-      const validOffers = [...offers].filter(o => {
+      const validItems = [...candidates].filter(o => {
         if (o.status && o.status !== 'AVAILABLE') return false;
         const val = o[attr];
         if (val === null || val === undefined || val === '') return false;
@@ -267,7 +284,7 @@ export class VoiceChannel {
         return !isNaN(num) && isFinite(num);
       });
 
-      if (validOffers.length === 0) {
+      if (validItems.length === 0) {
         return {
           status: 'INVALID_OFFER_DATA',
           intent: sc.intent,
@@ -275,23 +292,26 @@ export class VoiceChannel {
         };
       }
 
-      validOffers.sort((a, b) => {
+      validItems.sort((a, b) => {
         const valA = Number(a[attr]);
         const valB = Number(b[attr]);
         return mode === 'max' ? valB - valA : valA - valB;
       });
 
-      const best = validOffers[0];
+      const best = validItems[0];
       let responseText = template;
       for (const [key, value] of Object.entries(best)) {
         responseText = responseText.replace(new RegExp(`{{${key}}}`, 'g'), String(value));
       }
 
+      const idField = sc.candidateBinding?.idField || Object.keys(best).find(k => k.endsWith('Id') || k === 'id') || 'id';
+      const bestId = String(best[idField] ?? '');
+
       return {
         status: 'OFFER_COMPARISON_RESOLVED',
         intent: sc.intent,
         comparisonAttribute: (attribute || '').toUpperCase(),
-        bestOfferId: best.offerId,
+        bestOfferId: bestId,
         [attribute || 'value']: best[attr],
         etaMinutes: best.etaMinutes,
         price: best.price,
@@ -301,21 +321,26 @@ export class VoiceChannel {
 
     // 2. Information questions on a specific candidate
     if (sc.evaluation?.kind === 'query_attribute') {
+      const indexField = sc.candidateBinding?.indexField || 'index';
       const targetIndex = extractedIndex !== undefined ? extractedIndex : (sc.evaluation.targetIndex ?? 2);
-      const target = offers.find(o => o.index === targetIndex);
+      const target = candidates.find(o => o[indexField] === targetIndex);
       if (!target) return { status: 'NO_MATCH' };
 
-      const distanceMeters = target.distanceKm ? Math.round(target.distanceKm * 1000) : 0;
+      const distanceKm = typeof target.distanceKm === 'number' ? target.distanceKm : 0;
+      const distanceMeters = distanceKm ? Math.round(distanceKm * 1000) : 0;
       let responseText = template;
       for (const [key, value] of Object.entries(target)) {
         responseText = responseText.replace(new RegExp(`{{${key}}}`, 'g'), String(value));
       }
       responseText = responseText.replace(/{{distanceMeters}}/g, String(distanceMeters));
 
+      const idField = sc.candidateBinding?.idField || Object.keys(target).find(k => k.endsWith('Id') || k === 'id') || 'id';
+      const targetId = String(target[idField] ?? '');
+
       return {
         status: 'OFFER_QUERY_RESOLVED',
         intent: sc.intent,
-        offerId: target.offerId,
+        offerId: targetId,
         attributes: { ...target, distanceMeters },
         response: responseText
       };
@@ -324,65 +349,81 @@ export class VoiceChannel {
     return { status: 'RESOLVED', intent: sc.intent, scenarioId: sc.id };
   }
 
-  // Generic Candidate Resolver (Zero Domain-Specific Names)
-  private resolveCandidatesFromExtracted(
+  // Pure Generic Candidate Resolution (Zero Domain-Specific Terms)
+  public resolveCandidate(
     extractedSlots: Record<string, any>,
-    candidates: any[],
+    candidates: CandidateItem[],
+    binding: CandidateBindingDefinition | undefined,
     scenarioId: string,
     targetSlotName: string,
     ambiguityPrompt?: string
-  ): {
-    status: 'RESOLVED' | 'OFFER_UNAVAILABLE' | 'AMBIGUOUS_SLOT' | 'NO_MATCH';
-    targetId?: string;
-    targetItem?: any;
-    candidates?: any[];
-    prompt?: string;
-  } {
-    // Check if any extracted slot signals relative/ambiguous criteria (e.g. cheapest, fastest)
+  ): CandidateResolutionResult {
+    const idKey = binding?.idField || (candidates.length > 0 ? Object.keys(candidates[0]).find(k => k.endsWith('Id') || k === 'id') : undefined) || 'id';
+    const indexKey = binding?.indexField || 'index';
+    const statusKey = binding?.statusField || 'status';
+    const unavailableVal = binding?.unavailableValue || 'UNAVAILABLE';
+    const unavailTemplate = binding?.unavailableTemplate;
+
+    // Check if any extracted slot signals relative or ambiguous selection criteria
     const hasAmbiguousCriteria = Object.values(extractedSlots).some(
       v => typeof v === 'string' && (v === 'cheapest' || v === 'fastest' || v.includes('ambiguous'))
     );
 
     if (hasAmbiguousCriteria) {
-      const available = candidates.filter(c => !c.status || c.status === 'AVAILABLE');
+      const available = candidates.filter(c => c[statusKey] === undefined || c[statusKey] !== unavailableVal);
       if (available.length > 1) {
         return {
           status: 'AMBIGUOUS_SLOT',
           candidates: available.map(c => ({
             slotName: targetSlotName,
-            value: c.offerId || c.id,
+            value: String(c[idKey] ?? ''),
             scenarioId
           })),
-          prompt: ambiguityPrompt || 'Выберите, пожалуйста, конкретный вариант'
+          clarificationPrompt: ambiguityPrompt || 'Выберите, пожалуйста, конкретный вариант'
         };
       }
     }
 
-    let matched: any;
+    let matchedItem: CandidateItem | undefined;
 
-    // Match by numeric index or string property across candidate objects
+    // Match by declared index or matching attribute
     for (const val of Object.values(extractedSlots)) {
       if (typeof val === 'number') {
-        matched = candidates.find(c => c.index === val);
-        if (matched) break;
+        matchedItem = candidates.find(c => c[indexKey] === val);
+        if (matchedItem) break;
       } else if (typeof val === 'string' && val !== 'CONFIRMED' && val !== 'REJECTED') {
         const lowerVal = val.toLowerCase();
-        matched = candidates.find(c =>
+        matchedItem = candidates.find(c =>
           Object.values(c).some(prop => typeof prop === 'string' && prop.toLowerCase() === lowerVal)
         );
-        if (matched) break;
+        if (matchedItem) break;
       }
     }
 
-    if (!matched) {
+    if (!matchedItem) {
       return { status: 'NO_MATCH' };
     }
 
-    if (matched.status === 'UNAVAILABLE') {
-      return { status: 'OFFER_UNAVAILABLE', targetId: matched.offerId || matched.id, targetItem: matched };
+    const resolvedId = String(matchedItem[idKey] ?? '');
+
+    // Declarative unavailable state check
+    if (matchedItem[statusKey] !== undefined && matchedItem[statusKey] === unavailableVal) {
+      let unavailMsg = unavailTemplate || `Вариант ${resolvedId} более недоступен.`;
+      unavailMsg = unavailMsg.replace(/{{targetId}}/g, resolvedId);
+
+      return {
+        status: 'CANDIDATE_UNAVAILABLE',
+        targetId: resolvedId,
+        targetItem: matchedItem,
+        message: unavailMsg
+      };
     }
 
-    return { status: 'RESOLVED', targetId: matched.offerId || matched.id, targetItem: matched };
+    return {
+      status: 'RESOLVED',
+      targetId: resolvedId,
+      targetItem: matchedItem
+    };
   }
 
   public async handleIncomingVoice(phrase: string, identity: SessionIdentity): Promise<any> {
@@ -458,11 +499,11 @@ export class VoiceChannel {
           }
         }
 
-        return this.evaluateScenarioQuery(sc, currentCtx.offers, extractedIdx);
+        return this.evaluateScenarioQuery(sc, currentCtx.offers as unknown as CandidateItem[], extractedIdx);
       }
     }
 
-    // 3. Declarative Active Context Processing (Strictly Generic Slot Binding)
+    // 3. Declarative Active Context Processing (Strictly Generic Candidate & Slot Binding)
     const activeWaiting = this.dialogueManager.listContexts(identity).filter(c => c.status === 'WAITING_FOR_SLOT');
 
     if (activeWaiting.length === 1) {
@@ -485,16 +526,16 @@ export class VoiceChannel {
         if (slotRes.status === 'RESOLVED' && Object.keys(slotRes.slots).length > 0) {
           const extracted = slotRes.slots;
 
-          // A. If context contains candidate collection (e.g. offers)
+          // A. If context contains candidate collection
           if (activeCtx.offers && activeCtx.offers.length > 0) {
-            // Strictly determine target slot from declarative context (no hardcoded fallback)
             const targetSlot = activeCtx.missingSlots.find(s => s !== 'confirmation') 
               || activeCtx.requiredSlots?.find(s => s !== 'confirmation');
 
             if (targetSlot) {
-              const candidateResolution = this.resolveCandidatesFromExtracted(
+              const candidateResolution = this.resolveCandidate(
                 extracted,
-                activeCtx.offers,
+                activeCtx.offers as unknown as CandidateItem[],
+                scenario.candidateBinding,
                 scenario.id,
                 targetSlot,
                 scenario.ambiguityPrompt?.template
@@ -504,15 +545,15 @@ export class VoiceChannel {
                 return {
                   status: 'AMBIGUOUS_SLOT',
                   candidates: candidateResolution.candidates,
-                  clarificationPrompt: candidateResolution.prompt
+                  clarificationPrompt: candidateResolution.clarificationPrompt
                 };
               }
 
-              if (candidateResolution.status === 'OFFER_UNAVAILABLE') {
+              if (candidateResolution.status === 'CANDIDATE_UNAVAILABLE') {
                 return {
                   status: 'OFFER_UNAVAILABLE',
                   offerId: candidateResolution.targetId,
-                  message: `Предложение ${candidateResolution.targetId} более недоступно.`
+                  message: candidateResolution.message
                 };
               }
 
