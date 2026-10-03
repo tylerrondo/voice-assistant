@@ -279,7 +279,6 @@ test.describe('CONTRACT: SC-PLATFORM-003 Generic Candidate Resolution Portabilit
   });
 
   test('CANDIDATE-08: No hidden offerId fallback in resolveCandidate', () => {
-    // Ob'yektda faqat customId bor, binding ko'rsatilmagan bo'lsa 'id' ga fallback bo'ladi, lekin hech qachon 'offerId' deb uydirmaydi
     const res = vc.resolveCandidate(
       { choice: 1 },
       [{ otherField: 'test', index: 1 }],
@@ -289,30 +288,29 @@ test.describe('CONTRACT: SC-PLATFORM-003 Generic Candidate Resolution Portabilit
     );
     expect(res.status).toBe('RESOLVED');
     if (res.status === 'RESOLVED') {
-      // Hech qanday undefined offerId yoki 'undefined' bo'lmaydi
       expect(res.targetId).toBe('');
     }
   });
 
-  test('CANDIDATE-09: Архитектурный тест — в resolveCandidate отсутствуют доменные термины Taxi Offer', () => {
+  test('CANDIDATE-09: Архитектурный тест — в resolveCandidate отсутствуют доменные термины и семантика Taxi Offer', () => {
     const vcPath = path.resolve(__dirname, '../../../src/platform/voice-channel.ts');
     const vcContent = fs.readFileSync(vcPath, 'utf8');
 
-    // resolveCandidate funksiyasi tanasini ajratib olamiz
     const funcMatch = vcContent.match(/resolveCandidate\([\s\S]*?\n\s{2}\}/);
     expect(funcMatch).not.toBeNull();
     const funcBody = funcMatch![0];
 
-    // resolveCandidate ichida offerga xos bo'lgan kalit so'zlar qat'iyan man etiladi
     expect(funcBody).not.toContain('OfferDefinition');
     expect(funcBody).not.toContain("'offerId'");
     expect(funcBody).not.toContain('"offerId"');
     expect(funcBody).not.toContain('OFFER_UNAVAILABLE');
     expect(funcBody).not.toContain('Предложение');
+    expect(funcBody).not.toContain("'cheapest'");
+    expect(funcBody).not.toContain("'fastest'");
   });
 
-  test('CANDIDATE-10: One runtime handles full selection + confirmation lifecycle across different domains', async () => {
-    // 1. Service lifecycle
+  test('CANDIDATE-10: One runtime handles full selection + confirmation lifecycle across domains (Service, Item, Offer)', async () => {
+    // 1. Service full lifecycle and payload verification
     vc.registerScenarioSet(scenarioServiceSet);
     dm.createContext(
       'SELECT_SERVICE',
@@ -328,8 +326,54 @@ test.describe('CONTRACT: SC-PLATFORM-003 Generic Candidate Resolution Portabilit
     await vc.handleIncomingVoice('1', sessionUser);
     await vc.handleIncomingVoice('confirm', sessionUser);
 
-    expect(dm.getExecutionLogs(sessionUser).length).toBe(1);
-    expect(dm.getExecutionLogs(sessionUser)[0].payload.selectedServiceId).toBe('srv-clean');
+    const logsService = dm.getExecutionLogs(sessionUser);
+    expect(logsService.length).toBe(1);
+    expect(logsService[0].payload.selectedServiceId).toBe('srv-clean');
+    expect(logsService[0].payload.confirmation).toBe('CONFIRMED');
+
+    // 2. Arbitrary Item full lifecycle and payload verification
+    const sessionUserItem = { ownerId: 'user-cand-002', sessionId: 'session-cand-B' };
+    vc.registerScenarioSet(scenarioItemSet);
+    dm.createContext(
+      'SELECT_ITEM',
+      {},
+      ['selectedItemId', 'confirmation'],
+      'item.confirmed',
+      {},
+      sessionUserItem,
+      'select-item',
+      [{ itemId: 'item-galaxy', rank: 7, availability: 'IN_STOCK' }] as any
+    );
+
+    await vc.handleIncomingVoice('7', sessionUserItem);
+    await vc.handleIncomingVoice('confirm', sessionUserItem);
+
+    const logsItem = dm.getExecutionLogs(sessionUserItem);
+    expect(logsItem.length).toBe(1);
+    expect(logsItem[0].payload.selectedItemId).toBe('item-galaxy');
+    expect(logsItem[0].payload.confirmation).toBe('CONFIRMED');
+
+    // 3. Offer full lifecycle and payload verification
+    const sessionUserOffer = { ownerId: 'user-cand-003', sessionId: 'session-cand-C' };
+    vc.registerScenarioSet(scenarioOfferSet);
+    dm.createContext(
+      'SELECT_OFFER',
+      {},
+      ['selectedOfferId', 'confirmation'],
+      'offer.confirmed',
+      {},
+      sessionUserOffer,
+      'select-offer',
+      [{ offerId: 'offer-vip-777', index: 2, status: 'AVAILABLE' }] as any
+    );
+
+    await vc.handleIncomingVoice('2', sessionUserOffer);
+    await vc.handleIncomingVoice('confirm', sessionUserOffer);
+
+    const logsOffer = dm.getExecutionLogs(sessionUserOffer);
+    expect(logsOffer.length).toBe(1);
+    expect(logsOffer[0].payload.selectedOfferId).toBe('offer-vip-777');
+    expect(logsOffer[0].payload.confirmation).toBe('CONFIRMED');
   });
 
 });
