@@ -2,5 +2,6 @@
         "idField": "offerId",
         "indexField": "index",
         "statusField": "status",
-        "unavailableValue": "UNAVAILABLE"
+        "unavailableValue": "UNAVAILABLE",
+        "ambiguityTriggerValues": ["cheapest", "fastest"]
       },
