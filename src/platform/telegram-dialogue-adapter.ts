@@ -28,41 +28,14 @@ export interface DialogueInstrumentation {
   confidence: number;
 }
 
-export interface NannyCandidate {
-  id: string;
-  name: string;
-  index: number;
-  status: 'AVAILABLE' | 'UNAVAILABLE';
-}
-
-export interface DomainNannyService {
-  searchNannies(criteria: Record<string, any>): Promise<NannyCandidate[]>;
-  confirmOrder(orderData: Record<string, any>): Promise<{ orderId: string; status: 'SUCCESS' }>;
-}
-
-export class DefaultMockDomainNannyService implements DomainNannyService {
-  async searchNannies(criteria: Record<string, any>): Promise<NannyCandidate[]> {
-    return [
-      { id: 'nanny-1', name: 'Мария', index: 1, status: 'AVAILABLE' },
-      { id: 'nanny-2', name: 'Анна', index: 2, status: 'AVAILABLE' }
-    ];
-  }
-
-  async confirmOrder(orderData: Record<string, any>): Promise<{ orderId: string; status: 'SUCCESS' }> {
-    return { orderId: `ord-nanny-${Date.now()}`, status: 'SUCCESS' };
-  }
-}
-
 export class TelegramDialogueAdapter {
   private dm: DialogueStateManager;
   private vc: VoiceChannel;
-  private nannyService: DomainNannyService;
   private lastInstrumentation: DialogueInstrumentation | null = null;
 
-  constructor(dm: DialogueStateManager, vc: VoiceChannel, nannyService?: DomainNannyService) {
+  constructor(dm: DialogueStateManager, vc: VoiceChannel) {
     this.dm = dm;
     this.vc = vc;
-    this.nannyService = nannyService || new DefaultMockDomainNannyService();
   }
 
   public getLastInstrumentation(): DialogueInstrumentation | null {
@@ -82,20 +55,18 @@ export class TelegramDialogueAdapter {
     let transcript: string | null = null;
     let intent: string | null = activeCtxBefore?.intent || activeScenario.intent;
 
-    // 1. Convert Channel Input to Unified Action / Text
+    // 1. Channel Input Normalization (Button, Text, Voice STT)
     if (input.channel === 'button') {
       rawText = input.raw_input || '';
       if (input.button_payload?.slotName && input.button_payload?.slotValue !== undefined) {
         extractedSlots[input.button_payload.slotName] = input.button_payload.slotValue;
       } else if (rawText) {
-        // Fallback: extract slot from button text using scenario extractors
         const extracted = this.vc.extractSlotsDeterministically(rawText, activeScenario.slotExtractors, activeScenario.id);
         if (extracted.status === 'RESOLVED') {
           extractedSlots = extracted.slots;
         }
       }
     } else if (input.channel === 'voice') {
-      // Voice with STT seam
       transcript = input.transcript || input.raw_input || '';
       rawText = transcript;
       const extracted = this.vc.extractSlotsDeterministically(rawText, activeScenario.slotExtractors, activeScenario.id);
@@ -124,28 +95,18 @@ export class TelegramDialogueAdapter {
       );
     }
 
-    // 3. Handle Special Correction / Modification Token
-    if (extractedSlots.confirmation === 'MODIFY' || rawText.includes('изменить время') || rawText.includes('поменять время')) {
-      // Reset start_time and end_time
-      delete ctx.slots.start_time;
-      delete ctx.slots.end_time;
-      if (!ctx.missingSlots.includes('start_time')) ctx.missingSlots.push('start_time');
-      if (!ctx.missingSlots.includes('end_time')) ctx.missingSlots.push('end_time');
-      ctx.missingSlots.sort((a, b) => {
-        const order = activeScenario.requiredSlots || [];
-        return order.indexOf(a) - order.indexOf(b);
-      });
-      delete extractedSlots.confirmation;
-    }
+    // 3. True Cancellation: only when pure cancellation and no other productive slot values present
+    const nonConfirmSlots = Object.keys(extractedSlots).filter(k => k !== 'confirmation');
+    const isPureCancel = (extractedSlots.confirmation === 'REJECTED' || rawText.toLowerCase().trim() === 'отмена' || rawText.toLowerCase().trim() === 'отменяю')
+      && nonConfirmSlots.length === 0;
 
-    // 4. Handle Cancellation
-    if (extractedSlots.confirmation === 'REJECTED' || rawText.toLowerCase().includes('отмена') || rawText.toLowerCase().includes('отменяю')) {
+    if (isPureCancel) {
       this.dm.cancelContext(ctx.contextId, identity);
       this.recordInstrumentation(input, rawText, transcript, intent, extractedSlots, prevState, {}, null);
-      return { status: 'CANCELLED', message: 'Заказ отменен' };
+      return { status: 'CANCELLED', message: 'Диалог отменен' };
     }
 
-    // 5. Fill extracted slots directly into the unified DialogueContext
+    // 4. Fill or Replace Extracted Slots in the Unified DialogueContext
     for (const [slotKey, slotVal] of Object.entries(extractedSlots)) {
       if (slotKey !== 'confirmation') {
         await this.dm.fillSlot(slotKey, slotVal, ctx.contextId, identity);
@@ -154,57 +115,42 @@ export class TelegramDialogueAdapter {
 
     ctx = this.dm.getContext(ctx.contextId, identity)!;
 
-    // 6. Check if candidate search should be triggered (when base criteria are satisfied)
-    const baseInfoSlots = ['date', 'start_time', 'end_time', 'children_count'];
-    const hasBaseInfo = baseInfoSlots.every(slot => ctx.slots[slot] !== undefined);
-
-    if (hasBaseInfo && (!ctx.offers || ctx.offers.length === 0)) {
-      const candidates = await this.nannyService.searchNannies(ctx.slots);
-      ctx.offers = candidates as any;
-    }
-
-    // 7. If candidate selection slot is extracted or candidates present
-    if (ctx.offers && ctx.offers.length > 0 && (extractedSlots.selected_nanny !== undefined || extractedSlots.choice !== undefined)) {
-      const targetCandidateId = extractedSlots.selected_nanny;
-      if (targetCandidateId) {
-        await this.dm.fillSlot('selected_nanny', targetCandidateId, ctx.contextId, identity);
-      } else {
-        const resolution = this.vc.resolveCandidate(
-          extractedSlots,
-          ctx.offers as any,
-          activeScenario.candidateBinding,
-          activeScenario.id,
-          'selected_nanny'
-        );
-        if (resolution.status === 'RESOLVED') {
-          await this.dm.fillSlot('selected_nanny', resolution.targetId, ctx.contextId, identity);
-        }
+    // 5. Candidate Resolution if candidates are attached to context
+    if (ctx.offers && ctx.offers.length > 0 && extractedSlots.selected_nanny === undefined) {
+      const resolution = this.vc.resolveCandidate(
+        extractedSlots,
+        ctx.offers as any,
+        activeScenario.candidateBinding,
+        activeScenario.id,
+        'selected_nanny'
+      );
+      if (resolution.status === 'RESOLVED') {
+        await this.dm.fillSlot('selected_nanny', resolution.targetId, ctx.contextId, identity);
+        ctx = this.dm.getContext(ctx.contextId, identity)!;
       }
     }
 
-    ctx = this.dm.getContext(ctx.contextId, identity)!;
-
-    // 8. Handle Confirmation
+    // 6. Handle Confirmation through ActionDispatcher ONLY (Single Action Owner)
     if (extractedSlots.confirmation === 'CONFIRMED') {
       const remainingNonConfirm = ctx.missingSlots.filter(s => s !== 'confirmation');
       if (remainingNonConfirm.length === 0) {
         await this.dm.fillSlot('confirmation', 'CONFIRMED', ctx.contextId, identity);
         ctx = this.dm.getContext(ctx.contextId, identity)!;
         const exec = this.dm.createExecution(ctx, identity);
-        await this.dm.dispatchAction(exec.executionId, ctx.slots, identity);
-        await this.nannyService.confirmOrder(ctx.slots);
+        const dispatchRes = await this.dm.dispatchAction(exec.executionId, ctx.slots, identity);
 
         this.recordInstrumentation(input, rawText, transcript, intent, extractedSlots, prevState, ctx.slots, null);
         return {
           status: 'ORDER_CONFIRMED',
           contextId: ctx.contextId,
           executionId: exec.executionId,
+          dispatchStatus: dispatchRes.status,
           slots: ctx.slots
         };
       }
     }
 
-    // 9. Determine Next Question Prompt
+    // 7. Determine Next Prompt
     const nextMissing = ctx.missingSlots.find(s => s !== 'confirmation');
     const nextQuestion = nextMissing && activeScenario.clarificationPrompts?.[nextMissing]
       ? activeScenario.clarificationPrompts[nextMissing]
@@ -241,7 +187,7 @@ export class TelegramDialogueAdapter {
       previous_state: prevState,
       new_state: newState,
       next_question: nextQuestion,
-      confidence: 1.0
+      confidence: 1.0 // deterministic rule-based baseline confidence
     };
   }
 }
