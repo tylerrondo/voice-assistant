@@ -5,7 +5,46 @@ import { DialogueStateManager } from '../../../src/platform/dialogue-manager';
 import { VoiceChannel, type ScenarioSet } from '../../../src/platform/voice-channel';
 import { TelegramDialogueAdapter } from '../../../src/platform/telegram-dialogue-adapter';
 import { MockSTTProvider } from '../../../src/platform/stt-provider';
-import { TelegramVoiceTransport, type TelegramVoiceMessage } from '../../../src/platform/telegram-voice-transport';
+import {
+  TelegramVoiceTransport,
+  type TelegramVoiceMessage,
+  type TelegramFileProvider,
+  type TelegramFileMetadata
+} from '../../../src/platform/telegram-voice-transport';
+
+export class MockTelegramFileProvider implements TelegramFileProvider {
+  public files: Map<string, { meta: TelegramFileMetadata; buffer: Buffer }> = new Map();
+  public shouldFailDownload = false;
+  public downloadCalls = 0;
+
+  public registerFile(fileId: string, filePath: string, mimeType: string, buffer: Buffer) {
+    this.files.set(fileId, {
+      meta: { fileId, filePath, mimeType, fileSize: buffer.length },
+      buffer
+    });
+  }
+
+  async getFile(fileId: string): Promise<TelegramFileMetadata> {
+    const entry = this.files.get(fileId);
+    if (!entry) {
+      throw new Error(`TELEGRAM_FILE_NOT_FOUND: ${fileId}`);
+    }
+    return entry.meta;
+  }
+
+  async downloadFile(filePath: string): Promise<Buffer> {
+    this.downloadCalls++;
+    if (this.shouldFailDownload) {
+      throw new Error('TELEGRAM_FILE_DOWNLOAD_FAILED');
+    }
+    for (const entry of this.files.values()) {
+      if (entry.meta.filePath === filePath) {
+        return entry.buffer;
+      }
+    }
+    throw new Error(`TELEGRAM_FILE_NOT_FOUND_BY_PATH: ${filePath}`);
+  }
+}
 
 test.describe('CONTRACT: SC-INTEGRATION-002 Real Telegram Voice Input + STT Integration Suite', () => {
 
@@ -15,6 +54,7 @@ test.describe('CONTRACT: SC-INTEGRATION-002 Real Telegram Voice Input + STT Inte
   let vc: VoiceChannel;
   let adapter: TelegramDialogueAdapter;
   let mockSTT: MockSTTProvider;
+  let mockFileProvider: MockTelegramFileProvider;
   let voiceTransport: TelegramVoiceTransport;
   let nannyScenarioSet: ScenarioSet;
   let dispatcherCalls: number;
@@ -35,7 +75,8 @@ test.describe('CONTRACT: SC-INTEGRATION-002 Real Telegram Voice Input + STT Inte
 
     adapter = new TelegramDialogueAdapter(dm, vc);
     mockSTT = new MockSTTProvider();
-    voiceTransport = new TelegramVoiceTransport(mockSTT);
+    mockFileProvider = new MockTelegramFileProvider();
+    voiceTransport = new TelegramVoiceTransport(mockSTT, mockFileProvider);
   });
 
   const getScenario = () => nannyScenarioSet.scenarios[0];
@@ -46,7 +87,8 @@ test.describe('CONTRACT: SC-INTEGRATION-002 Real Telegram Voice Input + STT Inte
   const sendVoiceAudio = async (transcript: string) => {
     mockSTT.setTranscript(transcript);
     const transportRes = await voiceTransport.processVoiceMessage({
-      fileBuffer: fakeAudioBuffer
+      fileBuffer: fakeAudioBuffer,
+      mimeType: 'audio/ogg'
     });
 
     if (transportRes.status === 'TRANSCRIPTION_SUCCESS' && transportRes.normalizedInput) {
@@ -104,7 +146,6 @@ test.describe('CONTRACT: SC-INTEGRATION-002 Real Telegram Voice Input + STT Inte
   test('TV-04: Voice candidate selection using existing VoiceChannel.resolveCandidate()', async () => {
     const sc = getScenario();
 
-    // Track resolveCandidate calls
     let resolverCalls = 0;
     const origResolve = vc.resolveCandidate.bind(vc);
     vc.resolveCandidate = (...args) => {
@@ -112,7 +153,6 @@ test.describe('CONTRACT: SC-INTEGRATION-002 Real Telegram Voice Input + STT Inte
       return origResolve(...args);
     };
 
-    // Attach dynamic candidate set with unknown IDs
     await adapter.handleMessage({ channel: 'text', raw_input: 'завтра' }, sessionUser, sc);
     const ctx = dm.getActiveState(sessionUser)!;
     ctx.offers = [
@@ -120,7 +160,6 @@ test.describe('CONTRACT: SC-INTEGRATION-002 Real Telegram Voice Input + STT Inte
       { id: 'xyz-42', name: 'Ольга', index: 2, status: 'AVAILABLE' }
     ] as any;
 
-    // Voice selects second candidate
     await sendVoiceAudio('выбираю вторую');
 
     expect(dm.getActiveState(sessionUser)?.slots.selected_nanny).toBe('xyz-42');
@@ -130,7 +169,6 @@ test.describe('CONTRACT: SC-INTEGRATION-002 Real Telegram Voice Input + STT Inte
   test('TV-05: Voice confirmation triggers single execution dispatch', async () => {
     const sc = getScenario();
 
-    // Fill required slots
     await adapter.handleMessage({ channel: 'button', button_payload: { slotName: 'date', slotValue: 'завтра' } }, sessionUser, sc);
     await adapter.handleMessage({ channel: 'button', button_payload: { slotName: 'start_time', slotValue: '15:00' } }, sessionUser, sc);
     await adapter.handleMessage({ channel: 'button', button_payload: { slotName: 'end_time', slotValue: '20:00' } }, sessionUser, sc);
@@ -140,7 +178,6 @@ test.describe('CONTRACT: SC-INTEGRATION-002 Real Telegram Voice Input + STT Inte
     await adapter.handleMessage({ channel: 'button', button_payload: { slotName: 'requirements', slotValue: 'без особых требований' } }, sessionUser, sc);
     await adapter.handleMessage({ channel: 'button', button_payload: { slotName: 'selected_nanny', slotValue: 'xyz-42' } }, sessionUser, sc);
 
-    // Voice confirms
     const res = await sendVoiceAudio('да, подтверждаю');
 
     expect(res.status).toBe('ORDER_CONFIRMED');
@@ -153,7 +190,6 @@ test.describe('CONTRACT: SC-INTEGRATION-002 Real Telegram Voice Input + STT Inte
     await adapter.handleMessage({ channel: 'text', raw_input: 'нужна няня' }, sessionUser, sc);
     expect(dm.getActiveState(sessionUser)).toBeDefined();
 
-    // Voice cancels
     const res = await sendVoiceAudio('отменяю');
 
     expect(res.status).toBe('CANCELLED');
@@ -164,7 +200,6 @@ test.describe('CONTRACT: SC-INTEGRATION-002 Real Telegram Voice Input + STT Inte
     const sc = getScenario();
     await adapter.handleMessage({ channel: 'button', button_payload: { slotName: 'date', slotValue: 'сегодня' } }, sessionUser, sc);
 
-    // Mock STT Failure
     mockSTT.setFailure(new Error('STT_UNAVAILABLE'));
 
     const transportRes = await voiceTransport.processVoiceMessage({
@@ -174,13 +209,11 @@ test.describe('CONTRACT: SC-INTEGRATION-002 Real Telegram Voice Input + STT Inte
     expect(transportRes.status).toBe('TRANSPORT_ERROR');
     expect(transportRes.error).toBe('STT_UNAVAILABLE');
 
-    // DialogueContext must NOT be destroyed
     const ctx = dm.getActiveState(sessionUser);
     expect(ctx).toBeDefined();
     expect(ctx?.slots.date).toBe('сегодня');
     expect(dispatcherCalls).toBe(0);
 
-    // Can continue seamlessly with Button or Text
     await adapter.handleMessage({ channel: 'button', button_payload: { slotName: 'start_time', slotValue: '15:00' } }, sessionUser, sc);
     expect(dm.getActiveState(sessionUser)?.slots.start_time).toBe('15:00');
   });
@@ -189,7 +222,6 @@ test.describe('CONTRACT: SC-INTEGRATION-002 Real Telegram Voice Input + STT Inte
     const sc = getScenario();
     await adapter.handleMessage({ channel: 'button', button_payload: { slotName: 'date', slotValue: 'сегодня' } }, sessionUser, sc);
 
-    // Mock empty transcript
     mockSTT.setTranscript('   ');
 
     const transportRes = await voiceTransport.processVoiceMessage({
@@ -198,10 +230,114 @@ test.describe('CONTRACT: SC-INTEGRATION-002 Real Telegram Voice Input + STT Inte
 
     expect(transportRes.status).toBe('IGNORED_EMPTY_TRANSCRIPT');
 
-    // Context remains identical
     const ctx = dm.getActiveState(sessionUser);
     expect(ctx?.slots.date).toBe('сегодня');
     expect(dispatcherCalls).toBe(0);
+  });
+
+  // NEW TELEGRAM-SPECIFIC CONTRACT TESTS (TV-09 .. TV-12)
+
+  test('TV-09: Telegram file resolution — resolves fileId and passes downloaded audio to STT', async () => {
+    const expectedBuffer = Buffer.from('TELEGRAM_VOICE_OGG_BUFFER_123');
+    mockFileProvider.registerFile('telegram-file-123', 'voice/file_123.ogg', 'audio/ogg', expectedBuffer);
+
+    let receivedAudioBuffer: Buffer | null = null;
+    mockSTT.transcribe = async (audio, opts) => {
+      receivedAudioBuffer = audio;
+      return { text: 'нужна няня завтра', confidence: 1 };
+    };
+
+    const res = await voiceTransport.processVoiceMessage({
+      fileId: 'telegram-file-123'
+    });
+
+    expect(res.status).toBe('TRANSCRIPTION_SUCCESS');
+    expect(res.transcript).toBe('нужна няня завтра');
+    expect(receivedAudioBuffer).toEqual(expectedBuffer);
+  });
+
+  test('TV-10: Telegram download failure stops pipeline before STT and preserves state', async () => {
+    const sc = getScenario();
+    await adapter.handleMessage({ channel: 'button', button_payload: { slotName: 'date', slotValue: 'сегодня' } }, sessionUser, sc);
+
+    mockFileProvider.registerFile('file-fail', 'voice/fail.ogg', 'audio/ogg', Buffer.from('audio'));
+    mockFileProvider.shouldFailDownload = true;
+
+    let sttCalled = false;
+    mockSTT.transcribe = async () => {
+      sttCalled = true;
+      return { text: 'error text' };
+    };
+
+    const transportRes = await voiceTransport.processVoiceMessage({
+      fileId: 'file-fail'
+    });
+
+    expect(transportRes.status).toBe('TRANSPORT_ERROR');
+    expect(transportRes.error).toBe('TELEGRAM_FILE_DOWNLOAD_FAILED');
+    expect(sttCalled).toBe(false);
+
+    // Context preserved intact
+    const ctx = dm.getActiveState(sessionUser);
+    expect(ctx?.slots.date).toBe('сегодня');
+    expect(dispatcherCalls).toBe(0);
+  });
+
+  test('TV-11: MIME/format propagation propagates accurate format to STT', async () => {
+    mockFileProvider.registerFile('file-mp3', 'voice/sample.mp3', 'audio/mp3', Buffer.from('mp3-data'));
+    mockFileProvider.registerFile('file-ogg', 'voice/sample.ogg', 'audio/ogg; codecs=opus', Buffer.from('ogg-data'));
+
+    let passedFormat: string | undefined;
+    mockSTT.transcribe = async (audio, opts) => {
+      passedFormat = opts?.format;
+      return { text: 'тестовый голос' };
+    };
+
+    // Test MP3
+    const resMp3 = await voiceTransport.processVoiceMessage({ fileId: 'file-mp3' });
+    expect(resMp3.format).toBe('mp3');
+    expect(passedFormat).toBe('mp3');
+
+    // Test OGG/Opus
+    const resOgg = await voiceTransport.processVoiceMessage({ fileId: 'file-ogg' });
+    expect(resOgg.format).toBe('ogg');
+    expect(passedFormat).toBe('ogg');
+  });
+
+  test('TV-12: Full Telegram Voice path (file_id -> FileProvider -> Audio -> STT -> Adapter -> State -> Dispatcher)', async () => {
+    const sc = getScenario();
+
+    // 1. Initial State via Button
+    await adapter.handleMessage({ channel: 'button', button_payload: { slotName: 'date', slotValue: 'завтра' } }, sessionUser, sc);
+    await adapter.handleMessage({ channel: 'button', button_payload: { slotName: 'start_time', slotValue: '15:00' } }, sessionUser, sc);
+    await adapter.handleMessage({ channel: 'button', button_payload: { slotName: 'end_time', slotValue: '20:00' } }, sessionUser, sc);
+    await adapter.handleMessage({ channel: 'button', button_payload: { slotName: 'children_count', slotValue: 2 } }, sessionUser, sc);
+    await adapter.handleMessage({ channel: 'button', button_payload: { slotName: 'children_ages', slotValue: '5 лет' } }, sessionUser, sc);
+    await adapter.handleMessage({ channel: 'button', button_payload: { slotName: 'location', slotValue: 'Центр' } }, sessionUser, sc);
+    await adapter.handleMessage({ channel: 'button', button_payload: { slotName: 'requirements', slotValue: 'без требований' } }, sessionUser, sc);
+    await adapter.handleMessage({ channel: 'button', button_payload: { slotName: 'selected_nanny', slotValue: 'xyz-42' } }, sessionUser, sc);
+
+    // 2. Register real-like Telegram voice message in File Provider
+    mockFileProvider.registerFile('tg-voice-confirm-file', 'voice/voice_conf.ogg', 'audio/ogg', Buffer.from('REAL_AUDIO_PAYLOAD'));
+
+    // STT recognizes it as "да, подтверждаю"
+    mockSTT.setTranscript('да, подтверждаю');
+
+    // 3. Process Telegram voice message with fileId
+    const transportRes = await voiceTransport.processVoiceMessage({
+      fileId: 'tg-voice-confirm-file'
+    });
+
+    expect(transportRes.status).toBe('TRANSCRIPTION_SUCCESS');
+    expect(transportRes.normalizedInput).toBeDefined();
+
+    // 4. Feed normalized input into existing Dialogue Adapter
+    const finalResult = await adapter.handleMessage(transportRes.normalizedInput!, sessionUser, sc);
+
+    // 5. Verify full business outcome: Execution created and Action dispatched!
+    expect(finalResult.status).toBe('ORDER_CONFIRMED');
+    expect(dispatcherCalls).toBe(1);
+    expect(dm.getExecutionLogs(sessionUser).length).toBe(1);
   });
 
   // Architectural Static Checks
@@ -237,7 +373,6 @@ test.describe('CONTRACT: SC-INTEGRATION-002 Real Telegram Voice Input + STT Inte
   test('AT-04: Voice execution uses the exact same DialogueStateManager and ActionDispatcher as Button/Text', async () => {
     const sc = getScenario();
 
-    // Unified dispatch listener
     let dispatchedEvents: string[] = [];
     const sharedDM = new DialogueStateManager({
       actionDispatcher: async (event, ctx, exec) => {
@@ -249,7 +384,6 @@ test.describe('CONTRACT: SC-INTEGRATION-002 Real Telegram Voice Input + STT Inte
     sharedVC.registerScenarioSet(nannyScenarioSet);
     const sharedAdapter = new TelegramDialogueAdapter(sharedDM, sharedVC);
 
-    // Fill slots & confirm via voice
     const u = { ownerId: 'u-at4', sessionId: 's-at4' };
     await sharedAdapter.handleMessage({ channel: 'text', raw_input: 'завтра с трех до восьми на двух детей' }, u, sc);
     await sharedAdapter.handleMessage({ channel: 'button', button_payload: { slotName: 'children_ages', slotValue: '5 лет' } }, u, sc);
@@ -257,7 +391,6 @@ test.describe('CONTRACT: SC-INTEGRATION-002 Real Telegram Voice Input + STT Inte
     await sharedAdapter.handleMessage({ channel: 'button', button_payload: { slotName: 'requirements', slotValue: 'без требований' } }, u, sc);
     await sharedAdapter.handleMessage({ channel: 'button', button_payload: { slotName: 'selected_nanny', slotValue: 'nanny-1' } }, u, sc);
 
-    // Voice confirms
     await sharedAdapter.handleMessage({ channel: 'voice', transcript: 'подтверждаю' }, u, sc);
 
     expect(dispatchedEvents.length).toBe(1);
