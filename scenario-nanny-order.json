@@ -53,8 +53,8 @@
         "start_time": {
           "type": "string",
           "rules": [
-            { "pattern": "\\b(с\\s+трех|в\\s+три|в\\s+15(:00)?|15:00)\\b", "value": "15:00" },
             { "pattern": "\\b(с\\s+четырех|в\\s+четыре|в\\s+16(:00)?|16:00)\\b", "value": "16:00" },
+            { "pattern": "\\b(с\\s+трех|в\\s+три|в\\s+15(:00)?|15:00)\\b", "value": "15:00" },
             { "pattern": "\\b(с\\s+десяти|в\\s+10(:00)?|10:00)\\b", "value": "10:00" },
             { "pattern": "\\b(с\\s+девяти|в\\s+9(:00)?|09:00)\\b", "value": "09:00" }
           ]
@@ -100,16 +100,15 @@
         "selected_nanny": {
           "type": "string",
           "rules": [
-            { "pattern": "\\b(мария|марию|первая|первую|вариант\\s+1|1)\\b", "value": "nanny-1" },
-            { "pattern": "\\b(анна|анну|вторая|вторую|вариант\\s+2|2)\\b", "value": "nanny-2" }
+            { "pattern": "\\b(мария|марию|первая|первую|вариант\\s+1|nanny-1)\\b", "value": "nanny-1" },
+            { "pattern": "\\b(анна|анну|вторая|вторую|вариант\\s+2|nanny-2)\\b", "value": "nanny-2" }
           ]
         },
         "confirmation": {
           "type": "enum",
           "rules": [
             { "pattern": "\\b(да|подтверждаю|да,\\s*подтверждаю|верно|confirm)\\b", "value": "CONFIRMED" },
-            { "pattern": "\\b(нет|отмена|отменяю|отменить|reject|cancel)\\b", "value": "REJECTED" },
-            { "pattern": "\\b(хочу\\s+изменить|изменить|поменять)\\b", "value": "MODIFY" }
+            { "pattern": "\\b(отмена|отменяю|отменить|отбой|reject|cancel|нет,\\s*отмена)\\b", "value": "REJECTED" }
           ]
         }
       },
