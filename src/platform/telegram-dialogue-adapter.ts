@@ -106,16 +106,7 @@ export class TelegramDialogueAdapter {
       return { status: 'CANCELLED', message: 'Диалог отменен' };
     }
 
-    // 4. Fill or Replace Extracted Slots in the Unified DialogueContext
-    for (const [slotKey, slotVal] of Object.entries(extractedSlots)) {
-      if (slotKey !== 'confirmation') {
-        await this.dm.fillSlot(slotKey, slotVal, ctx.contextId, identity);
-      }
-    }
-
-    ctx = this.dm.getContext(ctx.contextId, identity)!;
-
-    // 5. Candidate Resolution if candidates are attached to context
+    // 4. Resolve Candidate using generic resolveCandidate if candidates are present and choice criteria extracted
     if (ctx.offers && ctx.offers.length > 0 && extractedSlots.selected_nanny === undefined) {
       const resolution = this.vc.resolveCandidate(
         extractedSlots,
@@ -125,10 +116,18 @@ export class TelegramDialogueAdapter {
         'selected_nanny'
       );
       if (resolution.status === 'RESOLVED') {
-        await this.dm.fillSlot('selected_nanny', resolution.targetId, ctx.contextId, identity);
-        ctx = this.dm.getContext(ctx.contextId, identity)!;
+        extractedSlots.selected_nanny = resolution.targetId;
       }
     }
+
+    // 5. Fill or Replace Extracted Slots in the Unified DialogueContext
+    for (const [slotKey, slotVal] of Object.entries(extractedSlots)) {
+      if (slotKey !== 'confirmation' && slotKey !== 'candidate_index' && slotKey !== 'candidate_name') {
+        await this.dm.fillSlot(slotKey, slotVal, ctx.contextId, identity);
+      }
+    }
+
+    ctx = this.dm.getContext(ctx.contextId, identity)!;
 
     // 6. Handle Confirmation through ActionDispatcher ONLY (Single Action Owner)
     if (extractedSlots.confirmation === 'CONFIRMED') {
