@@ -97,11 +97,20 @@
             { "pattern": "\\b(нет|без\\s+требований|стандартные)\\b", "value": "без особых требований" }
           ]
         },
-        "selected_nanny": {
+        "candidate_index": {
+          "type": "integer",
+          "rules": [
+            { "pattern": "\\b(перв(ая|ую|ый)|вариант\\s+1)\\b", "value": 1 },
+            { "pattern": "\\b(втор(ая|ую|ой)|вариант\\s+2)\\b", "value": 2 }
+          ]
+        },
+        "candidate_name": {
           "type": "string",
           "rules": [
-            { "pattern": "\\b(мария|марию|первая|первую|вариант\\s+1|nanny-1)\\b", "value": "nanny-1" },
-            { "pattern": "\\b(анна|анну|вторая|вторую|вариант\\s+2|nanny-2)\\b", "value": "nanny-2" }
+            { "pattern": "\\b(мари[яю]|maria)\\b", "value": "Мария" },
+            { "pattern": "\\b(анн[ау]|anna)\\b", "value": "Анна" },
+            { "pattern": "\\b(ирин[ау]|irina)\\b", "value": "Ирина" },
+            { "pattern": "\\b(ольг[ау]|olga)\\b", "value": "Ольга" }
           ]
         },
         "confirmation": {
