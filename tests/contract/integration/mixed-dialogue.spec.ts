@@ -39,13 +39,10 @@ test.describe('CONTRACT: SC-INTEGRATION-001 Mixed Button / Text / Voice Dialogue
 
   const getScenario = () => nannyScenarioSet.scenarios[0];
 
-  const attachMockCandidates = (userId: typeof sessionUser) => {
+  const attachCandidates = (userId: typeof sessionUser, candidates: any[]) => {
     const ctx = dm.getActiveState(userId);
     if (ctx) {
-      ctx.offers = [
-        { id: 'nanny-1', name: 'Мария', index: 1, status: 'AVAILABLE' },
-        { id: 'nanny-2', name: 'Анна', index: 2, status: 'AVAILABLE' }
-      ] as any;
+      ctx.offers = candidates as any;
     }
   };
 
@@ -79,6 +76,13 @@ test.describe('CONTRACT: SC-INTEGRATION-001 Mixed Button / Text / Voice Dialogue
     await adapter.handleMessage({ channel: 'voice', transcript: '3 и 5' }, sessionUser, sc);
     await adapter.handleMessage({ channel: 'voice', transcript: 'центр' }, sessionUser, sc);
     await adapter.handleMessage({ channel: 'voice', transcript: 'без вредных привычек' }, sessionUser, sc);
+
+    // Attach candidates dynamically and choose
+    attachCandidates(sessionUser, [
+      { id: 'nanny-1', name: 'Мария', index: 1, status: 'AVAILABLE' },
+      { id: 'nanny-2', name: 'Анна', index: 2, status: 'AVAILABLE' }
+    ]);
+
     await adapter.handleMessage({ channel: 'voice', transcript: 'выбираю марию' }, sessionUser, sc);
     const res = await adapter.handleMessage({ channel: 'voice', transcript: 'да, подтверждаю' }, sessionUser, sc);
 
@@ -158,36 +162,55 @@ test.describe('CONTRACT: SC-INTEGRATION-001 Mixed Button / Text / Voice Dialogue
     expect(dm.getActiveState(sessionUser)?.slots.start_time).toBe('16:00');
   });
 
-  test('Test H — Candidate selection: button, name, index, voice', async () => {
+  test('Test H — Candidate selection: FIX-01, FIX-02, FIX-03 real generic candidate resolution', async () => {
     const sc = getScenario();
 
-    // 1. Voice by Name: "выбираю марию"
-    const user1 = { ownerId: 'user-h1', sessionId: 'sess-h1' };
-    await adapter.handleMessage({ channel: 'text', raw_input: 'завтра' }, user1, sc);
-    attachMockCandidates(user1);
-    await adapter.handleMessage({ channel: 'voice', transcript: 'выбираю марию' }, user1, sc);
-    expect(dm.getActiveState(user1)?.slots.selected_nanny).toBe('nanny-1');
+    // 1. Spying on resolveCandidate to prove candidate selection goes through generic resolver
+    let resolverCalls = 0;
+    const origResolve = vc.resolveCandidate.bind(vc);
+    vc.resolveCandidate = (...args) => {
+      resolverCalls++;
+      return origResolve(...args);
+    };
 
-    // 2. Voice by Index: "вторая"
-    const user2 = { ownerId: 'user-h2', sessionId: 'sess-h2' };
-    await adapter.handleMessage({ channel: 'text', raw_input: 'завтра' }, user2, sc);
-    attachMockCandidates(user2);
-    await adapter.handleMessage({ channel: 'voice', transcript: 'вторая' }, user2, sc);
-    expect(dm.getActiveState(user2)?.slots.selected_nanny).toBe('nanny-2');
+    // 2. FIX-03: Arbitrary candidate set with completely unknown IDs (not in scenario JSON!)
+    const arbitraryCandidates = [
+      { id: 'xyz-17', name: 'Ирина', index: 1, status: 'AVAILABLE' },
+      { id: 'xyz-42', name: 'Ольга', index: 2, status: 'AVAILABLE' }
+    ];
 
-    // 3. Text by Index: "вариант 1"
-    const user3 = { ownerId: 'user-h3', sessionId: 'sess-h3' };
-    await adapter.handleMessage({ channel: 'text', raw_input: 'завтра' }, user3, sc);
-    attachMockCandidates(user3);
-    await adapter.handleMessage({ channel: 'text', raw_input: 'вариант 1' }, user3, sc);
-    expect(dm.getActiveState(user3)?.slots.selected_nanny).toBe('nanny-1');
+    // Case 1: Voice by Index («вторая») -> resolves to xyz-42
+    const userA = { ownerId: 'user-cand-a', sessionId: 'sess-a' };
+    await adapter.handleMessage({ channel: 'text', raw_input: 'завтра' }, userA, sc);
+    attachCandidates(userA, arbitraryCandidates);
 
-    // 4. Button by ID: "nanny-2"
-    const user4 = { ownerId: 'user-h4', sessionId: 'sess-h4' };
-    await adapter.handleMessage({ channel: 'text', raw_input: 'завтра' }, user4, sc);
-    attachMockCandidates(user4);
-    await adapter.handleMessage({ channel: 'button', button_payload: { slotName: 'selected_nanny', slotValue: 'nanny-2' } }, user4, sc);
-    expect(dm.getActiveState(user4)?.slots.selected_nanny).toBe('nanny-2');
+    await adapter.handleMessage({ channel: 'voice', transcript: 'выбираю вторую' }, userA, sc);
+    expect(dm.getActiveState(userA)?.slots.selected_nanny).toBe('xyz-42');
+    expect(resolverCalls).toBeGreaterThan(0);
+
+    // Case 2: Voice by Name («Ольга») -> resolves to xyz-42
+    const userB = { ownerId: 'user-cand-b', sessionId: 'sess-b' };
+    await adapter.handleMessage({ channel: 'text', raw_input: 'завтра' }, userB, sc);
+    attachCandidates(userB, arbitraryCandidates);
+
+    await adapter.handleMessage({ channel: 'voice', transcript: 'ольга' }, userB, sc);
+    expect(dm.getActiveState(userB)?.slots.selected_nanny).toBe('xyz-42');
+
+    // Case 3: Text by Index («вариант 1») -> resolves to xyz-17
+    const userC = { ownerId: 'user-cand-c', sessionId: 'sess-c' };
+    await adapter.handleMessage({ channel: 'text', raw_input: 'завтра' }, userC, sc);
+    attachCandidates(userC, arbitraryCandidates);
+
+    await adapter.handleMessage({ channel: 'text', raw_input: 'вариант 1' }, userC, sc);
+    expect(dm.getActiveState(userC)?.slots.selected_nanny).toBe('xyz-17');
+
+    // Case 4: Button by exact ID
+    const userD = { ownerId: 'user-cand-d', sessionId: 'sess-d' };
+    await adapter.handleMessage({ channel: 'text', raw_input: 'завтра' }, userD, sc);
+    attachCandidates(userD, arbitraryCandidates);
+
+    await adapter.handleMessage({ channel: 'button', button_payload: { slotName: 'selected_nanny', slotValue: 'xyz-42' } }, userD, sc);
+    expect(dm.getActiveState(userD)?.slots.selected_nanny).toBe('xyz-42');
   });
 
   test('Test I — Confirmation: Проверить подтверждение всеми тремя каналами', async () => {
