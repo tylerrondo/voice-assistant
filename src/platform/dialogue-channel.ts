@@ -67,15 +67,86 @@ export class DialogueEngine {
   public async processInput(
     input: DialogueInput,
     identity: SessionIdentity,
-    activeScenario: ScenarioDefinition
+    explicitScenario?: ScenarioDefinition
   ): Promise<DialogueEngineResult> {
     const inputModality: DialogueModality = input.modality || (input.channel as DialogueModality) || 'text';
-    let extractedSlots: Record<string, any> = {};
     let rawText = '';
 
-    // 1. Modality Input Normalization
     if (inputModality === 'button') {
       rawText = input.raw_input || '';
+    } else if (inputModality === 'voice') {
+      rawText = input.transcript || input.raw_input || '';
+    } else if (inputModality === 'text') {
+      rawText = input.raw_input || '';
+    }
+
+    // 1. Scenario Resolution & Binding Layer
+    let activeScenario = explicitScenario;
+    let ctx = this.dm.getActiveState(identity);
+
+    if (!activeScenario) {
+      if (ctx && ctx.scenarioId) {
+        // Rule A: Existing context drives the scenario
+        activeScenario = this.vc.getScenarioById(ctx.scenarioId)
+          || this.vc.getDeterministicScenarioForIntent(ctx.intent);
+      } else {
+        // Rule B: Button without existing context cannot resolve intent
+        if (inputModality === 'button') {
+          return {
+            status: 'SCENARIO_NOT_FOUND',
+            presentation: {
+              text: 'No active dialogue found for button action.'
+            }
+          };
+        }
+
+        // Rule C: New dialog resolution via VoiceChannel.resolveIntent
+        if (!rawText.trim()) {
+          return {
+            status: 'SCENARIO_NOT_FOUND',
+            presentation: {
+              text: 'Empty input.'
+            }
+          };
+        }
+
+        const intentRes = this.vc.resolveIntent(rawText);
+
+        if (intentRes.status === 'AMBIGUOUS_INTENT') {
+          return {
+            status: 'SCENARIO_AMBIGUOUS',
+            presentation: {
+              text: intentRes.clarificationPrompt || 'Ambiguous scenario.'
+            }
+          };
+        }
+
+        if (intentRes.status === 'NO_MATCH') {
+          return {
+            status: 'SCENARIO_NOT_FOUND',
+            presentation: {
+              text: 'Scenario not found.'
+            }
+          };
+        }
+
+        activeScenario = intentRes.scenario;
+      }
+    }
+
+    if (!activeScenario) {
+      return {
+        status: 'SCENARIO_NOT_FOUND',
+        presentation: {
+          text: 'Scenario not found.'
+        }
+      };
+    }
+
+    // 2. Extract slots using resolved scenario extractors
+    let extractedSlots: Record<string, any> = {};
+
+    if (inputModality === 'button') {
       if (input.payload?.slotName && input.payload?.slotValue !== undefined) {
         extractedSlots[input.payload.slotName] = input.payload.slotValue;
       } else if (rawText) {
@@ -84,22 +155,16 @@ export class DialogueEngine {
           extractedSlots = extracted.slots;
         }
       }
-    } else if (inputModality === 'voice') {
-      rawText = input.transcript || input.raw_input || '';
-      const extracted = this.vc.extractSlotsDeterministically(rawText, activeScenario.slotExtractors, activeScenario.id);
-      if (extracted.status === 'RESOLVED') {
-        extractedSlots = extracted.slots;
-      }
-    } else if (inputModality === 'text') {
-      rawText = input.raw_input || '';
-      const extracted = this.vc.extractSlotsDeterministically(rawText, activeScenario.slotExtractors, activeScenario.id);
-      if (extracted.status === 'RESOLVED') {
-        extractedSlots = extracted.slots;
+    } else {
+      if (rawText) {
+        const extracted = this.vc.extractSlotsDeterministically(rawText, activeScenario.slotExtractors, activeScenario.id);
+        if (extracted.status === 'RESOLVED') {
+          extractedSlots = extracted.slots;
+        }
       }
     }
 
-    // 2. Ensure Context exists
-    let ctx = this.dm.getActiveState(identity);
+    // 3. Ensure Context exists & bind scenarioId
     if (!ctx) {
       ctx = this.dm.createContext(
         activeScenario.intent,
@@ -112,7 +177,7 @@ export class DialogueEngine {
       );
     }
 
-    // 3. Declarative Cancellation check (strictly driven by Scenario definition)
+    // 4. Declarative Cancellation check (strictly driven by Scenario definition)
     const confirmationConfig = activeScenario.confirmation;
     if (confirmationConfig) {
       const confirmSlot = confirmationConfig.slot;
@@ -130,10 +195,10 @@ export class DialogueEngine {
       }
     }
 
-    // 4. Declarative Target Slot for Candidate Resolution
+    // 5. Declarative Target Slot for Candidate Resolution
     const targetSlot = activeScenario.candidateBinding?.targetSlot;
 
-    // 5. Generic Candidate Resolution using existing SC-PLATFORM-003
+    // 6. Generic Candidate Resolution using existing SC-PLATFORM-003
     if (targetSlot && ctx.offers && ctx.offers.length > 0 && extractedSlots[targetSlot] === undefined) {
       const resolution = this.vc.resolveCandidate(
         extractedSlots,
@@ -147,7 +212,7 @@ export class DialogueEngine {
       }
     }
 
-    // 6. Fill or Replace Slots in Unified DialogueContext
+    // 7. Fill or Replace Slots in Unified DialogueContext
     for (const [slotKey, slotVal] of Object.entries(extractedSlots)) {
       if (
         (!confirmationConfig || slotKey !== confirmationConfig.slot) &&
@@ -160,7 +225,7 @@ export class DialogueEngine {
 
     ctx = this.dm.getContext(ctx.contextId, identity)!;
 
-    // 7. Generic Confirmation & Execution via ActionDispatcher
+    // 8. Generic Confirmation & Execution via ActionDispatcher
     if (confirmationConfig && extractedSlots[confirmationConfig.slot] === confirmationConfig.confirmedValue) {
       const confirmSlot = confirmationConfig.slot;
       const remainingNonConfirm = ctx.missingSlots.filter(s => s !== confirmSlot);
@@ -184,7 +249,7 @@ export class DialogueEngine {
       }
     }
 
-    // 8. Build Generic Presentation (text + actions)
+    // 9. Build Generic Presentation (text + actions)
     const confirmSlot = confirmationConfig?.slot;
     const nextMissing = ctx.missingSlots.find(s => s !== confirmSlot);
     const nextQuestion = nextMissing && activeScenario.clarificationPrompts?.[nextMissing]
@@ -216,7 +281,6 @@ export class DialogueEngine {
         }
       ]);
     } else if (targetSlot && ctx.offers && ctx.offers.length > 0 && ctx.missingSlots.includes(targetSlot)) {
-      // Generic candidate presentation actions using declarative idField and labelField
       const idKey = activeScenario.candidateBinding?.idField || 'id';
       const labelKey = activeScenario.candidateBinding?.labelField || idKey;
 
