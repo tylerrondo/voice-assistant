@@ -1,11 +1,11 @@
 import { type ScenarioDefinition } from './voice-channel';
 import {
-  type TelegramDialogueAdapter,
-  type TelegramInputMessage,
   type DialoguePresentation,
   type DialoguePresentationAction,
-  type DialogueAdapterResult
-} from './telegram-dialogue-adapter';
+  type DialogueInput,
+  type DialogueEngine
+} from './dialogue-channel';
+import { type TelegramDialogueAdapter } from './telegram-dialogue-adapter';
 import { type TelegramVoiceTransport } from './telegram-voice-transport';
 import { type SessionIdentity } from './dialogue-manager';
 
@@ -77,28 +77,30 @@ export class MockTelegramClient implements TelegramClient {
 }
 
 export class TelegramBotAdapter {
-  private dialogueAdapter: TelegramDialogueAdapter;
+  private dialogueEngine: DialogueEngine;
   private voiceTransport: TelegramVoiceTransport;
   private telegramClient: TelegramClient;
 
   constructor(
-    dialogueAdapter: TelegramDialogueAdapter,
+    dialogueHandler: TelegramDialogueAdapter | DialogueEngine,
     voiceTransport: TelegramVoiceTransport,
     telegramClient: TelegramClient
   ) {
-    this.dialogueAdapter = dialogueAdapter;
+    if ('processInput' in dialogueHandler) {
+      this.dialogueEngine = dialogueHandler;
+    } else {
+      this.dialogueEngine = (dialogueHandler as TelegramDialogueAdapter).getDialogueEngine();
+    }
     this.voiceTransport = voiceTransport;
     this.telegramClient = telegramClient;
   }
 
-  // Safe encoding for callback data (handles values containing colons safely)
   public encodeCallbackData(slotName: string, slotValue: unknown): string {
     const encSlot = encodeURIComponent(slotName);
     const encVal = encodeURIComponent(typeof slotValue === 'object' ? JSON.stringify(slotValue) : String(slotValue));
     return `dialogue:${encSlot}:${encVal}`;
   }
 
-  // Safe decoding of callback data
   public decodeCallbackData(data: string): { slotName: string; slotValue: unknown } | null {
     if (!data.startsWith('dialogue:')) return null;
     const parts = data.split(':');
@@ -157,25 +159,25 @@ export class TelegramBotAdapter {
       await this.telegramClient.answerCallbackQuery(update.callback_query.id);
 
       const data = update.callback_query.data || '';
-      let inputMessage: TelegramInputMessage;
+      let dialogueInput: DialogueInput;
 
       const decoded = this.decodeCallbackData(data);
       if (decoded) {
-        inputMessage = {
+        dialogueInput = {
           channel: 'button',
-          button_payload: {
+          payload: {
             slotName: decoded.slotName,
             slotValue: decoded.slotValue
           }
         };
       } else {
-        inputMessage = {
+        dialogueInput = {
           channel: 'button',
           raw_input: data
         };
       }
 
-      const result = await this.dialogueAdapter.handleMessage(inputMessage, identity, activeScenario);
+      const result = await this.dialogueEngine.processInput(dialogueInput, identity, activeScenario);
       await this.sendTelegramResponse(chatId, result?.presentation);
       return;
     }
@@ -201,7 +203,11 @@ export class TelegramBotAdapter {
       }
 
       if (voiceResult.status === 'TRANSCRIPTION_SUCCESS' && voiceResult.normalizedInput) {
-        const result = await this.dialogueAdapter.handleMessage(voiceResult.normalizedInput, identity, activeScenario);
+        const dialogueInput: DialogueInput = {
+          channel: 'voice',
+          transcript: voiceResult.normalizedInput.transcript
+        };
+        const result = await this.dialogueEngine.processInput(dialogueInput, identity, activeScenario);
         await this.sendTelegramResponse(chatId, result?.presentation);
       }
       return;
@@ -209,12 +215,12 @@ export class TelegramBotAdapter {
 
     // 3. Handle Text Message
     if (update.message?.text) {
-      const inputMessage: TelegramInputMessage = {
+      const dialogueInput: DialogueInput = {
         channel: 'text',
         raw_input: update.message.text
       };
 
-      const result = await this.dialogueAdapter.handleMessage(inputMessage, identity, activeScenario);
+      const result = await this.dialogueEngine.processInput(dialogueInput, identity, activeScenario);
       await this.sendTelegramResponse(chatId, result?.presentation);
       return;
     }
@@ -225,7 +231,6 @@ export class TelegramBotAdapter {
 
     let options: TelegramSendOptions | undefined;
 
-    // Render actions into inline keyboard purely from presentation actions
     if (presentation.actions && presentation.actions.length > 0) {
       const inlineKeyboard: TelegramInlineButton[][] = presentation.actions.map(row =>
         row.map(action => ({
