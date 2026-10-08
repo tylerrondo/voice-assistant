@@ -24,11 +24,20 @@
         "confirmation"
       ],
       "candidateBinding": {
+        "targetSlot": "selected_nanny",
         "idField": "id",
+        "labelField": "name",
         "indexField": "index",
         "statusField": "status",
         "unavailableValue": "UNAVAILABLE",
         "unavailableTemplate": "Няня {{targetId}} сейчас недоступна"
+      },
+      "confirmation": {
+        "slot": "confirmation",
+        "confirmedValue": "CONFIRMED",
+        "rejectedValue": "REJECTED",
+        "confirmLabel": "Да",
+        "rejectLabel": "Отмена"
       },
       "clarificationPrompts": {
         "date": "Когда нужна няня?",
