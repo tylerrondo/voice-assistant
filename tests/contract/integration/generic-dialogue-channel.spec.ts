@@ -8,8 +8,11 @@ import {
   type DialogueInput,
   type DialoguePresentation
 } from '../../../src/platform/dialogue-channel';
+import { TelegramBotAdapter, MockTelegramClient } from '../../../src/platform/telegram-bot-adapter';
+import { TelegramVoiceTransport } from '../../../src/platform/telegram-voice-transport';
+import { MockSTTProvider } from '../../../src/platform/stt-provider';
+import { MockTelegramFileProvider } from './telegram-voice.spec';
 
-// Mock Channel Adapter (simulates WhatsApp or other messaging platform)
 class MockGenericChannelAdapter {
   constructor(private engine: DialogueEngine) {}
 
@@ -18,7 +21,6 @@ class MockGenericChannelAdapter {
   }
 }
 
-// Mock Web Channel Adapter (simulates Web UI client)
 class MockWebChannelAdapter {
   constructor(private engine: DialogueEngine) {}
 
@@ -54,14 +56,14 @@ test.describe('CONTRACT: SC-INTEGRATION-004 Generic Dialogue Channel Contract Su
     engine = new DialogueEngine(dm, vc);
   });
 
-  const getScenario = () => nannyScenarioSet.scenarios[0];
+  const getNannyScenario = () => nannyScenarioSet.scenarios[0];
 
   test('GC-01: Text — Mock Channel -> DialogueInput(text) -> DialogueEngine -> DialoguePresentation', async () => {
-    const sc = getScenario();
+    const sc = getNannyScenario();
     const adapter = new MockGenericChannelAdapter(engine);
 
     const res = await adapter.send({
-      channel: 'text',
+      modality: 'text',
       raw_input: 'нужна няня завтра'
     }, sessionUser, sc);
 
@@ -70,11 +72,11 @@ test.describe('CONTRACT: SC-INTEGRATION-004 Generic Dialogue Channel Contract Su
   });
 
   test('GC-02: Button — arbitrary slot and value filled via generic payload', async () => {
-    const sc = getScenario();
+    const sc = getNannyScenario();
     const adapter = new MockGenericChannelAdapter(engine);
 
     await adapter.send({
-      channel: 'button',
+      modality: 'button',
       payload: {
         slotName: 'start_time',
         slotValue: '15:00'
@@ -85,11 +87,11 @@ test.describe('CONTRACT: SC-INTEGRATION-004 Generic Dialogue Channel Contract Su
   });
 
   test('GC-03: Voice — DialogueInput(voice with transcript) passes through the same DialogueEngine', async () => {
-    const sc = getScenario();
+    const sc = getNannyScenario();
     const adapter = new MockGenericChannelAdapter(engine);
 
     await adapter.send({
-      channel: 'voice',
+      modality: 'voice',
       transcript: 'до восьми'
     }, sessionUser, sc);
 
@@ -97,19 +99,14 @@ test.describe('CONTRACT: SC-INTEGRATION-004 Generic Dialogue Channel Contract Su
   });
 
   test('GC-04: Mixed channels (Text -> Button -> Voice -> Button -> Voice) in ONE DialogueContext', async () => {
-    const sc = getScenario();
+    const sc = getNannyScenario();
     const adapter = new MockGenericChannelAdapter(engine);
 
-    // 1. Text
-    await adapter.send({ channel: 'text', raw_input: 'завтра' }, sessionUser, sc);
-    // 2. Button
-    await adapter.send({ channel: 'button', payload: { slotName: 'start_time', slotValue: '15:00' } }, sessionUser, sc);
-    // 3. Voice
-    await adapter.send({ channel: 'voice', transcript: 'до восьми' }, sessionUser, sc);
-    // 4. Button
-    await adapter.send({ channel: 'button', payload: { slotName: 'children_count', slotValue: 2 } }, sessionUser, sc);
-    // 5. Voice
-    await adapter.send({ channel: 'voice', transcript: 'центр' }, sessionUser, sc);
+    await adapter.send({ modality: 'text', raw_input: 'завтра' }, sessionUser, sc);
+    await adapter.send({ modality: 'button', payload: { slotName: 'start_time', slotValue: '15:00' } }, sessionUser, sc);
+    await adapter.send({ modality: 'voice', transcript: 'до восьми' }, sessionUser, sc);
+    await adapter.send({ modality: 'button', payload: { slotName: 'children_count', slotValue: 2 } }, sessionUser, sc);
+    await adapter.send({ modality: 'voice', transcript: 'центр' }, sessionUser, sc);
 
     expect(dm.listContexts(sessionUser).length).toBe(1);
     const ctx = dm.getActiveState(sessionUser);
@@ -120,109 +117,204 @@ test.describe('CONTRACT: SC-INTEGRATION-004 Generic Dialogue Channel Contract Su
     expect(ctx?.slots.location).toBe('Центр');
   });
 
-  test('GC-05: Candidate resolution on arbitrary candidates without nanny terminology', async () => {
-    const sc = getScenario();
+  test('GC-05: Generic candidate resolution on independent Scenario (service booking with selected_service)', async () => {
+    const serviceScenario: ScenarioDefinition = {
+      id: 'service-booking',
+      intent: 'BOOK_SERVICE',
+      requiredSlots: ['date', 'selected_service'],
+      candidateBinding: {
+        targetSlot: 'selected_service',
+        idField: 'serviceId',
+        labelField: 'title',
+        indexField: 'position'
+      },
+      slotExtractors: {
+        date: {
+          type: 'string',
+          rules: [{ pattern: '\\b(завтра)\\b', value: 'завтра' }]
+        },
+        choice: {
+          type: 'integer',
+          rules: [{ pattern: '\\b(втор(ой|ая)|2)\\b', value: 2 }]
+        }
+      }
+    };
+
+    const userS = { ownerId: 'u-serv', sessionId: 's-serv' };
     const adapter = new MockGenericChannelAdapter(engine);
 
-    await adapter.send({ channel: 'text', raw_input: 'завтра' }, sessionUser, sc);
-    const ctx = dm.getActiveState(sessionUser)!;
+    // Initial message to open context
+    await adapter.send({ modality: 'text', raw_input: 'завтра' }, userS, serviceScenario);
+
+    // Attach custom candidate items with non-standard fields
+    const ctx = dm.getActiveState(userS)!;
     ctx.offers = [
-      { id: 'x-17', name: 'Alpha', index: 1, status: 'AVAILABLE' },
-      { id: 'x-42', name: 'Beta', index: 2, status: 'AVAILABLE' }
+      { serviceId: 'svc-17', title: 'Cleaning', position: 1, status: 'AVAILABLE' },
+      { serviceId: 'svc-42', title: 'Repair', position: 2, status: 'AVAILABLE' }
     ] as any;
 
-    // Send selection choice via voice
-    await adapter.send({ channel: 'voice', transcript: 'выбираю вторую' }, sessionUser, sc);
+    // Send selection choice
+    await adapter.send({ modality: 'voice', transcript: 'выбираю второй' }, userS, serviceScenario);
 
-    expect(dm.getActiveState(sessionUser)?.slots.selected_nanny).toBe('x-42');
+    expect(dm.getActiveState(userS)?.slots.selected_service).toBe('svc-42');
   });
 
-  test('GC-06: Confirmation — DialogueEngine forms generic presentation actions without Telegram knowledge', async () => {
-    const sc = getScenario();
+  test('GC-05-B: Candidate Presentation portability with non-standard idField and labelField', async () => {
+    const serviceScenario: ScenarioDefinition = {
+      id: 'service-booking-pres',
+      intent: 'BOOK_SERVICE',
+      requiredSlots: ['selected_service'],
+      candidateBinding: {
+        targetSlot: 'selected_service',
+        idField: 'serviceId',
+        labelField: 'title',
+        indexField: 'position'
+      },
+      clarificationPrompts: {
+        selected_service: 'Выберите услугу:'
+      }
+    };
+
+    const userP = { ownerId: 'u-pres', sessionId: 's-pres' };
     const adapter = new MockGenericChannelAdapter(engine);
 
-    // Pre-fill slots
-    await adapter.send({ channel: 'text', raw_input: 'завтра с трех до восьми на двух детей' }, sessionUser, sc);
-    await adapter.send({ channel: 'button', payload: { slotName: 'children_ages', slotValue: '5 лет' } }, sessionUser, sc);
-    await adapter.send({ channel: 'button', payload: { slotName: 'location', slotValue: 'Центр' } }, sessionUser, sc);
-    await adapter.send({ channel: 'button', payload: { slotName: 'requirements', slotValue: 'без требований' } }, sessionUser, sc);
-    const res = await adapter.send({ channel: 'button', payload: { slotName: 'selected_nanny', slotValue: 'x-42' } }, sessionUser, sc);
+    // Attach candidates before prompt
+    dm.createContext('BOOK_SERVICE', {}, ['selected_service'], 'service.action', { selected_service: 'Выберите услугу:' }, userP, serviceScenario.id, [
+      { serviceId: 'svc-17', title: 'Cleaning', position: 1 },
+      { serviceId: 'svc-42', title: 'Repair', position: 2 }
+    ] as any);
+
+    // Prompt presentation generated
+    const res = await adapter.send({ modality: 'text', raw_input: 'start' }, userP, serviceScenario);
 
     expect(res.presentation.actions).toBeDefined();
     const actions = res.presentation.actions![0];
-    expect(actions[0].label).toBe('Да');
-    expect(actions[0].payload.slotValue).toBe('CONFIRMED');
-    expect(actions[1].label).toBe('Отмена');
-    expect(actions[1].payload.slotValue).toBe('REJECTED');
+    expect(actions[1].id).toBe('svc-42');
+    expect(actions[1].label).toBe('Repair');
+    expect(actions[1].payload.slotName).toBe('selected_service');
+    expect(actions[1].payload.slotValue).toBe('svc-42');
   });
 
-  test('GC-07: Cancellation — generic cancellation', async () => {
-    const sc = getScenario();
+  test('GC-06: Declarative Confirmation — Scenario with approval (YES/NO) and custom messages', async () => {
+    const approvalScenario: ScenarioDefinition = {
+      id: 'custom-approval-scenario',
+      intent: 'CUSTOM_ORDER',
+      requiredSlots: ['target_item', 'approval'],
+      confirmation: {
+        slot: 'approval',
+        confirmedValue: 'YES',
+        rejectedValue: 'NO',
+        confirmLabel: 'Подтвердить заказ',
+        rejectLabel: 'Отказаться',
+        confirmedMessage: 'Approval registered successfully'
+      }
+    };
+
+    const userAppr = { ownerId: 'u-appr', sessionId: 's-appr' };
     const adapter = new MockGenericChannelAdapter(engine);
 
-    await adapter.send({ channel: 'text', raw_input: 'нужна няня' }, sessionUser, sc);
+    // 1. Fill target_item
+    const resPrompt = await adapter.send({ modality: 'button', payload: { slotName: 'target_item', slotValue: 'item-777' } }, userAppr, approvalScenario);
+
+    expect(resPrompt.presentation.actions).toBeDefined();
+    const actionRow = resPrompt.presentation.actions![0];
+    expect(actionRow[0].label).toBe('Подтвердить заказ');
+    expect(actionRow[0].payload.slotName).toBe('approval');
+    expect(actionRow[0].payload.slotValue).toBe('YES');
+    expect(actionRow[1].label).toBe('Отказаться');
+    expect(actionRow[1].payload.slotValue).toBe('NO');
+
+    // 2. Confirm
+    const resConfirmed = await adapter.send({ modality: 'button', payload: { slotName: 'approval', slotValue: 'YES' } }, userAppr, approvalScenario);
+    expect(resConfirmed.status).toBe('CONFIRMED');
+    expect(resConfirmed.presentation.text).toBe('Approval registered successfully');
+  });
+
+  test('GC-07: Cancellation — generic cancellation with declarative rejection value', async () => {
+    const sc = getNannyScenario();
+    const adapter = new MockGenericChannelAdapter(engine);
+
+    await adapter.send({ modality: 'text', raw_input: 'нужна няня' }, sessionUser, sc);
     expect(dm.getActiveState(sessionUser)).toBeDefined();
 
-    const res = await adapter.send({ channel: 'button', payload: { slotName: 'confirmation', slotValue: 'REJECTED' } }, sessionUser, sc);
+    const res = await adapter.send({ modality: 'button', payload: { slotName: 'confirmation', slotValue: 'REJECTED' } }, sessionUser, sc);
 
     expect(res.status).toBe('CANCELLED');
+    expect(res.presentation.text).toBe(sc.confirmation?.cancelledMessage);
     expect(dm.getActiveState(sessionUser)).toBeUndefined();
   });
 
   test('GC-08: Execution — ActionDispatcher called exactly once on confirmation', async () => {
-    const sc = getScenario();
+    const sc = getNannyScenario();
     const adapter = new MockGenericChannelAdapter(engine);
 
-    await adapter.send({ channel: 'text', raw_input: 'завтра с трех до восьми на двух детей' }, sessionUser, sc);
-    await adapter.send({ channel: 'button', payload: { slotName: 'children_ages', slotValue: '5 лет' } }, sessionUser, sc);
-    await adapter.send({ channel: 'button', payload: { slotName: 'location', slotValue: 'Центр' } }, sessionUser, sc);
-    await adapter.send({ channel: 'button', payload: { slotName: 'requirements', slotValue: 'без требований' } }, sessionUser, sc);
-    await adapter.send({ channel: 'button', payload: { slotName: 'selected_nanny', slotValue: 'x-42' } }, sessionUser, sc);
+    await adapter.send({ modality: 'text', raw_input: 'завтра с трех до восьми на двух детей' }, sessionUser, sc);
+    await adapter.send({ modality: 'button', payload: { slotName: 'children_ages', slotValue: '5 лет' } }, sessionUser, sc);
+    await adapter.send({ modality: 'button', payload: { slotName: 'location', slotValue: 'Центр' } }, sessionUser, sc);
+    await adapter.send({ modality: 'button', payload: { slotName: 'requirements', slotValue: 'без требований' } }, sessionUser, sc);
+    await adapter.send({ modality: 'button', payload: { slotName: 'selected_nanny', slotValue: 'xyz-42' } }, sessionUser, sc);
 
-    const res = await adapter.send({ channel: 'button', payload: { slotName: 'confirmation', slotValue: 'CONFIRMED' } }, sessionUser, sc);
+    const res = await adapter.send({ modality: 'button', payload: { slotName: 'confirmation', slotValue: 'CONFIRMED' } }, sessionUser, sc);
 
     expect(res.status).toBe('CONFIRMED');
     expect(dispatcherCalls).toBe(1);
     expect(dm.getExecutionLogs(sessionUser).length).toBe(1);
   });
 
-  test('GC-09: Telegram independence — MockGenericChannelAdapter completes identical dialogue flow', async () => {
-    const sc = getScenario();
-    const channelA = new MockGenericChannelAdapter(engine);
+  test('GC-09: Real Telegram Bot Adapter -> DialogueInput -> DialogueEngine -> Presentation flow', async () => {
+    const sc = getNannyScenario();
+    const tgClient = new MockTelegramClient();
+    const mockSTT = new MockSTTProvider();
+    const mockFiles = new MockTelegramFileProvider();
+    const voiceTransport = new TelegramVoiceTransport(mockSTT, mockFiles);
 
-    const res = await channelA.send({ channel: 'text', raw_input: 'сегодня' }, sessionUser, sc);
-    expect(dm.getActiveState(sessionUser)?.slots.date).toBe('сегодня');
-    expect(res.presentation.text).toBe(sc.clarificationPrompts?.start_time);
+    const botAdapter = new TelegramBotAdapter(engine, voiceTransport, tgClient);
+
+    const tgUser = { id: 12345 };
+    const tgChat = { id: 67890 };
+    const tgIdentity = { ownerId: '12345', sessionId: '67890' };
+
+    // Send Telegram Update
+    await botAdapter.handleUpdate({
+      message: { from: tgUser, chat: tgChat, text: 'завтра' }
+    }, sc);
+
+    expect(dm.getActiveState(tgIdentity)?.slots.date).toBe('завтра');
+
+    const msg = tgClient.getLastMessage();
+    expect(msg?.text).toBe(sc.clarificationPrompts?.start_time);
   });
 
   test('GC-10: Web independence — MockWebChannelAdapter executes scenario without engine modification', async () => {
-    const sc = getScenario();
+    const sc = getNannyScenario();
     const webUser = { ownerId: 'web-user-1', sessionId: 'web-tab-9' };
     const webAdapter = new MockWebChannelAdapter(engine);
 
-    const res = await webAdapter.submit({ channel: 'text', raw_input: 'послезавтра' }, webUser, sc);
+    const res = await webAdapter.submit({ modality: 'text', raw_input: 'послезавтра' }, webUser, sc);
     expect(dm.getActiveState(webUser)?.slots.date).toBe('послезавтра');
     expect(res.presentation.text).toBe(sc.clarificationPrompts?.start_time);
   });
 
-  test('GC-11: Presentation portability across Telegram, WhatsApp, and Web renderers', () => {
+  test('GC-11: Presentation portability across distinct renderers (Telegram, WhatsApp, Web)', () => {
     const samplePresentation: DialoguePresentation = {
       text: 'Выберите вариант:',
       actions: [[
-        { id: '1', label: 'Опция 1', payload: { slotName: 'opt', slotValue: 'val1' } },
-        { id: '2', label: 'Опция 2', payload: { slotName: 'opt', slotValue: 'val2' } }
+        { id: '1', label: 'Опция 1', payload: { slotName: 'custom_slot', slotValue: 'val1' } },
+        { id: '2', label: 'Опция 2', payload: { slotName: 'custom_slot', slotValue: 'val2' } }
       ]]
     };
 
-    // 1. Mock Telegram Renderer (Inline Keyboard)
-    const tgKeyboard = samplePresentation.actions?.map(row => row.map(a => ({ text: a.label, callback_data: `dialogue:${a.payload.slotName}:${a.payload.slotValue}` })));
-    expect(tgKeyboard?.[0][0].text).toBe('Опция 1');
+    // Generic presentation contains purely abstract contract
+    expect(samplePresentation.actions?.[0][0].id).toBe('1');
+    expect(samplePresentation.actions?.[0][0].label).toBe('Опция 1');
+    expect(samplePresentation.actions?.[0][0].payload.slotName).toBe('custom_slot');
+    expect(samplePresentation.actions?.[0][0].payload.slotValue).toBe('val1');
 
-    // 2. Mock WhatsApp Renderer (Interactive Buttons)
+    // 1. WhatsApp Renderer
     const waButtons = samplePresentation.actions?.[0].map(a => ({ id: a.id, title: a.label }));
     expect(waButtons?.[1].title).toBe('Опция 2');
 
-    // 3. Mock Web Renderer (HTML Buttons)
+    // 2. Web Renderer
     const webButtons = samplePresentation.actions?.[0].map(a => `<button data-slot="${a.payload.slotName}" data-val="${a.payload.slotValue}">${a.label}</button>`);
     expect(webButtons?.[0]).toContain('Опция 1');
   });
@@ -284,14 +376,21 @@ test.describe('CONTRACT: SC-INTEGRATION-004 Generic Dialogue Channel Contract Su
     expect(content).not.toMatch(/import\s+.*DialogueStateManager.*from/);
   });
 
-  test('AT-08: DialogueEngine is the single owner of DialogueContext orchestration', () => {
-    const filePath = path.resolve(__dirname, '../../../src/platform/dialogue-channel.ts');
-    const content = fs.readFileSync(filePath, 'utf8');
+  test('AT-08: Negative check — Adapters do NOT directly invoke DialogueStateManager orchestration methods', () => {
+    const adapterFiles = [
+      path.resolve(__dirname, '../../../src/platform/telegram-bot-adapter.ts'),
+      path.resolve(__dirname, '../../../src/platform/telegram-dialogue-adapter.ts')
+    ];
 
-    expect(content).toContain('class DialogueEngine');
-    expect(content).toContain('this.dm.createContext');
-    expect(content).toContain('this.dm.createExecution');
-    expect(content).toContain('this.dm.dispatchAction');
+    for (const file of adapterFiles) {
+      const content = fs.readFileSync(file, 'utf8');
+      expect(content).not.toContain('.createContext(');
+      expect(content).not.toContain('.cancelContext(');
+      expect(content).not.toContain('.createExecution(');
+      expect(content).not.toContain('.dispatchAction(');
+      expect(content).not.toContain('.fillSlot(');
+      expect(content).not.toContain('.resolveCandidate(');
+    }
   });
 
 });
