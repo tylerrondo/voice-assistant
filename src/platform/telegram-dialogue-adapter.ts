@@ -64,6 +64,7 @@ export class TelegramDialogueAdapter {
     const prevState = activeCtxBefore ? { ...activeCtxBefore.slots } : {};
 
     const dialogueInput: DialogueInput = {
+      modality: input.channel,
       channel: input.channel,
       raw_input: input.raw_input,
       transcript: input.transcript,
@@ -90,11 +91,6 @@ export class TelegramDialogueAdapter {
       next_question: res.nextQuestion || null,
       confidence: 1.0
     };
-
-    // Keep ORDER_CONFIRMED status for legacy test assertions
-    if (res.status === 'CONFIRMED') {
-      res.status = 'ORDER_CONFIRMED';
-    }
 
     return res;
   }
