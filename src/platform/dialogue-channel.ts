@@ -5,6 +5,8 @@ import {
 } from './dialogue-manager';
 import { VoiceChannel, type ScenarioDefinition } from './voice-channel';
 
+export type DialogueModality = 'text' | 'button' | 'voice';
+
 export interface DialogueInputPayload {
   slotName?: string;
   slotValue?: unknown;
@@ -12,7 +14,8 @@ export interface DialogueInputPayload {
 }
 
 export interface DialogueInput {
-  channel: 'text' | 'button' | 'voice';
+  modality?: DialogueModality;
+  channel?: DialogueModality | string; // backward-compatible alias
   raw_input?: string;
   transcript?: string;
   payload?: DialogueInputPayload;
@@ -66,11 +69,12 @@ export class DialogueEngine {
     identity: SessionIdentity,
     activeScenario: ScenarioDefinition
   ): Promise<DialogueEngineResult> {
+    const inputModality: DialogueModality = input.modality || (input.channel as DialogueModality) || 'text';
     let extractedSlots: Record<string, any> = {};
     let rawText = '';
 
-    // 1. Channel Input Normalization
-    if (input.channel === 'button') {
+    // 1. Modality Input Normalization
+    if (inputModality === 'button') {
       rawText = input.raw_input || '';
       if (input.payload?.slotName && input.payload?.slotValue !== undefined) {
         extractedSlots[input.payload.slotName] = input.payload.slotValue;
@@ -80,13 +84,13 @@ export class DialogueEngine {
           extractedSlots = extracted.slots;
         }
       }
-    } else if (input.channel === 'voice') {
+    } else if (inputModality === 'voice') {
       rawText = input.transcript || input.raw_input || '';
       const extracted = this.vc.extractSlotsDeterministically(rawText, activeScenario.slotExtractors, activeScenario.id);
       if (extracted.status === 'RESOLVED') {
         extractedSlots = extracted.slots;
       }
-    } else if (input.channel === 'text') {
+    } else if (inputModality === 'text') {
       rawText = input.raw_input || '';
       const extracted = this.vc.extractSlotsDeterministically(rawText, activeScenario.slotExtractors, activeScenario.id);
       if (extracted.status === 'RESOLVED') {
@@ -108,31 +112,28 @@ export class DialogueEngine {
       );
     }
 
-    // 3. Declarative Confirmation & Cancellation settings from Scenario Contract
-    const confirmSlot = activeScenario.confirmation?.slot || 'confirmation';
-    const confirmedVal = activeScenario.confirmation?.confirmedValue || 'CONFIRMED';
-    const rejectedVal = activeScenario.confirmation?.rejectedValue || 'REJECTED';
-    const confirmLabel = activeScenario.confirmation?.confirmLabel || 'Да';
-    const rejectLabel = activeScenario.confirmation?.rejectLabel || 'Отмена';
+    // 3. Declarative Cancellation check (strictly driven by Scenario definition)
+    const confirmationConfig = activeScenario.confirmation;
+    if (confirmationConfig) {
+      const confirmSlot = confirmationConfig.slot;
+      const rejectedVal = confirmationConfig.rejectedValue;
+      const nonConfirmSlots = Object.keys(extractedSlots).filter(k => k !== confirmSlot);
 
-    // 4. Semantic Cancellation
-    const nonConfirmSlots = Object.keys(extractedSlots).filter(k => k !== confirmSlot);
-    const isPureCancel = extractedSlots[confirmSlot] === rejectedVal && nonConfirmSlots.length === 0;
-
-    if (isPureCancel) {
-      this.dm.cancelContext(ctx.contextId, identity);
-      return {
-        status: 'CANCELLED',
-        presentation: {
-          text: 'Диалог отменён.'
-        }
-      };
+      if (extractedSlots[confirmSlot] === rejectedVal && nonConfirmSlots.length === 0) {
+        this.dm.cancelContext(ctx.contextId, identity);
+        return {
+          status: 'CANCELLED',
+          presentation: {
+            text: confirmationConfig.cancelledMessage || 'Cancelled'
+          }
+        };
+      }
     }
 
-    // 5. Declarative Target Slot for Candidate Resolution
+    // 4. Declarative Target Slot for Candidate Resolution
     const targetSlot = activeScenario.candidateBinding?.targetSlot;
 
-    // 6. Generic Candidate Resolution using existing SC-PLATFORM-003
+    // 5. Generic Candidate Resolution using existing SC-PLATFORM-003
     if (targetSlot && ctx.offers && ctx.offers.length > 0 && extractedSlots[targetSlot] === undefined) {
       const resolution = this.vc.resolveCandidate(
         extractedSlots,
@@ -146,20 +147,26 @@ export class DialogueEngine {
       }
     }
 
-    // 7. Fill or Replace Slots in Unified DialogueContext
+    // 6. Fill or Replace Slots in Unified DialogueContext
     for (const [slotKey, slotVal] of Object.entries(extractedSlots)) {
-      if (slotKey !== confirmSlot && slotKey !== 'candidate_index' && slotKey !== 'candidate_name') {
+      if (
+        (!confirmationConfig || slotKey !== confirmationConfig.slot) &&
+        slotKey !== 'candidate_index' &&
+        slotKey !== 'candidate_name'
+      ) {
         await this.dm.fillSlot(slotKey, slotVal, ctx.contextId, identity);
       }
     }
 
     ctx = this.dm.getContext(ctx.contextId, identity)!;
 
-    // 8. Generic Confirmation & Execution via ActionDispatcher
-    if (extractedSlots[confirmSlot] === confirmedVal) {
+    // 7. Generic Confirmation & Execution via ActionDispatcher
+    if (confirmationConfig && extractedSlots[confirmationConfig.slot] === confirmationConfig.confirmedValue) {
+      const confirmSlot = confirmationConfig.slot;
       const remainingNonConfirm = ctx.missingSlots.filter(s => s !== confirmSlot);
+
       if (remainingNonConfirm.length === 0) {
-        await this.dm.fillSlot(confirmSlot, confirmedVal, ctx.contextId, identity);
+        await this.dm.fillSlot(confirmSlot, confirmationConfig.confirmedValue, ctx.contextId, identity);
         ctx = this.dm.getContext(ctx.contextId, identity)!;
         const exec = this.dm.createExecution(ctx, identity);
         const dispatchRes = await this.dm.dispatchAction(exec.executionId, ctx.slots, identity);
@@ -171,51 +178,54 @@ export class DialogueEngine {
           dispatchStatus: dispatchRes.status,
           slots: ctx.slots,
           presentation: {
-            text: 'Заказ подтверждён.'
+            text: confirmationConfig.confirmedMessage || 'Operation confirmed'
           }
         };
       }
     }
 
-    // 9. Build Generic Presentation (text + actions)
+    // 8. Build Generic Presentation (text + actions)
+    const confirmSlot = confirmationConfig?.slot;
     const nextMissing = ctx.missingSlots.find(s => s !== confirmSlot);
     const nextQuestion = nextMissing && activeScenario.clarificationPrompts?.[nextMissing]
       ? activeScenario.clarificationPrompts[nextMissing]
-      : (ctx.missingSlots.includes(confirmSlot) ? activeScenario.clarificationPrompts?.[confirmSlot] || 'Подтверждаете?' : 'Пожалуйста, продолжите ввод:');
+      : (confirmSlot && ctx.missingSlots.includes(confirmSlot)
+          ? activeScenario.clarificationPrompts?.[confirmSlot] || 'Confirmation required'
+          : '');
 
     const actions: DialoguePresentationAction[][] = [];
 
     // Generic confirmation actions
-    if (ctx.missingSlots.length === 1 && ctx.missingSlots[0] === confirmSlot) {
+    if (confirmationConfig && ctx.missingSlots.length === 1 && ctx.missingSlots[0] === confirmationConfig.slot) {
       actions.push([
         {
           id: 'confirm',
-          label: confirmLabel,
+          label: confirmationConfig.confirmLabel || 'Confirm',
           payload: {
-            slotName: confirmSlot,
-            slotValue: confirmedVal
+            slotName: confirmationConfig.slot,
+            slotValue: confirmationConfig.confirmedValue
           }
         },
         {
           id: 'cancel',
-          label: rejectLabel,
+          label: confirmationConfig.rejectLabel || 'Cancel',
           payload: {
-            slotName: confirmSlot,
-            slotValue: rejectedVal
+            slotName: confirmationConfig.slot,
+            slotValue: confirmationConfig.rejectedValue
           }
         }
       ]);
     } else if (targetSlot && ctx.offers && ctx.offers.length > 0 && ctx.missingSlots.includes(targetSlot)) {
       // Generic candidate presentation actions using declarative idField and labelField
       const idKey = activeScenario.candidateBinding?.idField || 'id';
-      const labelKey = activeScenario.candidateBinding?.labelField || 'name';
+      const labelKey = activeScenario.candidateBinding?.labelField || idKey;
 
       const candidateRow: DialoguePresentationAction[] = ctx.offers.map((cand: any) => ({
-        id: String(cand[idKey] ?? cand.id),
-        label: String(cand[labelKey] ?? cand.name ?? cand[idKey] ?? cand.id),
+        id: String(cand[idKey]),
+        label: String(cand[labelKey] ?? cand[idKey]),
         payload: {
           slotName: targetSlot,
-          slotValue: cand[idKey] ?? cand.id
+          slotValue: cand[idKey]
         }
       }));
       actions.push(candidateRow);
