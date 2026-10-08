@@ -28,6 +28,32 @@ export interface DialogueInstrumentation {
   confidence: number;
 }
 
+export interface DialoguePresentationAction {
+  id: string;
+  label: string;
+  payload: {
+    slotName: string;
+    slotValue: unknown;
+  };
+}
+
+export interface DialoguePresentation {
+  text?: string;
+  actions?: DialoguePresentationAction[][];
+}
+
+export interface DialogueAdapterResult {
+  status: string;
+  contextId?: string;
+  executionId?: string;
+  slots?: Record<string, any>;
+  missingSlots?: string[];
+  nextQuestion?: string | null;
+  offers?: any[];
+  dispatchStatus?: string;
+  presentation: DialoguePresentation;
+}
+
 export class TelegramDialogueAdapter {
   private dm: DialogueStateManager;
   private vc: VoiceChannel;
@@ -46,7 +72,7 @@ export class TelegramDialogueAdapter {
     input: TelegramInputMessage,
     identity: SessionIdentity,
     activeScenario: ScenarioDefinition
-  ): Promise<any> {
+  ): Promise<DialogueAdapterResult> {
     const activeCtxBefore = this.dm.getActiveState(identity);
     const prevState = activeCtxBefore ? { ...activeCtxBefore.slots } : {};
 
@@ -103,7 +129,12 @@ export class TelegramDialogueAdapter {
     if (isPureCancel) {
       this.dm.cancelContext(ctx.contextId, identity);
       this.recordInstrumentation(input, rawText, transcript, intent, extractedSlots, prevState, {}, null);
-      return { status: 'CANCELLED', message: 'Диалог отменен' };
+      return {
+        status: 'CANCELLED',
+        presentation: {
+          text: 'Диалог отменён.'
+        }
+      };
     }
 
     // 4. Resolve Candidate using generic resolveCandidate if candidates are present and choice criteria extracted
@@ -144,16 +175,54 @@ export class TelegramDialogueAdapter {
           contextId: ctx.contextId,
           executionId: exec.executionId,
           dispatchStatus: dispatchRes.status,
-          slots: ctx.slots
+          slots: ctx.slots,
+          presentation: {
+            text: 'Заказ подтверждён.'
+          }
         };
       }
     }
 
-    // 7. Determine Next Prompt
+    // 7. Determine Next Prompt & Build Generic Presentation Actions
     const nextMissing = ctx.missingSlots.find(s => s !== 'confirmation');
     const nextQuestion = nextMissing && activeScenario.clarificationPrompts?.[nextMissing]
       ? activeScenario.clarificationPrompts[nextMissing]
-      : (ctx.missingSlots.includes('confirmation') ? activeScenario.clarificationPrompts?.confirmation || 'Подтверждаете?' : null);
+      : (ctx.missingSlots.includes('confirmation') ? activeScenario.clarificationPrompts?.confirmation || 'Подтверждаете?' : 'Пожалуйста, продолжите ввод:');
+
+    const actions: DialoguePresentationAction[][] = [];
+
+    // Confirmation action buttons
+    if (ctx.missingSlots.length === 1 && ctx.missingSlots[0] === 'confirmation') {
+      actions.push([
+        {
+          id: 'confirm',
+          label: 'Да',
+          payload: {
+            slotName: 'confirmation',
+            slotValue: 'CONFIRMED'
+          }
+        },
+        {
+          id: 'cancel',
+          label: 'Отмена',
+          payload: {
+            slotName: 'confirmation',
+            slotValue: 'REJECTED'
+          }
+        }
+      ]);
+    } else if (ctx.offers && ctx.offers.length > 0 && ctx.missingSlots.includes('selected_nanny')) {
+      // Generic candidate presentation actions
+      const candidateRow: DialoguePresentationAction[] = ctx.offers.map((cand: any) => ({
+        id: String(cand.id),
+        label: cand.name || String(cand.id),
+        payload: {
+          slotName: 'selected_nanny',
+          slotValue: cand.id
+        }
+      }));
+      actions.push(candidateRow);
+    }
 
     this.recordInstrumentation(input, rawText, transcript, intent, extractedSlots, prevState, ctx.slots, nextQuestion);
 
@@ -163,7 +232,11 @@ export class TelegramDialogueAdapter {
       slots: ctx.slots,
       missingSlots: ctx.missingSlots,
       nextQuestion,
-      offers: ctx.offers
+      offers: ctx.offers,
+      presentation: {
+        text: nextQuestion,
+        actions: actions.length > 0 ? actions : undefined
+      }
     };
   }
 
@@ -186,7 +259,7 @@ export class TelegramDialogueAdapter {
       previous_state: prevState,
       new_state: newState,
       next_question: nextQuestion,
-      confidence: 1.0 // deterministic rule-based baseline confidence
+      confidence: 1.0
     };
   }
 }
