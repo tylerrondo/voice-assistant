@@ -1,5 +1,11 @@
 import { type ScenarioDefinition } from './voice-channel';
-import { type TelegramDialogueAdapter, type TelegramInputMessage } from './telegram-dialogue-adapter';
+import {
+  type TelegramDialogueAdapter,
+  type TelegramInputMessage,
+  type DialoguePresentation,
+  type DialoguePresentationAction,
+  type DialogueAdapterResult
+} from './telegram-dialogue-adapter';
 import { type TelegramVoiceTransport } from './telegram-voice-transport';
 import { type SessionIdentity } from './dialogue-manager';
 
@@ -85,6 +91,42 @@ export class TelegramBotAdapter {
     this.telegramClient = telegramClient;
   }
 
+  // Safe encoding for callback data (handles values containing colons safely)
+  public encodeCallbackData(slotName: string, slotValue: unknown): string {
+    const encSlot = encodeURIComponent(slotName);
+    const encVal = encodeURIComponent(typeof slotValue === 'object' ? JSON.stringify(slotValue) : String(slotValue));
+    return `dialogue:${encSlot}:${encVal}`;
+  }
+
+  // Safe decoding of callback data
+  public decodeCallbackData(data: string): { slotName: string; slotValue: unknown } | null {
+    if (!data.startsWith('dialogue:')) return null;
+    const parts = data.split(':');
+    if (parts.length < 3) return null;
+
+    const encSlot = parts[1];
+    const encVal = parts.slice(2).join(':');
+
+    const slotName = decodeURIComponent(encSlot);
+    const rawVal = decodeURIComponent(encVal);
+
+    let slotValue: unknown = rawVal;
+    if (rawVal === 'true') slotValue = true;
+    else if (rawVal === 'false') slotValue = false;
+    else if (!isNaN(Number(rawVal)) && rawVal.trim() !== '') {
+      slotValue = Number(rawVal);
+    } else {
+      try {
+        const parsed = JSON.parse(rawVal);
+        if (typeof parsed === 'object') slotValue = parsed;
+      } catch {
+        // preserve as string
+      }
+    }
+
+    return { slotName, slotValue };
+  }
+
   public extractIdentity(update: TelegramUpdate): { identity: SessionIdentity; chatId: string } {
     if (update.callback_query) {
       const fromId = String(update.callback_query.from.id);
@@ -110,31 +152,20 @@ export class TelegramBotAdapter {
   public async handleUpdate(update: TelegramUpdate, activeScenario: ScenarioDefinition): Promise<void> {
     const { identity, chatId } = this.extractIdentity(update);
 
-    // 1. Handle Callback Query (Button click)
+    // 1. Handle Callback Query
     if (update.callback_query) {
       await this.telegramClient.answerCallbackQuery(update.callback_query.id);
 
       const data = update.callback_query.data || '';
       let inputMessage: TelegramInputMessage;
 
-      // Protocol: dialogue:<slotName>:<slotValue>
-      if (data.startsWith('dialogue:')) {
-        const parts = data.split(':');
-        const slotName = parts[1];
-        let slotValue: any = parts.slice(2).join(':');
-
-        // Cast boolean or numeric values
-        if (slotValue === 'true') slotValue = true;
-        else if (slotValue === 'false') slotValue = false;
-        else if (!isNaN(Number(slotValue)) && slotValue.trim() !== '') {
-          slotValue = Number(slotValue);
-        }
-
+      const decoded = this.decodeCallbackData(data);
+      if (decoded) {
         inputMessage = {
           channel: 'button',
           button_payload: {
-            slotName,
-            slotValue
+            slotName: decoded.slotName,
+            slotValue: decoded.slotValue
           }
         };
       } else {
@@ -145,7 +176,7 @@ export class TelegramBotAdapter {
       }
 
       const result = await this.dialogueAdapter.handleMessage(inputMessage, identity, activeScenario);
-      await this.sendTelegramResponse(chatId, result);
+      await this.sendTelegramResponse(chatId, result?.presentation);
       return;
     }
 
@@ -171,7 +202,7 @@ export class TelegramBotAdapter {
 
       if (voiceResult.status === 'TRANSCRIPTION_SUCCESS' && voiceResult.normalizedInput) {
         const result = await this.dialogueAdapter.handleMessage(voiceResult.normalizedInput, identity, activeScenario);
-        await this.sendTelegramResponse(chatId, result);
+        await this.sendTelegramResponse(chatId, result?.presentation);
       }
       return;
     }
@@ -184,46 +215,32 @@ export class TelegramBotAdapter {
       };
 
       const result = await this.dialogueAdapter.handleMessage(inputMessage, identity, activeScenario);
-      await this.sendTelegramResponse(chatId, result);
+      await this.sendTelegramResponse(chatId, result?.presentation);
       return;
     }
   }
 
-  private async sendTelegramResponse(chatId: string, result: any): Promise<void> {
-    if (!result) return;
+  public async sendTelegramResponse(chatId: string, presentation?: DialoguePresentation): Promise<void> {
+    if (!presentation || !presentation.text) return;
 
-    if (result.status === 'CANCELLED') {
-      await this.telegramClient.sendMessage(chatId, 'Диалог отменён.');
-      return;
+    let options: TelegramSendOptions | undefined;
+
+    // Render actions into inline keyboard purely from presentation actions
+    if (presentation.actions && presentation.actions.length > 0) {
+      const inlineKeyboard: TelegramInlineButton[][] = presentation.actions.map(row =>
+        row.map(action => ({
+          text: action.label,
+          callback_data: this.encodeCallbackData(action.payload.slotName, action.payload.slotValue)
+        }))
+      );
+
+      options = {
+        reply_markup: {
+          inline_keyboard: inlineKeyboard
+        }
+      };
     }
 
-    if (result.status === 'ORDER_CONFIRMED') {
-      await this.telegramClient.sendMessage(chatId, 'Заказ подтверждён.');
-      return;
-    }
-
-    const responseText = result.nextQuestion || 'Пожалуйста, продолжите ввод:';
-    const inlineKeyboard: TelegramInlineButton[][] = [];
-
-    // Confirmation step buttons
-    if (result.missingSlots && result.missingSlots.length === 1 && result.missingSlots[0] === 'confirmation') {
-      inlineKeyboard.push([
-        { text: 'Да', callback_data: 'dialogue:confirmation:CONFIRMED' },
-        { text: 'Отмена', callback_data: 'dialogue:confirmation:REJECTED' }
-      ]);
-    } else if (result.offers && result.offers.length > 0 && result.missingSlots?.includes('selected_nanny')) {
-      // Dynamic Candidate presentation buttons
-      const candidateRow: TelegramInlineButton[] = result.offers.map((cand: any) => ({
-        text: cand.name || String(cand.id),
-        callback_data: `dialogue:selected_nanny:${cand.id}`
-      }));
-      inlineKeyboard.push(candidateRow);
-    }
-
-    const options: TelegramSendOptions | undefined = inlineKeyboard.length > 0
-      ? { reply_markup: { inline_keyboard: inlineKeyboard } }
-      : undefined;
-
-    await this.telegramClient.sendMessage(chatId, responseText, options);
+    await this.telegramClient.sendMessage(chatId, presentation.text, options);
   }
 }
