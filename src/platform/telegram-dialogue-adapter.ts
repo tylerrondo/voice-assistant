@@ -57,7 +57,7 @@ export class TelegramDialogueAdapter {
   public async handleMessage(
     input: TelegramInputMessage,
     identity: SessionIdentity,
-    activeScenario: ScenarioDefinition
+    activeScenario?: ScenarioDefinition
   ): Promise<DialogueAdapterResult> {
     const dm = this.engine.getDialogueManager();
     const activeCtxBefore = dm.getActiveState(identity);
@@ -84,7 +84,7 @@ export class TelegramDialogueAdapter {
       channel: input.channel,
       raw_input: input.raw_input || null,
       transcript: input.transcript || null,
-      intent: activeCtxAfter?.intent || activeScenario.intent,
+      intent: activeCtxAfter?.intent || activeScenario?.intent || null,
       extracted_slots: {},
       previous_state: prevState,
       new_state: newState,
