@@ -151,7 +151,7 @@ export class TelegramBotAdapter {
     throw new Error('INVALID_TELEGRAM_UPDATE: Missing message or callback_query');
   }
 
-  public async handleUpdate(update: TelegramUpdate, activeScenario: ScenarioDefinition): Promise<void> {
+  public async handleUpdate(update: TelegramUpdate, optionalScenario?: ScenarioDefinition): Promise<void> {
     const { identity, chatId } = this.extractIdentity(update);
 
     // 1. Handle Callback Query
@@ -164,7 +164,7 @@ export class TelegramBotAdapter {
       const decoded = this.decodeCallbackData(data);
       if (decoded) {
         dialogueInput = {
-          channel: 'button',
+          modality: 'button',
           payload: {
             slotName: decoded.slotName,
             slotValue: decoded.slotValue
@@ -172,12 +172,12 @@ export class TelegramBotAdapter {
         };
       } else {
         dialogueInput = {
-          channel: 'button',
+          modality: 'button',
           raw_input: data
         };
       }
 
-      const result = await this.dialogueEngine.processInput(dialogueInput, identity, activeScenario);
+      const result = await this.dialogueEngine.processInput(dialogueInput, identity, optionalScenario);
       await this.sendTelegramResponse(chatId, result?.presentation);
       return;
     }
@@ -204,10 +204,10 @@ export class TelegramBotAdapter {
 
       if (voiceResult.status === 'TRANSCRIPTION_SUCCESS' && voiceResult.normalizedInput) {
         const dialogueInput: DialogueInput = {
-          channel: 'voice',
+          modality: 'voice',
           transcript: voiceResult.normalizedInput.transcript
         };
-        const result = await this.dialogueEngine.processInput(dialogueInput, identity, activeScenario);
+        const result = await this.dialogueEngine.processInput(dialogueInput, identity, optionalScenario);
         await this.sendTelegramResponse(chatId, result?.presentation);
       }
       return;
@@ -216,11 +216,11 @@ export class TelegramBotAdapter {
     // 3. Handle Text Message
     if (update.message?.text) {
       const dialogueInput: DialogueInput = {
-        channel: 'text',
+        modality: 'text',
         raw_input: update.message.text
       };
 
-      const result = await this.dialogueEngine.processInput(dialogueInput, identity, activeScenario);
+      const result = await this.dialogueEngine.processInput(dialogueInput, identity, optionalScenario);
       await this.sendTelegramResponse(chatId, result?.presentation);
       return;
     }
