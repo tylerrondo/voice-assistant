@@ -37,7 +37,9 @@
         "confirmedValue": "CONFIRMED",
         "rejectedValue": "REJECTED",
         "confirmLabel": "Да",
-        "rejectLabel": "Отмена"
+        "rejectLabel": "Отмена",
+        "confirmedMessage": "Заказ подтверждён.",
+        "cancelledMessage": "Диалог отменён."
       },
       "clarificationPrompts": {
         "date": "Когда нужна няня?",
