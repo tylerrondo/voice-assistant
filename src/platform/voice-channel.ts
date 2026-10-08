@@ -39,12 +39,22 @@ export interface ScenarioQueryEvaluation {
 }
 
 export interface CandidateBindingDefinition {
+  targetSlot?: string;
   idField?: string;
+  labelField?: string;
   indexField?: string;
   statusField?: string;
   unavailableValue?: string;
   unavailableTemplate?: string;
   ambiguityTriggerValues?: string[];
+}
+
+export interface ConfirmationDefinition {
+  slot: string;
+  confirmedValue: string;
+  rejectedValue: string;
+  confirmLabel?: string;
+  rejectLabel?: string;
 }
 
 export interface ScenarioDefinition {
@@ -61,6 +71,7 @@ export interface ScenarioDefinition {
   requiredSlots?: string[];
   slotExtractors?: Record<string, SlotExtractorDefinition>;
   candidateBinding?: CandidateBindingDefinition;
+  confirmation?: ConfirmationDefinition;
   clarificationPrompts?: Record<string, string>;
   ambiguityPrompt?: {
     template: string;
@@ -366,7 +377,6 @@ export class VoiceChannel {
     const unavailTemplate = binding?.unavailableTemplate;
     const ambiguityTriggers = binding?.ambiguityTriggerValues || [];
 
-    // Declarative ambiguity check: only triggers if extracted value matches declarative ambiguityTriggerValues or explicitly signals ambiguity
     const hasAmbiguousCriteria = Object.values(extractedSlots).some(
       v => typeof v === 'string' && (ambiguityTriggers.includes(v) || v.toLowerCase().includes('ambiguous'))
     );
@@ -388,7 +398,6 @@ export class VoiceChannel {
 
     let matchedItem: CandidateItem | undefined;
 
-    // Match by declared index or matching attribute
     for (const val of Object.values(extractedSlots)) {
       if (typeof val === 'number') {
         matchedItem = candidates.find(c => c[indexKey] === val);
@@ -408,7 +417,6 @@ export class VoiceChannel {
 
     const resolvedId = String(matchedItem[idKey] ?? '');
 
-    // Declarative unavailable state check
     if (matchedItem[statusKey] !== undefined && matchedItem[statusKey] === unavailableVal) {
       let unavailMsg = unavailTemplate || `Вариант ${resolvedId} более недоступен.`;
       unavailMsg = unavailMsg.replace(/{{targetId}}/g, resolvedId);
@@ -505,7 +513,7 @@ export class VoiceChannel {
       }
     }
 
-    // 3. Declarative Active Context Processing (Strictly Generic Candidate & Slot Binding)
+    // 3. Declarative Active Context Processing
     const activeWaiting = this.dialogueManager.listContexts(identity).filter(c => c.status === 'WAITING_FOR_SLOT');
 
     if (activeWaiting.length === 1) {
@@ -528,9 +536,9 @@ export class VoiceChannel {
         if (slotRes.status === 'RESOLVED' && Object.keys(slotRes.slots).length > 0) {
           const extracted = slotRes.slots;
 
-          // A. If context contains candidate collection
           if (activeCtx.offers && activeCtx.offers.length > 0) {
-            const targetSlot = activeCtx.missingSlots.find(s => s !== 'confirmation') 
+            const targetSlot = scenario.candidateBinding?.targetSlot
+              || activeCtx.missingSlots.find(s => s !== 'confirmation') 
               || activeCtx.requiredSlots?.find(s => s !== 'confirmation');
 
             if (targetSlot) {
@@ -552,7 +560,6 @@ export class VoiceChannel {
               }
 
               if (candidateResolution.status === 'CANDIDATE_UNAVAILABLE') {
-                // Return generic status with legacy compatibility field
                 return {
                   status: 'CANDIDATE_UNAVAILABLE',
                   targetId: candidateResolution.targetId,
@@ -570,7 +577,6 @@ export class VoiceChannel {
             }
           }
 
-          // B. Generic slot binding: any slot matching requiredSlots or existing context slots
           let updatedCtxState: any = null;
           for (const [slotKey, slotVal] of Object.entries(extracted)) {
             if (slotKey !== 'confirmation' && (activeCtx.requiredSlots?.includes(slotKey) || activeCtx.slots[slotKey] !== undefined)) {
@@ -581,7 +587,6 @@ export class VoiceChannel {
             }
           }
 
-          // C. Rejection: "confirmation" === "REJECTED"
           if (extracted.confirmation === 'REJECTED') {
             return {
               status: 'SELECTION_REJECTED',
@@ -591,7 +596,6 @@ export class VoiceChannel {
             };
           }
 
-          // D. Confirmation: "confirmation" === "CONFIRMED"
           if (extracted.confirmation === 'CONFIRMED') {
             const currentCtx = this.dialogueManager.getContext(activeCtx.contextId, identity) || activeCtx;
             const remainingNonConfirm = currentCtx.missingSlots.filter(s => s !== 'confirmation');
@@ -632,7 +636,7 @@ export class VoiceChannel {
       }
     }
 
-    // 4. Initial Context Creation from Scenario
+    // 4. Initial Context Creation
     if (intentRes.status === 'RESOLVED') {
       const sc = intentRes.scenario;
       const emitStep = sc.steps?.find(st => st.kind === 'emit');
