@@ -55,6 +55,8 @@ export interface ConfirmationDefinition {
   rejectedValue: string;
   confirmLabel?: string;
   rejectLabel?: string;
+  confirmedMessage?: string;
+  cancelledMessage?: string;
 }
 
 export interface ScenarioDefinition {
