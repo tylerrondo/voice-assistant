@@ -66,7 +66,6 @@ export class DialogueEngine {
     identity: SessionIdentity,
     activeScenario: ScenarioDefinition
   ): Promise<DialogueEngineResult> {
-    const activeCtxBefore = this.dm.getActiveState(identity);
     let extractedSlots: Record<string, any> = {};
     let rawText = '';
 
@@ -109,9 +108,16 @@ export class DialogueEngine {
       );
     }
 
-    // 3. Generic Semantic Cancellation
-    const nonConfirmSlots = Object.keys(extractedSlots).filter(k => k !== 'confirmation');
-    const isPureCancel = extractedSlots.confirmation === 'REJECTED' && nonConfirmSlots.length === 0;
+    // 3. Declarative Confirmation & Cancellation settings from Scenario Contract
+    const confirmSlot = activeScenario.confirmation?.slot || 'confirmation';
+    const confirmedVal = activeScenario.confirmation?.confirmedValue || 'CONFIRMED';
+    const rejectedVal = activeScenario.confirmation?.rejectedValue || 'REJECTED';
+    const confirmLabel = activeScenario.confirmation?.confirmLabel || 'Да';
+    const rejectLabel = activeScenario.confirmation?.rejectLabel || 'Отмена';
+
+    // 4. Semantic Cancellation
+    const nonConfirmSlots = Object.keys(extractedSlots).filter(k => k !== confirmSlot);
+    const isPureCancel = extractedSlots[confirmSlot] === rejectedVal && nonConfirmSlots.length === 0;
 
     if (isPureCancel) {
       this.dm.cancelContext(ctx.contextId, identity);
@@ -123,13 +129,11 @@ export class DialogueEngine {
       };
     }
 
-    // 4. Declarative Target Slot for Candidate Resolution
-    const targetSlot = (activeScenario.candidateBinding as any)?.targetSlot
-      || ctx.missingSlots.find(s => s !== 'confirmation')
-      || 'selectedItem';
+    // 5. Declarative Target Slot for Candidate Resolution
+    const targetSlot = activeScenario.candidateBinding?.targetSlot;
 
-    // 5. Generic Candidate Resolution using existing SC-PLATFORM-003
-    if (ctx.offers && ctx.offers.length > 0 && extractedSlots[targetSlot] === undefined) {
+    // 6. Generic Candidate Resolution using existing SC-PLATFORM-003
+    if (targetSlot && ctx.offers && ctx.offers.length > 0 && extractedSlots[targetSlot] === undefined) {
       const resolution = this.vc.resolveCandidate(
         extractedSlots,
         ctx.offers as any,
@@ -142,20 +146,20 @@ export class DialogueEngine {
       }
     }
 
-    // 6. Fill or Replace Slots in Unified DialogueContext
+    // 7. Fill or Replace Slots in Unified DialogueContext
     for (const [slotKey, slotVal] of Object.entries(extractedSlots)) {
-      if (slotKey !== 'confirmation' && slotKey !== 'candidate_index' && slotKey !== 'candidate_name') {
+      if (slotKey !== confirmSlot && slotKey !== 'candidate_index' && slotKey !== 'candidate_name') {
         await this.dm.fillSlot(slotKey, slotVal, ctx.contextId, identity);
       }
     }
 
     ctx = this.dm.getContext(ctx.contextId, identity)!;
 
-    // 7. Generic Confirmation & Execution via ActionDispatcher
-    if (extractedSlots.confirmation === 'CONFIRMED') {
-      const remainingNonConfirm = ctx.missingSlots.filter(s => s !== 'confirmation');
+    // 8. Generic Confirmation & Execution via ActionDispatcher
+    if (extractedSlots[confirmSlot] === confirmedVal) {
+      const remainingNonConfirm = ctx.missingSlots.filter(s => s !== confirmSlot);
       if (remainingNonConfirm.length === 0) {
-        await this.dm.fillSlot('confirmation', 'CONFIRMED', ctx.contextId, identity);
+        await this.dm.fillSlot(confirmSlot, confirmedVal, ctx.contextId, identity);
         ctx = this.dm.getContext(ctx.contextId, identity)!;
         const exec = this.dm.createExecution(ctx, identity);
         const dispatchRes = await this.dm.dispatchAction(exec.executionId, ctx.slots, identity);
@@ -173,42 +177,45 @@ export class DialogueEngine {
       }
     }
 
-    // 8. Build Generic Presentation (text + actions)
-    const nextMissing = ctx.missingSlots.find(s => s !== 'confirmation');
+    // 9. Build Generic Presentation (text + actions)
+    const nextMissing = ctx.missingSlots.find(s => s !== confirmSlot);
     const nextQuestion = nextMissing && activeScenario.clarificationPrompts?.[nextMissing]
       ? activeScenario.clarificationPrompts[nextMissing]
-      : (ctx.missingSlots.includes('confirmation') ? activeScenario.clarificationPrompts?.confirmation || 'Подтверждаете?' : 'Пожалуйста, продолжите ввод:');
+      : (ctx.missingSlots.includes(confirmSlot) ? activeScenario.clarificationPrompts?.[confirmSlot] || 'Подтверждаете?' : 'Пожалуйста, продолжите ввод:');
 
     const actions: DialoguePresentationAction[][] = [];
 
     // Generic confirmation actions
-    if (ctx.missingSlots.length === 1 && ctx.missingSlots[0] === 'confirmation') {
+    if (ctx.missingSlots.length === 1 && ctx.missingSlots[0] === confirmSlot) {
       actions.push([
         {
           id: 'confirm',
-          label: 'Да',
+          label: confirmLabel,
           payload: {
-            slotName: 'confirmation',
-            slotValue: 'CONFIRMED'
+            slotName: confirmSlot,
+            slotValue: confirmedVal
           }
         },
         {
           id: 'cancel',
-          label: 'Отмена',
+          label: rejectLabel,
           payload: {
-            slotName: 'confirmation',
-            slotValue: 'REJECTED'
+            slotName: confirmSlot,
+            slotValue: rejectedVal
           }
         }
       ]);
-    } else if (ctx.offers && ctx.offers.length > 0 && ctx.missingSlots.includes(targetSlot)) {
-      // Generic candidate presentation actions
+    } else if (targetSlot && ctx.offers && ctx.offers.length > 0 && ctx.missingSlots.includes(targetSlot)) {
+      // Generic candidate presentation actions using declarative idField and labelField
+      const idKey = activeScenario.candidateBinding?.idField || 'id';
+      const labelKey = activeScenario.candidateBinding?.labelField || 'name';
+
       const candidateRow: DialoguePresentationAction[] = ctx.offers.map((cand: any) => ({
-        id: String(cand.id),
-        label: cand.name || String(cand.id),
+        id: String(cand[idKey] ?? cand.id),
+        label: String(cand[labelKey] ?? cand.name ?? cand[idKey] ?? cand.id),
         payload: {
           slotName: targetSlot,
-          slotValue: cand.id
+          slotValue: cand[idKey] ?? cand.id
         }
       }));
       actions.push(candidateRow);
