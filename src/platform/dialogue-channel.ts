@@ -66,8 +66,7 @@ export class DialogueEngine {
 
   public async processInput(
     input: DialogueInput,
-    identity: SessionIdentity,
-    explicitScenario?: ScenarioDefinition
+    identity: SessionIdentity
   ): Promise<DialogueEngineResult> {
     const inputModality: DialogueModality = input.modality || (input.channel as DialogueModality) || 'text';
     let rawText = '';
@@ -81,57 +80,65 @@ export class DialogueEngine {
     }
 
     // 1. Scenario Resolution & Binding Layer
-    let activeScenario = explicitScenario;
+    let activeScenario: ScenarioDefinition | undefined;
     let ctx = this.dm.getActiveState(identity);
 
-    if (!activeScenario) {
-      if (ctx && ctx.scenarioId) {
-        // Rule A: Existing context drives the scenario
-        activeScenario = this.vc.getScenarioById(ctx.scenarioId)
-          || this.vc.getDeterministicScenarioForIntent(ctx.intent);
-      } else {
-        // Rule B: Button without existing context cannot resolve intent
-        if (inputModality === 'button') {
-          return {
-            status: 'SCENARIO_NOT_FOUND',
-            presentation: {
-              text: 'No active dialogue found for button action.'
-            }
-          };
-        }
+    if (ctx) {
+      // Rule A: Existing context drives the scenario strictly via scenarioId
+      activeScenario = ctx.scenarioId
+        ? this.vc.getScenarioById(ctx.scenarioId)
+        : undefined;
 
-        // Rule C: New dialog resolution via VoiceChannel.resolveIntent
-        if (!rawText.trim()) {
-          return {
-            status: 'SCENARIO_NOT_FOUND',
-            presentation: {
-              text: 'Empty input.'
-            }
-          };
-        }
-
-        const intentRes = this.vc.resolveIntent(rawText);
-
-        if (intentRes.status === 'AMBIGUOUS_INTENT') {
-          return {
-            status: 'SCENARIO_AMBIGUOUS',
-            presentation: {
-              text: intentRes.clarificationPrompt || 'Ambiguous scenario.'
-            }
-          };
-        }
-
-        if (intentRes.status === 'NO_MATCH') {
-          return {
-            status: 'SCENARIO_NOT_FOUND',
-            presentation: {
-              text: 'Scenario not found.'
-            }
-          };
-        }
-
-        activeScenario = intentRes.scenario;
+      if (!activeScenario) {
+        return {
+          status: 'SCENARIO_NOT_FOUND',
+          presentation: {
+            text: 'Active context scenario not found.'
+          }
+        };
       }
+    } else {
+      // Rule B: Button without existing context cannot resolve intent
+      if (inputModality === 'button') {
+        return {
+          status: 'SCENARIO_NOT_FOUND',
+          presentation: {
+            text: 'No active dialogue found for button action.'
+          }
+        };
+      }
+
+      // Rule C: New dialog resolution via VoiceChannel.resolveIntent
+      if (!rawText.trim()) {
+        return {
+          status: 'SCENARIO_NOT_FOUND',
+          presentation: {
+            text: 'Empty input.'
+          }
+        };
+      }
+
+      const intentRes = this.vc.resolveIntent(rawText);
+
+      if (intentRes.status === 'AMBIGUOUS_INTENT') {
+        return {
+          status: 'SCENARIO_AMBIGUOUS',
+          presentation: {
+            text: intentRes.clarificationPrompt || 'Ambiguous scenario.'
+          }
+        };
+      }
+
+      if (intentRes.status === 'NO_MATCH') {
+        return {
+          status: 'SCENARIO_NOT_FOUND',
+          presentation: {
+            text: 'Scenario not found.'
+          }
+        };
+      }
+
+      activeScenario = intentRes.scenario;
     }
 
     if (!activeScenario) {
@@ -185,7 +192,7 @@ export class DialogueEngine {
       const nonConfirmSlots = Object.keys(extractedSlots).filter(k => k !== confirmSlot);
 
       if (extractedSlots[confirmSlot] === rejectedVal && nonConfirmSlots.length === 0) {
-        this.dm.cancelContext(ctx.contextId, identity);
+        await this.dm.cancelContext(ctx.contextId, identity);
         return {
           status: 'CANCELLED',
           presentation: {

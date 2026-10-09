@@ -1,4 +1,3 @@
-import { type ScenarioDefinition } from './voice-channel';
 import {
   type DialoguePresentation,
   type DialoguePresentationAction,
@@ -151,7 +150,7 @@ export class TelegramBotAdapter {
     throw new Error('INVALID_TELEGRAM_UPDATE: Missing message or callback_query');
   }
 
-  public async handleUpdate(update: TelegramUpdate, optionalScenario?: ScenarioDefinition): Promise<void> {
+  public async handleUpdate(update: TelegramUpdate): Promise<void> {
     const { identity, chatId } = this.extractIdentity(update);
 
     // 1. Handle Callback Query
@@ -177,7 +176,7 @@ export class TelegramBotAdapter {
         };
       }
 
-      const result = await this.dialogueEngine.processInput(dialogueInput, identity, optionalScenario);
+      const result = await this.dialogueEngine.processInput(dialogueInput, identity);
       await this.sendTelegramResponse(chatId, result?.presentation);
       return;
     }
@@ -207,7 +206,7 @@ export class TelegramBotAdapter {
           modality: 'voice',
           transcript: voiceResult.normalizedInput.transcript
         };
-        const result = await this.dialogueEngine.processInput(dialogueInput, identity, optionalScenario);
+        const result = await this.dialogueEngine.processInput(dialogueInput, identity);
         await this.sendTelegramResponse(chatId, result?.presentation);
       }
       return;
@@ -220,7 +219,7 @@ export class TelegramBotAdapter {
         raw_input: update.message.text
       };
 
-      const result = await this.dialogueEngine.processInput(dialogueInput, identity, optionalScenario);
+      const result = await this.dialogueEngine.processInput(dialogueInput, identity);
       await this.sendTelegramResponse(chatId, result?.presentation);
       return;
     }
