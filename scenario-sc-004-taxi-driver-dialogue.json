@@ -44,6 +44,46 @@
           "pattern": "\\b\\d+\\b"
         }
       }
+    },
+    {
+      "id": "sc004-driver-arrived-dialogue",
+      "name": "Подтверждение прибытия к заказу",
+      "activation": {
+        "type": "voice",
+        "value": "voice.driver-arrived"
+      },
+      "intent": "DRIVER_ARRIVED",
+      "requiredSlots": [
+        "orderId"
+      ],
+      "clarificationPrompts": {
+        "orderId": "К какому заказу вы приехали?"
+      },
+      "steps": [
+        {
+          "kind": "emit",
+          "event": {
+            "type": "driver.arrived",
+            "payload": {
+              "orderId": "{{slots.orderId}}"
+            }
+          }
+        },
+        {
+          "kind": "end"
+        }
+      ],
+      "aliases": [
+        "Я приехал",
+        "Прибыл",
+        "На месте"
+      ],
+      "slotExtractors": {
+        "orderId": {
+          "type": "integer",
+          "pattern": "\\b\\d+\\b"
+        }
+      }
     }
   ]
 }
