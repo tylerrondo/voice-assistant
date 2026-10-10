@@ -37,7 +37,8 @@ test.describe('E2E: SC-004 Taxi Driver Multi-Turn Dialogue & Real FSM Suite (Ð¢Ð
 
     const state = await page.evaluate(() => {
       const dm = (window as any).__DIALOGUE_MANAGER__;
-      return dm ? dm.getActiveState() : null;
+      const identity = (window as any).__VOICE_DEMO_APP__.getIdentity();
+      return dm ? dm.getActiveState(identity) : null;
     });
 
     expect(state).not.toBeNull();
@@ -61,7 +62,8 @@ test.describe('E2E: SC-004 Taxi Driver Multi-Turn Dialogue & Real FSM Suite (Ð¢Ð
     // 3. Dialogue State COMPLETED
     const state = await page.evaluate(() => {
       const dm = (window as any).__DIALOGUE_MANAGER__;
-      return dm ? dm.getActiveState() : null;
+      const identity = (window as any).__VOICE_DEMO_APP__.getIdentity();
+      return dm ? dm.getActiveState(identity) : null;
     });
     expect(state.status).toBe('COMPLETED');
     expect(state.slots).toEqual({ orderId: 1001 });
@@ -69,7 +71,8 @@ test.describe('E2E: SC-004 Taxi Driver Multi-Turn Dialogue & Real FSM Suite (Ð¢Ð
     // 4. Validate Action executed in logs
     const action = await page.evaluate(() => {
       const dm = (window as any).__DIALOGUE_MANAGER__;
-      const logs = dm ? dm.getExecutionLogs() : [];
+      const identity = (window as any).__VOICE_DEMO_APP__.getIdentity();
+      const logs = dm ? dm.getExecutionLogs(identity) : [];
       return logs.find((l: any) => l.intent === 'ACCEPT_ORDER');
     });
     expect(action).toBeDefined();
@@ -86,7 +89,8 @@ test.describe('E2E: SC-004 Taxi Driver Multi-Turn Dialogue & Real FSM Suite (Ð¢Ð
 
     const state = await page.evaluate(() => {
       const dm = (window as any).__DIALOGUE_MANAGER__;
-      return dm ? dm.getActiveState() : null;
+      const identity = (window as any).__VOICE_DEMO_APP__.getIdentity();
+      return dm ? dm.getActiveState(identity) : null;
     });
 
     expect(state.status).toBe('WAITING_FOR_SLOT');
@@ -94,7 +98,8 @@ test.describe('E2E: SC-004 Taxi Driver Multi-Turn Dialogue & Real FSM Suite (Ð¢Ð
 
     const action = await page.evaluate(() => {
       const dm = (window as any).__DIALOGUE_MANAGER__;
-      const logs = dm ? dm.getExecutionLogs() : [];
+      const identity = (window as any).__VOICE_DEMO_APP__.getIdentity();
+      const logs = dm ? dm.getExecutionLogs(identity) : [];
       return logs.find((l: any) => l.intent === 'ACCEPT_ORDER');
     });
     expect(action).toBeUndefined();
@@ -107,7 +112,8 @@ test.describe('E2E: SC-004 Taxi Driver Multi-Turn Dialogue & Real FSM Suite (Ð¢Ð
 
     const state = await page.evaluate(() => {
       const dm = (window as any).__DIALOGUE_MANAGER__;
-      return dm ? dm.getActiveState() : null;
+      const identity = (window as any).__VOICE_DEMO_APP__.getIdentity();
+      return dm ? dm.getActiveState(identity) : null;
     });
 
     expect(state.status).toBe('CANCELLED');
@@ -116,7 +122,8 @@ test.describe('E2E: SC-004 Taxi Driver Multi-Turn Dialogue & Real FSM Suite (Ð¢Ð
 
     const hasExecuted = await page.evaluate(() => {
       const dm = (window as any).__DIALOGUE_MANAGER__;
-      const logs = dm ? dm.getExecutionLogs() : [];
+      const identity = (window as any).__VOICE_DEMO_APP__.getIdentity();
+      const logs = dm ? dm.getExecutionLogs(identity) : [];
       return logs.some((l: any) => l.intent === 'ACCEPT_ORDER');
     });
     expect(hasExecuted).toBe(false);
@@ -130,7 +137,8 @@ test.describe('E2E: SC-004 Taxi Driver Multi-Turn Dialogue & Real FSM Suite (Ð¢Ð
 
     const state = await page.evaluate(() => {
       const dm = (window as any).__DIALOGUE_MANAGER__;
-      return dm ? dm.getActiveState() : null;
+      const identity = (window as any).__VOICE_DEMO_APP__.getIdentity();
+      return dm ? dm.getActiveState(identity) : null;
     });
 
     expect(state.intent).toBe('DRIVER_ARRIVED');
@@ -156,7 +164,8 @@ test.describe('E2E: SC-004 Taxi Driver Multi-Turn Dialogue & Real FSM Suite (Ð¢Ð
 
     const executionCount = await page.evaluate(() => {
       const dm = (window as any).__DIALOGUE_MANAGER__;
-      const logs = dm ? dm.getExecutionLogs() : [];
+      const identity = (window as any).__VOICE_DEMO_APP__.getIdentity();
+      const logs = dm ? dm.getExecutionLogs(identity) : [];
       return logs.filter((l: any) => l.intent === 'ACCEPT_ORDER').length;
     });
 
