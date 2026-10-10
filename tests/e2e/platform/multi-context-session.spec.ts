@@ -82,13 +82,13 @@ test.describe('E2E: PLATFORM-010 Multi-Context Session Manager Runtime Suite', (
 
     expect(match1001.length).toBe(1);
     expect(match1001[0].contextId).toBe(idA);
-    expect(match1001[0].event.type).toBe('driver.order.accepted');
-    expect(match1001[0].event.payload).toEqual({ orderId: 1001, payment: 'card' });
+    expect(match1001[0].actionType).toBe('driver.order.accepted');
+    expect(match1001[0].payload).toEqual({ orderId: 1001, payment: 'card' });
 
     expect(match1002.length).toBe(1);
     expect(match1002[0].contextId).toBe(idB);
-    expect(match1002[0].event.type).toBe('driver.order.accepted');
-    expect(match1002[0].event.payload).toEqual({ orderId: 1002, payment: 'cash' });
+    expect(match1002[0].actionType).toBe('driver.order.accepted');
+    expect(match1002[0].payload).toEqual({ orderId: 1002, payment: 'cash' });
   });
 
   test('MULTICONTEXT-E2E-05: Switch A -> B -> A preserving slot values and activeContextId', async ({ page }) => {
@@ -188,8 +188,8 @@ test.describe('E2E: PLATFORM-010 Multi-Context Session Manager Runtime Suite', (
 
     const logs = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity()));
 
-    const contaminated1001Cash = logs.filter((l: any) => l.event.payload.orderId === 1001 && l.event.payload.payment === 'cash');
-    const contaminated1002Card = logs.filter((l: any) => l.event.payload.orderId === 1002 && l.event.payload.payment === 'card');
+    const contaminated1001Cash = logs.filter((l: any) => l.payload.orderId === 1001 && l.payload.payment === 'cash');
+    const contaminated1002Card = logs.filter((l: any) => l.payload.orderId === 1002 && l.payload.payment === 'card');
 
     expect(contaminated1001Cash.length).toBe(0);
     expect(contaminated1002Card.length).toBe(0);
