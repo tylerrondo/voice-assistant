@@ -777,7 +777,10 @@ export class VoiceChannel {
                   contextId: updated.contextId,
                   executionId: exec.executionId,
                   attempt: dispatchRes.attempt,
-                  context: this.dialogueManager.getContext(updated.contextId, identity)
+                  context: this.dialogueManager.getContext(updated.contextId, identity),
+                  intent: updated.intent,
+                  slots: { ...updated.slots },
+                  missingSlots: [...updated.missingSlots]
                 };
               }
             }
@@ -800,7 +803,10 @@ export class VoiceChannel {
               contextId: latestContext.contextId,
               executionId: exec.executionId,
               attempt: dispatchRes.attempt,
-              context: this.dialogueManager.getContext(latestContext.contextId, identity)
+              context: this.dialogueManager.getContext(latestContext.contextId, identity),
+              intent: latestContext.intent,
+              slots: { ...latestContext.slots },
+              missingSlots: [...latestContext.missingSlots]
             };
           }
 
@@ -917,7 +923,10 @@ export class VoiceChannel {
                   contextId: updated.contextId,
                   executionId: execution.executionId,
                   attempt: dispatch.attempt,
-                  context: this.dialogueManager.getContext(updated.contextId, identity)
+                  context: this.dialogueManager.getContext(updated.contextId, identity),
+                  intent: updated.intent,
+                  slots: { ...updated.slots },
+                  missingSlots: [...updated.missingSlots]
                 };
               }
               return updated;
@@ -964,7 +973,10 @@ export class VoiceChannel {
           contextId: ctx.contextId,
           executionId: exec.executionId,
           attempt: dispatchRes.attempt,
-          context: this.dialogueManager.getContext(ctx.contextId, identity)
+          context: this.dialogueManager.getContext(ctx.contextId, identity),
+          intent: ctx.intent,
+          slots: { ...ctx.slots },
+          missingSlots: [...ctx.missingSlots]
         };
       }
 
