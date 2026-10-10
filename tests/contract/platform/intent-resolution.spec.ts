@@ -290,7 +290,13 @@ test.describe('CONTRACT: PLATFORM-014 Intent Resolution & Slot Ambiguity Suite',
   });
 
   test('CONTRACT-13: Foreign context never enters candidate set during resolution', async () => {
-    const dm = new DialogueStateManager();
+    const dm = new DialogueStateManager({
+      actionDispatcher: async (_event, _context, execution) => ({
+        status: 'SUCCEEDED',
+        executionId: execution.executionId,
+        attempt: execution.attempt
+      })
+    });
     const channel = new VoiceChannel(dm);
     channel.registerScenarioSet({
       version: 2,
