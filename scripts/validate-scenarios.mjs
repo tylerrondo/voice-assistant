@@ -66,7 +66,7 @@ for (const name of files) {
 }
 
 if (errors.length) {
-  console.error('Scenario JSON validation failed:\\n' + errors.map((error) => `- ${error}`).join('\\n'));
+  console.error('Scenario JSON validation failed:\n' + errors.map((error) => `- ${error}`).join('\n'));
   process.exitCode = 1;
 } else {
   console.log(`Validated ${files.length} scenario JSON files.`);
