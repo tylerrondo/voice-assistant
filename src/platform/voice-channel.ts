@@ -130,7 +130,7 @@ export class VoiceChannel {
     const seenIds = new Set<string>();
     const triggerOwners = new Map<string, string>();
     const normalizeTrigger = (trigger: string): string =>
-      trigger.replace(/^voice\\./i, '').replace(/[-_]/g, ' ').trim().toLowerCase();
+      trigger.replace(/^voice\./i, '').replace(/[-_]/g, ' ').trim().toLowerCase();
 
     for (const sc of scenarioSet.scenarios) {
       if (!sc.id || typeof sc.id !== 'string') {
