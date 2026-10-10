@@ -469,7 +469,7 @@ export class VoiceChannel {
     const unavailTemplate = binding?.unavailableTemplate;
     const ambiguityTriggers = binding?.ambiguityTriggerValues || [];
 
-    const candidateKeys = new Set(['candidate_index', 'candidate_name', 'candidate_criteria', 'choice', 'index', 'name', 'offerId', targetSlotName]);
+    const candidateKeys = new Set(['candidate_index', 'candidate_name', 'candidate_criteria', 'choice', 'index', 'name', targetSlotName]);
     const selectionEntries = Object.entries(extractedSlots).filter(([key]) => candidateKeys.has(key));
     const selectionValues = selectionEntries.map(([, value]) => value);
 
