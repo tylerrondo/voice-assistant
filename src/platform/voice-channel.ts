@@ -1008,6 +1008,18 @@ export class VoiceChannel {
       return intentRes;
     }
 
+    // Explicit entity references must not leak foreign contexts as NO_MATCH.
+    // Resolve routing even when the current session has no active context.
+    if (intentRes.status === 'NO_MATCH') {
+      const route = this.dialogueManager.resolveRouting(text, [], identity);
+      if (route.status === 'CONTEXT_ACCESS_DENIED') {
+        return { status: 'CONTEXT_ACCESS_DENIED' };
+      }
+      if (route.status === 'AMBIGUOUS_CONTEXT') {
+        return { status: 'AMBIGUOUS_CONTEXT', candidateContextIds: route.candidateContextIds };
+      }
+    }
+
     return { status: 'NO_MATCH' };
   }
 
