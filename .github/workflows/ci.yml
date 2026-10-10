@@ -12,6 +12,8 @@ jobs:
     name: Build, Contract & E2E Validation
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      APP_URL: http://localhost:3000
 
     steps:
       - name: Checkout Source Code
