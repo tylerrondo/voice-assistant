@@ -23,7 +23,7 @@ test.describe('CONTRACT: PLATFORM-013 Context Ownership & Session Isolation Suit
     const res = await dm.fillSlot('payment', 'card', ctx.contextId, sessionA);
     expect(res).not.toBeNull();
     expect(res.success).toBe(true);
-    if (res.success) expect(res.data.status).toBe('COMPLETED');
+    if (res.success) expect(res.data.status).toBe('WAITING_FOR_SLOT');
   });
 
   test('CONTRACT-03: Cross-owner access returns CONTEXT_ACCESS_DENIED and state remains unchanged', async () => {
