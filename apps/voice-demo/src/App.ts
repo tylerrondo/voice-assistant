@@ -218,7 +218,7 @@ export function mountApp(root: HTMLElement, runtime: any, authenticatedIdentity:
     const trace = query('execution-trace');
     const entry = document.createElement('div');
     entry.className = 'trace-entry';
-    entry.textContent = rejected ? 'FSM_REJECTED INVALID_TRANSITION' : eventType + ' ' + JSON.stringify(payload || {});
+    entry.textContent = rejected ? 'FSM_REJECTED INVALID_FSM_TRANSITION' : eventType + ' ' + JSON.stringify(payload || {});
     trace.appendChild(entry);
   };
   const resolveEventPayload = (payload: any, slots: Record<string, any> = {}) => {
