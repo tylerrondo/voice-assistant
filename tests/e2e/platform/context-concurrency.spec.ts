@@ -105,11 +105,11 @@ test.describe('E2E: PLATFORM-016 Concurrency Control Suite', () => {
       const app = (window as any).__VOICE_DEMO_APP__;
       const identity = app.getIdentity();
 
-      const ctx = dm.createContext('ORDER_PAYMENT', { paymentMethod: 'CARD' }, ['paymentMethod'], 'order.payment.completed', {}, identity);
+      const ctx = dm.createContext('ORDER_PAYMENT', { orderId: 1001 }, ['orderId'], 'driver.order.accepted', {}, identity);
       const ex = dm.createExecution(ctx, identity);
 
       const [dispRes, sysRes] = await Promise.all([
-        dm.dispatchAction(ex.executionId, { paymentMethod: 'CARD' }, identity),
+        dm.dispatchAction(ex.executionId, { orderId: 1001 }, identity),
         dm.handleSystemEvent(ctx.contextId, { type: 'EXTERNAL_FINISH', targetTransition: 'COMPLETE' }, identity)
       ]);
 
