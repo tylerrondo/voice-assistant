@@ -75,9 +75,9 @@ test.describe('E2E: PLATFORM-011 Ambiguous Input & Context Selection Suite', () 
     logs = await page.evaluate(() => { const w = window as any; return w.__DIALOGUE_MANAGER__.getExecutionLogs(w.__VOICE_DEMO_APP__.getIdentity()); });
     expect(logs.length).toBe(1);
     expect(logs[0].contextId).toBe(idB);
-    expect(logs[0].event.type).toBe('driver.order.accepted');
-    expect(logs[0].event.payload.orderId).toBe(1002);
-    expect(logs[0].event.payload.payment).toBe('card');
+    expect(logs[0].actionType).toBe('driver.order.accepted');
+    expect(logs[0].payload.orderId).toBe(1002);
+    expect(logs[0].payload.payment).toBe('card');
 
     // Verify 1001 remains in WAITING_FOR_SLOT with 0 executions
     const ctxA = await page.evaluate((id: string) => { const w = window as any; return w.__DIALOGUE_MANAGER__.getContext(id, w.__VOICE_DEMO_APP__.getIdentity()); }, idA);
@@ -126,8 +126,8 @@ test.describe('E2E: PLATFORM-011 Ambiguous Input & Context Selection Suite', () 
     const logs = await page.evaluate(() => { const w = window as any; return w.__DIALOGUE_MANAGER__.getExecutionLogs(w.__VOICE_DEMO_APP__.getIdentity()); });
     expect(logs.length).toBe(2);
 
-    const matchA = logs.filter((l: any) => l.contextId === idA && l.event.payload.orderId === 1001 && l.event.payload.payment === 'card');
-    const matchB = logs.filter((l: any) => l.contextId === idB && l.event.payload.orderId === 1002 && l.event.payload.payment === 'cash');
+    const matchA = logs.filter((l: any) => l.contextId === idA && l.actionType === 'driver.order.accepted' && l.payload.orderId === 1001 && l.payload.payment === 'card');
+    const matchB = logs.filter((l: any) => l.contextId === idB && l.actionType === 'driver.order.accepted' && l.payload.orderId === 1002 && l.payload.payment === 'cash');
 
     expect(matchA.length).toBe(1);
     expect(matchB.length).toBe(1);
@@ -180,8 +180,8 @@ test.describe('E2E: PLATFORM-011 Ambiguous Input & Context Selection Suite', () 
     const logs = await page.evaluate(() => { const w = window as any; return w.__DIALOGUE_MANAGER__.getExecutionLogs(w.__VOICE_DEMO_APP__.getIdentity()); });
     expect(logs.length).toBe(1);
     expect(logs[0].contextId).toBe(idA);
-    expect(logs[0].event.payload.orderId).toBe(1001);
-    expect(logs[0].event.payload.payment).toBe('card');
+    expect(logs[0].payload.orderId).toBe(1001);
+    expect(logs[0].payload.payment).toBe('card');
   });
 
 });
