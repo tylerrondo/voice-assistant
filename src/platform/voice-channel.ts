@@ -607,8 +607,22 @@ export class VoiceChannel {
 
     // 3. Declarative Active Context Processing
     const activeWaiting = this.dialogueManager.listContexts(identity).filter(c => c.status === 'WAITING_FOR_SLOT');
+    const isFreshScenarioActivation = intentRes.status === 'RESOLVED' && (() => {
+      const scenario = intentRes.scenario;
+      const triggers: string[] = [];
+      if (scenario.activation?.value) triggers.push(scenario.activation.value);
+      if (Array.isArray(scenario.triggerPhrases)) triggers.push(...scenario.triggerPhrases);
+      if (Array.isArray(scenario.aliases)) triggers.push(...scenario.aliases);
+      return triggers.some(trigger => {
+        const clean = trigger.replace(/^voice\\./i, '').replace(/[-_]/g, ' ').toLowerCase().trim();
+        return text === clean ||
+          text.startsWith(clean + ' ') ||
+          clean.startsWith(text) ||
+          clean.split(/\\s+/).every(word => text.includes(word));
+      });
+    })();
 
-    if (activeWaiting.length === 1) {
+    if (activeWaiting.length === 1 && !isFreshScenarioActivation) {
       const activeCtx = activeWaiting[0];
       const scenario = (activeCtx.scenarioId ? this.scenarioRegistry.find(s => s.id === activeCtx.scenarioId) : undefined)
         || this.getDeterministicScenarioForIntent(activeCtx.intent);
@@ -737,7 +751,7 @@ export class VoiceChannel {
           return updatedCtxState || latestContext;
         }
       }
-    } else if (activeWaiting.length > 1) {
+    } else if (activeWaiting.length > 1 && !isFreshScenarioActivation) {
       const matchedContexts: Array<{
         context: DialogueContext;
         scenario: ScenarioDefinition;
