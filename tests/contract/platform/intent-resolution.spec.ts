@@ -322,7 +322,7 @@ test.describe('CONTRACT: PLATFORM-014 Intent Resolution & Slot Ambiguity Suite',
     await channel.handleIncomingVoice('order 2001', sessionB);
 
     const resA = await channel.handleIncomingVoice('картой', sessionA);
-    expect(resA.status).toBe('COMPLETED');
+    expect(resA.status).toBe('SUCCEEDED');
     expect(resA.slots.orderId).toBe(1001);
   });
 
