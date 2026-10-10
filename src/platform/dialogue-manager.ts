@@ -509,7 +509,7 @@ export class DialogueStateManager {
     identity: SessionIdentity,
     expectedVersion?: number
   ): Promise<MutationResult<boolean>> {
-    const targetId = contextId || this.activeContextId;
+    const targetId = contextId || this.activeContextBySession.get(this.sessionKey(identity)) || null;
     if (!targetId) {
       return { success: false, error: 'CONTEXT_NOT_FOUND', message: 'No target contextId specified' };
     }
