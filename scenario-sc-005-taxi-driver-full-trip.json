@@ -37,7 +37,13 @@
         "Прими заказ",
         "Беру заказ",
         "Accept order"
-      ]
+      ],
+      "slotExtractors": {
+        "orderId": {
+          "type": "integer",
+          "pattern": "\\b\\d+\\b"
+        }
+      }
     },
     {
       "id": "sc005-step02-arrived",
