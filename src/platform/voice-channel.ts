@@ -311,13 +311,9 @@ export class VoiceChannel {
             const matchingSynonyms = synonyms
               .filter(item => {
                 if (typeof item !== 'string' || item.length === 0) return false;
-                const normalizedPhrase = item.toLowerCase().trim().replace(/[^\\p{L}\\p{N}_]+/gu, ' ');
-                const paddedText = ' ' + normalizedText.replace(/[^\\p{L}\\p{N}_]+/gu, ' ') + ' ';
+                const normalizedPhrase = item.toLowerCase().trim().replace(/[^\p{L}\p{N}_]+/gu, ' ');
+                const paddedText = ' ' + normalizedText.replace(/[^\p{L}\p{N}_]+/gu, ' ') + ' ';
                 return paddedText.includes(' ' + normalizedPhrase + ' ');
-              })
-              .sort((a, b) => b.length - a.length);');
-                const phrasePattern = new RegExp('(^|[^\\p{L}\\p{N}_])' + escaped + '(?=$|[^\\p{L}\\p{N}_])', 'iu');
-                return phrasePattern.test(normalizedText);
               })
               .sort((a, b) => b.length - a.length);
             if (matchingSynonyms.length > 0) {
