@@ -131,8 +131,9 @@ test.describe('SC-001: Live Application Runtime Execution E2E (External JSON & S
 
     // 2. Select External JSON Source via UI
     const fileSourceRadio = page.locator('[data-testid="scenario-source-file"]').or(page.getByLabel(/загрузить json|файл json|upload json/i)).or(page.locator('input[type="file"]').locator('..'));
-    if (await fileSourceRadio.isVisible()) {
-      await fileSourceRadio.click();
+    const sourceControl = fileSourceRadio.first();
+    if (await sourceControl.isVisible()) {
+      await sourceControl.click();
     }
 
     // 3. Upload the exact external scenario JSON file
