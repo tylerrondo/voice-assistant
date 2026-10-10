@@ -13,6 +13,7 @@ const rawContent = fs.readFileSync(scenarioPath, 'utf-8');
 const scenarioSet: ScenarioSet = JSON.parse(rawContent);
 
 test.describe('CONTRACT: PLATFORM-012 Production Pipeline Suite', () => {
+  const identity = { ownerId: 'driver-platform-012', sessionId: 'session-platform-012' };
 
   test('CONTRACT-01: VoiceChannel registers ScenarioSet and exposes activeScenarioSetId', async () => {
     const dm = new DialogueStateManager();
@@ -32,8 +33,8 @@ test.describe('CONTRACT: PLATFORM-012 Production Pipeline Suite', () => {
     const channel = new VoiceChannel(dm);
     channel.registerScenarioSet(scenarioSet);
 
-    await channel.handleIncomingVoice('Прими заказ 1001');
-    await channel.handleIncomingVoice('Картой');
+    await channel.handleIncomingVoice('Прими заказ 1001', identity);
+    await channel.handleIncomingVoice('Картой', identity);
 
     expect(dispatchedEvents.length).toBe(1);
     expect(dispatchedEvents[0].event.type).toBe('driver.order.accepted');
@@ -68,8 +69,8 @@ test.describe('CONTRACT: PLATFORM-012 Production Pipeline Suite', () => {
     const channel = new VoiceChannel(dm);
     channel.registerScenarioSet(scenarioSet);
 
-    await channel.handleIncomingVoice('Прими заказ 1001');
-    const cancelRes = await channel.handleIncomingVoice('Отмена');
+    await channel.handleIncomingVoice('Прими заказ 1001', identity);
+    const cancelRes = await channel.handleIncomingVoice('Отмена', identity);
 
     expect(cancelRes).toBe(true);
     const ctx = dm.listContexts()[0];
@@ -82,10 +83,10 @@ test.describe('CONTRACT: PLATFORM-012 Production Pipeline Suite', () => {
     const channel = new VoiceChannel(dm);
     channel.registerScenarioSet(scenarioSet);
 
-    await channel.handleIncomingVoice('Прими заказ 1001');
-    await channel.handleIncomingVoice('Прими заказ 1002');
+    await channel.handleIncomingVoice('Прими заказ 1001', identity);
+    await channel.handleIncomingVoice('Прими заказ 1002', identity);
 
-    const ambResult = await channel.handleIncomingVoice('Картой');
+    const ambResult = await channel.handleIncomingVoice('Картой', identity);
     expect(ambResult.status).toBe('AMBIGUOUS_CONTEXT');
     expect(ambResult.clarificationPrompt).toContain('1001');
     expect(ambResult.clarificationPrompt).toContain('1002');
