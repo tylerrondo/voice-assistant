@@ -10,6 +10,10 @@ const scenarioFilePath = path.resolve(__dirname, '../../../scenario-platform-012
 test.describe('E2E: PLATFORM-012 Production Voice Pipeline Integration Suite', () => {
 
   async function setupApp(page: any) {
+    await page.addInitScript(() => {
+      (window as any).__AUTH_OWNER_ID__ = 'driver-pipeline-012';
+      (window as any).__AUTH_SESSION_ID__ = 'session-pipeline-012';
+    });
     const appUrl = process.env.APP_URL || 'http://localhost:3000';
     await page.goto(appUrl);
     await expect(page.locator('body')).toBeVisible();
