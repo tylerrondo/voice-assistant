@@ -31,3 +31,5 @@ jobs:
           tests/e2e/platform/production-pipeline.spec.ts
           tests/e2e/scenarios/sc-002-taxi-driver.spec.ts
           tests/e2e/scenarios/passenger-order.spec.ts
+          tests/e2e/scenarios/sc-003-taxi-driver-trip.spec.ts
+          --grep "WORKFLOW-01|E2E-PASS-001|TEST-RUNTIME-0[1-5]|MULTICONTEXT-E2E|PIPELINE-E2E"
