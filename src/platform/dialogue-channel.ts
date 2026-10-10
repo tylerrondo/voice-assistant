@@ -224,15 +224,25 @@ export class DialogueEngine {
     // 5. Declarative Target Slot for Candidate Resolution
     const targetSlot = activeScenario.candidateBinding?.targetSlot;
     const candidateSelectionKeys = new Set(['candidate_index', 'candidate_name', 'candidate_criteria', 'choice', targetSlot || '']);
+    const normalizedInput = rawText.toLowerCase();
+    const selectionTriggerMatched = [
+      activeScenario.activation?.value,
+      ...(activeScenario.triggerPhrases || []),
+      ...(activeScenario.aliases || [])
+    ].filter((trigger): trigger is string => typeof trigger === 'string')
+      .some(trigger => {
+        const clean = trigger.replace(/^voice\./i, '').replace(/[-_]/g, ' ').toLowerCase().trim();
+        return normalizedInput.includes(clean) || clean.split(/\s+/).every(word => normalizedInput.includes(word));
+      });
 
-    // 6. Resolve only explicit candidate-selection slots. Unrelated numeric slots
+    // 6. Resolve only explicit candidate-selection input. Unrelated numeric slots
     // (for example children_count=2) must never select candidate #2 by accident.
     if (
       targetSlot &&
       ctx.offers &&
       ctx.offers.length > 0 &&
       extractedSlots[targetSlot] === undefined &&
-      Object.keys(extractedSlots).some(key => candidateSelectionKeys.has(key))
+      (Object.keys(extractedSlots).some(key => candidateSelectionKeys.has(key)) || selectionTriggerMatched)
     ) {
       const resolution = this.vc.resolveCandidate(
         extractedSlots,
