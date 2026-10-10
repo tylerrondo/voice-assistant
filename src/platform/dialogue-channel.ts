@@ -43,6 +43,7 @@ export interface DialogueEngineResult {
   missingSlots?: string[];
   nextQuestion?: string | null;
   offers?: unknown[];
+  candidates?: Array<{ slotName: string; value: any; scenarioId: string }>;
   dispatchStatus?: string;
   presentation: DialoguePresentation;
 }
@@ -195,6 +196,7 @@ export class DialogueEngine {
         contextId: ctx.contextId,
         slots: ctx.slots,
         missingSlots: ctx.missingSlots,
+        candidates: slotAmbiguity.candidates,
         presentation: {
           text: slotAmbiguity.clarificationPrompt || 'Уточните, пожалуйста, какое значение вы имели в виду.'
         }
@@ -248,6 +250,7 @@ export class DialogueEngine {
           contextId: ctx.contextId,
           slots: ctx.slots,
           missingSlots: ctx.missingSlots,
+          candidates: resolution.candidates,
           presentation: { text: resolution.clarificationPrompt || 'Выберите конкретный вариант.' }
         };
       } else if (resolution.status === 'CANDIDATE_UNAVAILABLE') {
