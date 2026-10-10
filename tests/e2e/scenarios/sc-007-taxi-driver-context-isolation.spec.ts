@@ -20,13 +20,11 @@ test.describe('E2E: SC-007 Context Isolation & Cross-Contamination Protection Su
 
   async function emitVoicePhrase(page: any, phrase: string) {
     await page.evaluate(async (text: string) => {
-      const channel = (window as any).__VOICE_CHANNEL__;
-      if (!channel) {
-        throw new Error('VoiceChannel production instance is not initialized on window.__VOICE_CHANNEL__');
+      const dispatch = (window as any).__DISPATCH_VOICE_COMMAND__;
+      if (typeof dispatch !== 'function') {
+        throw new Error('Production voice-command dispatcher is not initialized');
       }
-      const app = (window as any).__VOICE_DEMO_APP__;
-      if (!app || typeof app.getIdentity !== 'function') throw new Error('Voice demo app identity is not initialized');
-      return channel.handleIncomingVoice(text, app.getIdentity());
+      return dispatch(text);
     }, phrase);
   }
 
