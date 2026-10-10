@@ -688,11 +688,10 @@ export class VoiceChannel {
         }
 
         if (
-          slotRes.status === 'RESOLVED' &&
-          (Object.keys(slotRes.slots).length > 0 ||
-            (!!activeCtx.offers?.length && !!scenario.candidateBinding?.targetSlot && ordinalIndex !== undefined))
+          (slotRes.status === 'RESOLVED' && Object.keys(slotRes.slots).length > 0) ||
+          (!!activeCtx.offers?.length && !!scenario.candidateBinding?.targetSlot && ordinalIndex !== undefined)
         ) {
-          const extracted = { ...slotRes.slots };
+          const extracted = slotRes.status === 'RESOLVED' ? { ...slotRes.slots } : {};
           if (activeCtx.offers?.length && scenario.candidateBinding?.targetSlot &&
               extracted.candidate_index === undefined && ordinalIndex !== undefined) {
             extracted.candidate_index = ordinalIndex;
