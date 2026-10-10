@@ -25,7 +25,9 @@ test.describe('E2E: SC-005 Taxi Driver Full Trip Workflow & Real FSM Suite (ТЗ
       if (!channel) {
         throw new Error('VoiceChannel production instance is not initialized on window.__VOICE_CHANNEL__');
       }
-      return channel.handleIncomingVoice(text);
+      const app = (window as any).__VOICE_DEMO_APP__;
+      if (!app || typeof app.getIdentity !== 'function') throw new Error('Voice demo app identity is not initialized');
+      return channel.handleIncomingVoice(text, app.getIdentity());
     }, phrase);
   }
 
