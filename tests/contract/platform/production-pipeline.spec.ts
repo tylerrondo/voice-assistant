@@ -57,7 +57,7 @@ test.describe('CONTRACT: PLATFORM-012 Production Pipeline Suite', () => {
 
   test('CONTRACT-04: Strict capacity policy rejects new context when maxActiveContexts is exceeded', async () => {
     const dm = new DialogueStateManager({ maxActiveContexts: 1 });
-    dm.createContext('ACCEPT_ORDER', { orderId: 1001 }, ['orderId', 'payment'], 'driver.order.accepted');
+    dm.createContext('ACCEPT_ORDER', { orderId: 1001 }, ['orderId', 'payment'], 'driver.order.accepted', {}, identity);
 
     expect(() => {
       dm.createContext('ACCEPT_ORDER', { orderId: 1002 }, ['orderId', 'payment'], 'driver.order.accepted', {}, identity);
