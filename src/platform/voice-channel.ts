@@ -117,6 +117,7 @@ export class VoiceChannel {
   private dialogueManager: DialogueStateManager;
   private scenarioRegistry: ScenarioDefinition[] = [];
   private activeScenarioSetId: string = '';
+  private preferredContextBySession: Map<string, string> = new Map();
 
   constructor(dialogueManager: DialogueStateManager) {
     this.dialogueManager = dialogueManager;
@@ -810,23 +811,38 @@ export class VoiceChannel {
         }
 
         if (slotNames.length === 1) {
-          const route = this.dialogueManager.resolveRouting(text, slotNames, identity);
+          let route = this.dialogueManager.resolveRouting(text, slotNames, identity);
+          const sessionKey = `${identity.ownerId}\\u0000${identity.sessionId}`;
+
           if (route.status === 'AMBIGUOUS_CONTEXT') {
-            const candidateContexts = activeWaiting.filter(context => route.candidateContextIds.includes(context.contextId));
-            const identifiers = candidateContexts.map(context => context.slots.orderId).filter(value => value !== undefined);
-            return {
-              status: 'AMBIGUOUS_CONTEXT',
-              candidateContextIds: route.candidateContextIds,
-              clarificationPrompt: identifiers.length > 0
-                ? `Уточните, пожалуйста, к какому заказу относится ответ: ${identifiers.join(', ')}.`
-                : 'Уточните, пожалуйста, к какому диалогу относится ответ.'
-            };
+            const preferredId = this.preferredContextBySession.get(sessionKey);
+            const preferredContext = preferredId ? this.dialogueManager.getContext(preferredId, identity) : undefined;
+            const preferredIsCandidate = !!preferredId && route.candidateContextIds.includes(preferredId);
+            if (preferredContext?.status === 'WAITING_FOR_SLOT' && preferredIsCandidate) {
+              route = { status: 'RESOLVED', contextId: preferredContext.contextId };
+            } else {
+              if (preferredId) this.preferredContextBySession.delete(sessionKey);
+              const candidateContexts = activeWaiting.filter(context => route.status === 'AMBIGUOUS_CONTEXT' && route.candidateContextIds.includes(context.contextId));
+              const identifiers = candidateContexts.map(context => context.slots.orderId).filter(value => value !== undefined);
+              return {
+                status: 'AMBIGUOUS_CONTEXT',
+                candidateContextIds: route.candidateContextIds,
+                clarificationPrompt: identifiers.length > 0
+                  ? `Уточните, пожалуйста, к какому заказу относится ответ: ${identifiers.join(', ')}.`
+                  : 'Уточните, пожалуйста, к какому диалогу относится ответ.'
+              };
+            }
           }
 
           if (route.status === 'RESOLVED') {
             const targetContext = this.dialogueManager.getContext(route.contextId, identity);
             const match = matchedContexts.find(item => item.context.contextId === route.contextId);
             if (targetContext && match) {
+              const explicitlySelected = Object.values(targetContext.slots).some(value =>
+                value !== undefined && value !== null && text.includes(String(value).toLowerCase())
+              );
+              if (explicitlySelected) this.preferredContextBySession.set(sessionKey, targetContext.contextId);
+
               for (const [slotName, value] of Object.entries(match.slots)) {
                 if (targetContext.missingSlots.includes(slotName) || targetContext.slots[slotName] !== undefined) {
                   await this.dialogueManager.fillSlot(slotName, value, targetContext.contextId, identity);
@@ -837,6 +853,9 @@ export class VoiceChannel {
               if (updated.missingSlots.length === 0 && !match.scenario.confirmation) {
                 const execution = this.dialogueManager.createExecution(updated, identity);
                 const dispatch = await this.dialogueManager.dispatchAction(execution.executionId, updated.slots, identity);
+                if (['COMPLETED', 'CANCELLED', 'EXPIRED'].includes(this.dialogueManager.getContext(updated.contextId, identity)?.status || '')) {
+                  this.preferredContextBySession.delete(sessionKey);
+                }
                 return {
                   status: dispatch.status,
                   contextId: updated.contextId,
