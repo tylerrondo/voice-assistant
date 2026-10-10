@@ -629,7 +629,27 @@ export class VoiceChannel {
             }
           }
 
-          return updatedCtxState || this.dialogueManager.getContext(activeCtx.contextId, identity);
+          const latestContext = this.dialogueManager.getContext(activeCtx.contextId, identity) || activeCtx;
+
+          // Non-confirmation scenarios execute once their required slots are complete.
+          // Confirmation-driven scenarios continue through the explicit confirmation branch above.
+          if (
+            latestContext.missingSlots.length === 0 &&
+            !scenario.confirmation &&
+            extracted.confirmation === undefined
+          ) {
+            const exec = this.dialogueManager.createExecution(latestContext, identity);
+            const dispatchRes = await this.dialogueManager.dispatchAction(exec.executionId, latestContext.slots, identity);
+            return {
+              status: dispatchRes.status,
+              contextId: latestContext.contextId,
+              executionId: exec.executionId,
+              attempt: dispatchRes.attempt,
+              context: this.dialogueManager.getContext(latestContext.contextId, identity)
+            };
+          }
+
+          return updatedCtxState || latestContext;
         }
       }
     } else if (activeWaiting.length > 1) {
