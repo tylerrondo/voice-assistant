@@ -156,15 +156,20 @@ test.describe('CONTRACT: SC-INTEGRATION-004 Generic Dialogue Channel Contract Su
     vc.registerScenarioSet({ version: 1, id: 'service-booking-set', scenarios: [serviceScenario] });
     const adapter = new MockGenericChannelAdapter(engine);
 
-    // Initial message explicitly resolves the registered service scenario.
-    await adapter.send({ modality: 'text', raw_input: 'book service завтра' }, userS, serviceScenario);
-
-    // Attach custom candidate items with non-standard fields
-    const ctx = dm.getActiveState(userS)!;
-    ctx.offers = [
-      { serviceId: 'svc-17', title: 'Cleaning', position: 1, status: 'AVAILABLE' },
-      { serviceId: 'svc-42', title: 'Repair', position: 2, status: 'AVAILABLE' }
-    ] as any;
+    // Seed a valid context and offers through the manager API; returned context snapshots are immutable.
+    dm.createContext(
+      serviceScenario.intent,
+      { date: 'завтра' },
+      serviceScenario.requiredSlots,
+      'service.action',
+      {},
+      userS,
+      serviceScenario.id,
+      [
+        { serviceId: 'svc-17', title: 'Cleaning', position: 1, status: 'AVAILABLE' },
+        { serviceId: 'svc-42', title: 'Repair', position: 2, status: 'AVAILABLE' }
+      ] as any
+    );
 
     // Send selection choice
     await adapter.send({ modality: 'voice', transcript: 'выбираю второй' }, userS, serviceScenario);
@@ -260,7 +265,7 @@ test.describe('CONTRACT: SC-INTEGRATION-004 Generic Dialogue Channel Contract Su
 
     expect(res.status).toBe('CANCELLED');
     expect(res.presentation.text).toBe(sc.confirmation?.cancelledMessage);
-    expect(dm.getActiveState(sessionUser)).toBeUndefined();
+    expect(dm.getActiveState(sessionUser)?.status).toBe('CANCELLED');
   });
 
   test('GC-08: Execution — ActionDispatcher called exactly once on confirmation', async () => {
