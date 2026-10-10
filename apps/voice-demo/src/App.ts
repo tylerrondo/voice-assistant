@@ -211,49 +211,43 @@ export function mountApp(root: HTMLElement, runtime: any, authenticatedIdentity:
     setText('scenario-metadata', (activeScenarioSet?.id || '') + ' — ' + (activeScenarioSet?.name || ''));
   };
   const executeActiveScenario = async () => {
-    const scenario = scenarios()[0];
-    if (!scenario) {
+    const entries = scenarios();
+    if (entries.length === 0) {
       window.alert('No scenario is loaded');
       return;
     }
     const trace = query('scenario-trace');
     trace.innerHTML = '';
     let outputIndex = 0;
-    const steps = Array.isArray(scenario.steps) ? scenario.steps : [];
-    for (const step of steps) {
-      if (step?.kind === 'delay' && Number.isFinite(step.ms)) {
-        await sleep(Math.min(Math.max(0, step.ms), 1500));
-        continue;
-      }
-      if (step?.kind === 'emit' && step.event?.type && step.event.type !== 'VOICE_INPUT_RECEIVED') {
-        const card = document.createElement('div');
-        card.setAttribute('data-testid', 'step-result-' + outputIndex);
-        card.style.border = '1px solid #ddd';
-        card.style.padding = '8px';
-        card.style.margin = '6px 0';
-        const payload = step.event.payload || {};
-        card.textContent = step.event.type + ' ' + JSON.stringify(payload);
-        if (payload.receiptPrinted === true) {
-          const receipt = document.createElement('span');
-          receipt.textContent = ' Receipt printed: true';
-          card.appendChild(receipt);
+    for (const scenario of entries) {
+      const steps = Array.isArray(scenario?.steps) ? scenario.steps : [];
+      for (const step of steps) {
+        if (step?.kind === 'delay' && Number.isFinite(step.ms)) {
+          await sleep(Math.min(Math.max(0, step.ms), 1500));
+          continue;
         }
-        trace.appendChild(card);
-        outputIndex++;
-      }
-      if (step?.kind === 'end') {
-        const terminal = document.createElement('div');
-        terminal.setAttribute('data-testid', 'execution-terminal');
-        terminal.textContent = 'KIND_END_REACHED / kind: end / SCENARIO_STATE_COMPLETED';
-        trace.appendChild(terminal);
+        if (step?.kind === 'emit' && step.event?.type && step.event.type !== 'VOICE_INPUT_RECEIVED') {
+          const card = document.createElement('div');
+          card.setAttribute('data-testid', 'step-result-' + outputIndex);
+          card.style.border = '1px solid #ddd';
+          card.style.padding = '8px';
+          card.style.margin = '6px 0';
+          const payload = step.event.payload || {};
+          card.textContent = step.event.type + ' ' + JSON.stringify(payload);
+          if (payload.receiptPrinted === true) {
+            const receipt = document.createElement('span');
+            receipt.textContent = ' Receipt printed: true';
+            card.appendChild(receipt);
+          }
+          trace.appendChild(card);
+          outputIndex++;
+        }
       }
     }
-    if (!trace.querySelector('[data-testid="execution-terminal"]')) {
-      const terminal = document.createElement('div');
-      terminal.setAttribute('data-testid', 'execution-terminal');
-      terminal.textContent = 'KIND_END_REACHED / kind: end / SCENARIO_STATE_COMPLETED';
-      trace.appendChild(terminal);
-    }
+    const terminal = document.createElement('div');
+    terminal.setAttribute('data-testid', 'execution-terminal');
+    terminal.textContent = 'KIND_END_REACHED / kind: end / SCENARIO_STATE_COMPLETED';
+    trace.appendChild(terminal);
   };
   const startInteractive = (resetLog: boolean) => {
     currentStep = 1;
