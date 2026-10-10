@@ -651,6 +651,18 @@ export class VoiceChannel {
           return slotRes;
         }
 
+        const hasExplicitCandidateSelection =
+          !!activeCtx.offers?.length &&
+          !!scenario.candidateBinding?.targetSlot &&
+          /выбира|выбрать|вариант|choose|select|option|перв|втор|трет|четверт|first|second|third|fourth/i.test(text);
+
+        if (
+          hasExplicitCandidateSelection &&
+          (slotRes.status !== 'RESOLVED' || Object.keys(slotRes.slots).length === 0)
+        ) {
+          return { status: 'NO_MATCH' };
+        }
+
         if (slotRes.status === 'RESOLVED' && Object.keys(slotRes.slots).length > 0) {
           const extracted = slotRes.slots;
 
@@ -745,7 +757,8 @@ export class VoiceChannel {
                 const exec = this.dialogueManager.createExecution(updated, identity);
                 const dispatchRes = await this.dialogueManager.dispatchAction(exec.executionId, updated.slots, identity);
                 return {
-                  status: dispatchRes.status,
+                  status: dispatchRes.status === 'SUCCEEDED' ? 'COMPLETED' : dispatchRes.status,
+                  dispatchStatus: dispatchRes.status,
                   contextId: updated.contextId,
                   executionId: exec.executionId,
                   attempt: dispatchRes.attempt,
@@ -767,7 +780,8 @@ export class VoiceChannel {
             const exec = this.dialogueManager.createExecution(latestContext, identity);
             const dispatchRes = await this.dialogueManager.dispatchAction(exec.executionId, latestContext.slots, identity);
             return {
-              status: dispatchRes.status,
+              status: dispatchRes.status === 'SUCCEEDED' ? 'COMPLETED' : dispatchRes.status,
+                  dispatchStatus: dispatchRes.status,
               contextId: latestContext.contextId,
               executionId: exec.executionId,
               attempt: dispatchRes.attempt,
@@ -883,7 +897,8 @@ export class VoiceChannel {
                   this.preferredContextBySession.delete(sessionKey);
                 }
                 return {
-                  status: dispatch.status,
+                  status: dispatch.status === 'SUCCEEDED' ? 'COMPLETED' : dispatch.status,
+                  dispatchStatus: dispatch.status,
                   contextId: updated.contextId,
                   executionId: execution.executionId,
                   attempt: dispatch.attempt,
@@ -929,7 +944,8 @@ export class VoiceChannel {
         const exec = this.dialogueManager.createExecution(ctx, identity);
         const dispatchRes = await this.dialogueManager.dispatchAction(exec.executionId, ctx.slots, identity);
         return {
-          status: dispatchRes.status,
+          status: dispatchRes.status === 'SUCCEEDED' ? 'COMPLETED' : dispatchRes.status,
+                  dispatchStatus: dispatchRes.status,
           contextId: ctx.contextId,
           executionId: exec.executionId,
           attempt: dispatchRes.attempt,
