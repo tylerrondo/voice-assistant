@@ -95,6 +95,7 @@ export interface SystemEventDescriptor {
 export class DialogueStateManager {
   private contexts: Map<string, DialogueContext> = new Map();
   private activeContextId: string | null = null;
+  private activeContextBySession: Map<string, string> = new Map();
   private executions: Map<string, ActionExecution> = new Map();
   private maxActiveContexts: number;
   private defaultTtlMs: number;
@@ -133,6 +134,7 @@ export class DialogueStateManager {
     this.timerMap.clear();
     this.contexts.clear();
     this.activeContextId = null;
+    this.activeContextBySession.clear();
     this.executions.clear();
     this.contextMutationQueues.clear();
   }
@@ -147,13 +149,41 @@ export class DialogueStateManager {
     return this.activeContextId;
   }
 
+  private sessionKey(identity: SessionIdentity): string {
+    return `${identity.ownerId}\\u0000${identity.sessionId}`;
+  }
+
+  private setActiveContext(contextId: string, identity: SessionIdentity): void {
+    this.activeContextId = contextId;
+    this.activeContextBySession.set(this.sessionKey(identity), contextId);
+  }
+
   public getActiveState(identity: SessionIdentity): DialogueContext | null {
     this.validateIdentity(identity);
-    if (!this.activeContextId) return null;
-    const ctx = this.contexts.get(this.activeContextId);
-    if (!ctx || ctx.ownerId !== identity.ownerId || ctx.sessionId !== identity.sessionId) {
-      return null;
+    const key = this.sessionKey(identity);
+    let contextId = this.activeContextBySession.get(key);
+    let ctx = contextId ? this.contexts.get(contextId) : undefined;
+
+    if (!ctx || ctx.ownerId !== identity.ownerId || ctx.sessionId !== identity.sessionId ||
+        !['WAITING_FOR_SLOT', 'DISPATCHING'].includes(ctx.status)) {
+      const replacement = Array.from(this.contexts.values())
+        .filter(candidate =>
+          candidate.ownerId === identity.ownerId &&
+          candidate.sessionId === identity.sessionId &&
+          ['WAITING_FOR_SLOT', 'DISPATCHING'].includes(candidate.status)
+        )
+        .sort((a, b) => b.updatedAt - a.updatedAt)[0];
+      if (!replacement) {
+        this.activeContextBySession.delete(key);
+        if (contextId && this.activeContextId === contextId) this.activeContextId = null;
+        return null;
+      }
+      contextId = replacement.contextId;
+      ctx = replacement;
+      this.activeContextBySession.set(key, contextId);
     }
+
+    this.activeContextId = contextId!;
     return {
       ...ctx,
       slots: { ...ctx.slots },
@@ -195,7 +225,7 @@ export class DialogueStateManager {
     if (!ctx || ctx.ownerId !== identity.ownerId || ctx.sessionId !== identity.sessionId) {
       return false;
     }
-    this.activeContextId = contextId;
+    this.setActiveContext(contextId, identity);
     return true;
   }
 
@@ -325,7 +355,7 @@ export class DialogueStateManager {
             c.status === 'WAITING_FOR_SLOT'
         );
         if (existing) {
-          this.activeContextId = existing.contextId;
+          this.setActiveContext(existing.contextId, identity);
           return {
             ...existing,
             slots: { ...existing.slots },
@@ -370,7 +400,7 @@ export class DialogueStateManager {
     };
 
     this.contexts.set(contextId, newContext);
-    this.activeContextId = contextId;
+    this.setActiveContext(contextId, identity);
 
     if (missingSlots.length > 0) {
       this.scheduleTtlTimer(contextId, this.defaultTtlMs);
@@ -404,7 +434,7 @@ export class DialogueStateManager {
           if (ctx.ownerId !== identity.ownerId || ctx.sessionId !== identity.sessionId) {
             return { status: 'CONTEXT_ACCESS_DENIED' };
           }
-          this.activeContextId = ctx.contextId;
+          this.setActiveContext(ctx.contextId, identity);
           return { status: 'RESOLVED', contextId: ctx.contextId };
         }
       }
@@ -417,7 +447,7 @@ export class DialogueStateManager {
     });
 
     if (candidates.length === 1) {
-      this.activeContextId = candidates[0].contextId;
+      this.setActiveContext(candidates[0].contextId, identity);
       return { status: 'RESOLVED', contextId: candidates[0].contextId };
     }
 
@@ -438,7 +468,7 @@ export class DialogueStateManager {
     identity: SessionIdentity,
     expectedVersion?: number
   ): Promise<MutationResult<DialogueContext>> {
-    const targetId = contextId || this.activeContextId;
+    const targetId = contextId || this.activeContextBySession.get(this.sessionKey(identity)) || null;
     if (!targetId) {
       return { success: false, error: 'CONTEXT_NOT_FOUND', message: 'No target contextId specified' };
     }
