@@ -104,10 +104,10 @@ test.describe('E2E: PLATFORM-013 Context Ownership & Session Isolation Suite', (
     const logsB = await page.evaluate((id) => (window as any).__DIALOGUE_MANAGER__.getExecutionLogs(id), sessionB);
 
     expect(logsA.length).toBe(1);
-    expect(logsA[0].event.payload.payment).toBe('card');
+    expect(logsA[0].payload.payment).toBe('card');
 
     expect(logsB.length).toBe(1);
-    expect(logsB[0].event.payload.payment).toBe('cash');
+    expect(logsB[0].payload.payment).toBe('cash');
   });
 
   test('E2E-OWNERSHIP-05: Ambiguity calculation is scoped strictly within current session boundaries', async ({ page }) => {
