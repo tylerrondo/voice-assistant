@@ -87,24 +87,24 @@ test.describe('SC-001: Scenario JSON Contract & Schema Validation', () => {
   });
 
   test('CONTRACT-06: Step 5 Schema - CREATE_NEW_CATALOG_ITEM', async () => {
-    const stepInput = scenarioSet.scenarios[0].steps[11];
+    const stepInput = scenarioSet.scenarios[0].steps[12];
     expect(stepInput.kind).toBe('emit');
     expect(stepInput.event.type).toBe('VOICE_INPUT_RECEIVED');
     expect(stepInput.event.payload.action).toBe('CREATE_NEW_CATALOG_ITEM');
 
-    const stepOutput = scenarioSet.scenarios[0].steps[12];
+    const stepOutput = scenarioSet.scenarios[0].steps[13];
     expect(stepOutput.kind).toBe('emit');
     expect(stepOutput.event.type).toBe('CATALOG_ITEM_CREATED');
     expect(stepOutput.event.payload.itemName).toBe('Клубника');
   });
 
   test('CONTRACT-07: Step 6 Schema - SET_INVENTORY_STOCK_LEVEL', async () => {
-    const stepInput = scenarioSet.scenarios[0].steps[13];
+    const stepInput = scenarioSet.scenarios[0].steps[15];
     expect(stepInput.kind).toBe('emit');
     expect(stepInput.event.type).toBe('VOICE_INPUT_RECEIVED');
     expect(stepInput.event.payload.action).toBe('SET_INVENTORY_STOCK_LEVEL');
 
-    const stepOutput = scenarioSet.scenarios[0].steps[14];
+    const stepOutput = scenarioSet.scenarios[0].steps[16];
     expect(stepOutput.kind).toBe('emit');
     expect(stepOutput.event.type).toBe('INVENTORY_STOCK_UPDATED');
     expect(stepOutput.event.payload.quantity).toBe(10.0);
@@ -189,8 +189,9 @@ test.describe('SC-001: Live Application Runtime Execution E2E (External JSON & S
     const executionTerminal = page.locator('[data-testid="execution-terminal"]').or(page.locator('text=/kind:\s*"?end"?|KIND_END_REACHED|завершение сценария|SCENARIO_STATE_COMPLETED/i')).first();
     await expect(executionTerminal).toBeVisible({ timeout: 15000 });
 
-    // 14. Verify Final Scenario Status in UI Execution Log (100% / 6/6 PASS)
-    await expect(page.locator('text=100%').or(page.locator('text=6/6')).first()).toBeVisible({ timeout: 15000 });
+    // 14. Verify all six output events were rendered and the scenario reached its terminal step.
+    await expect(page.locator('[data-testid^="step-result-"]')).toHaveCount(6, { timeout: 15000 });
+    await expect(executionTerminal).toContainText(/KIND_END_REACHED|SCENARIO_STATE_COMPLETED|kind:\s*"?end"?/i);
   });
 
 });
