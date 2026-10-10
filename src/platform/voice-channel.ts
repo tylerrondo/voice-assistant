@@ -209,7 +209,7 @@ export class VoiceChannel {
 
       const matches = triggers.some(trig => {
         const clean = trig.replace(/^voice\./, '').replace(/[-_]/g, ' ').toLowerCase().trim();
-        return text === clean || text.startsWith(clean + ' ') || (text.length >= 3 && !/^(?:перв\w*|втор\w*|трет\w*|четверт\w*|first|second|third|fourth|\d+)$/i.test(text) && clean.startsWith(text)) || clean.split(/\s+/).every(w => text.includes(w));
+        return text === clean || text.startsWith(clean + ' ') || (text.length >= 3 && !/^(?:перв[а-яё]*|втор[а-яё]*|трет[а-яё]*|четверт[а-яё]*|first|second|third|fourth|\d+)$/i.test(text) && clean.startsWith(text)) || clean.split(/\s+/).every(w => text.includes(w));
       });
 
       if (matches) {
@@ -636,7 +636,7 @@ export class VoiceChannel {
         const clean = trigger.replace(/^voice\./i, '').replace(/[-_]/g, ' ').toLowerCase().trim();
         return text === clean ||
           text.startsWith(clean + ' ') ||
-          (text.length >= 3 && !/^(?:перв\w*|втор\w*|трет\w*|четверт\w*|first|second|third|fourth|\d+)$/i.test(text) && clean.startsWith(text)) ||
+          (text.length >= 3 && !/^(?:перв[а-яё]*|втор[а-яё]*|трет[а-яё]*|четверт[а-яё]*|first|second|third|fourth|\d+)$/i.test(text) && clean.startsWith(text)) ||
           clean.split(/\s+/).every(word => text.includes(word));
       });
     })();
@@ -671,7 +671,7 @@ export class VoiceChannel {
           !!scenario.candidateBinding?.targetSlot &&
           /выбира|выбрать|вариант|choose|select|option|перв|втор|трет|четверт|first|second|third|fourth/i.test(text);
 
-        const ordinalMatch = text.match(/(?:^|\s)(перв\w*|втор\w*|трет\w*|четверт\w*|first|second|third|fourth)(?:\s|$)/i);
+        const ordinalMatch = text.match(/(?:^|\s)(перв[а-яё]*|втор[а-яё]*|трет[а-яё]*|четверт[а-яё]*|first|second|third|fourth)(?:\s|$)/i);
         const ordinalIndex = ordinalMatch
           ? (/^(?:перв|first)/i.test(ordinalMatch[1]) ? 1
             : /^(?:втор|second)/i.test(ordinalMatch[1]) ? 2
@@ -704,7 +704,7 @@ export class VoiceChannel {
 
             const candidateSelectionKeys = new Set(['candidate_index', 'candidate_name', 'candidate_criteria', 'choice', targetSlot || '']);
           const normalizedInput = text.toLowerCase();
-          const selectionTriggerMatched = /выбира|выбрать|вариант|choose|select|option|тогда.{0,20}(перв|втор|трет|четверт)|хочу.{0,12}(перв|втор|трет|четверт)/i.test(normalizedInput) || /^(?:перв\w*|втор\w*|трет\w*|четверт\w*|first|second|third|fourth|\d+)$/i.test(normalizedInput.trim());
+          const selectionTriggerMatched = /выбира|выбрать|вариант|choose|select|option|тогда.{0,20}(перв|втор|трет|четверт)|хочу.{0,12}(перв|втор|трет|четверт)/i.test(normalizedInput) || /^(?:перв[а-яё]*|втор[а-яё]*|трет[а-яё]*|четверт[а-яё]*|first|second|third|fourth|\d+)$/i.test(normalizedInput.trim());
           if (targetSlot && (
             Object.keys(extracted).some(key => candidateSelectionKeys.has(key)) ||
             selectionTriggerMatched
