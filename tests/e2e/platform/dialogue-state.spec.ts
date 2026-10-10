@@ -149,7 +149,7 @@ test.describe('E2E: Strict Platform Dialogue State & Multi-Turn Slot-Filling Sui
     await setupApp(page);
     await emitVoicePhrase(page, 'Обработай яблоки');
 
-    await page.evaluate(() => {
+    await page.evaluate(async () => {
       const dm = (window as any).__DIALOGUE_MANAGER__;
       const app = (window as any).__VOICE_DEMO_APP__;
       const state = app && dm ? dm.getActiveState(app.getIdentity()) : null;
