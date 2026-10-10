@@ -105,7 +105,7 @@ test.describe('CONTRACT: SC-INTEGRATION-003 Production Telegram Bot Voice Adapte
     const sc = getScenario();
 
     mockFileProvider.registerFile('voice-file-tb3', 'voices/tb3.ogg', 'audio/ogg', Buffer.from('AUDIO_BUFFER'));
-    mockSTT.setTranscript('завтра с трех');
+    mockSTT.setTranscript('нужна няня завтра с трех');
 
     const update: TelegramUpdate = {
       message: {
@@ -171,7 +171,7 @@ test.describe('CONTRACT: SC-INTEGRATION-003 Production Telegram Bot Voice Adapte
 
     // 1. Voice: "завтра"
     mockFileProvider.registerFile('v-tb5-1', 'v.ogg', 'audio/ogg', Buffer.from('1'));
-    mockSTT.setTranscript('завтра');
+    mockSTT.setTranscript('нужна няня завтра');
     await botAdapter.handleUpdate({
       message: { from: testUser, chat: testChat, voice: { file_id: 'v-tb5-1' } }
     });
@@ -197,7 +197,7 @@ test.describe('CONTRACT: SC-INTEGRATION-003 Production Telegram Bot Voice Adapte
   test('TB-06: Confirmation by Button displays [Да] [Отмена] and confirms on [Да]', async () => {
     const sc = getScenario();
 
-    await botAdapter.handleUpdate({ message: { from: testUser, chat: testChat, text: 'завтра с трех до восьми на двух детей' } });
+    await botAdapter.handleUpdate({ message: { from: testUser, chat: testChat, text: 'нужна няня завтра с трех до восьми на двух детей' } });
     await botAdapter.handleUpdate({ callback_query: { id: 'c1', from: testUser, message: { chat: testChat }, data: botAdapter.encodeCallbackData('children_ages', '5 лет') } });
     await botAdapter.handleUpdate({ callback_query: { id: 'c2', from: testUser, message: { chat: testChat }, data: botAdapter.encodeCallbackData('location', 'Центр') } });
     await botAdapter.handleUpdate({ callback_query: { id: 'c3', from: testUser, message: { chat: testChat }, data: botAdapter.encodeCallbackData('requirements', 'без требований') } });
@@ -224,7 +224,7 @@ test.describe('CONTRACT: SC-INTEGRATION-003 Production Telegram Bot Voice Adapte
   test('TB-07: Confirmation by Voice after prompt confirmation displays', async () => {
     const sc = getScenario();
 
-    await botAdapter.handleUpdate({ message: { from: testUser, chat: testChat, text: 'завтра с трех до восьми на двух детей' } });
+    await botAdapter.handleUpdate({ message: { from: testUser, chat: testChat, text: 'нужна няня завтра с трех до восьми на двух детей' } });
     await botAdapter.handleUpdate({ callback_query: { id: 'c1', from: testUser, message: { chat: testChat }, data: botAdapter.encodeCallbackData('children_ages', '5 лет') } });
     await botAdapter.handleUpdate({ callback_query: { id: 'c2', from: testUser, message: { chat: testChat }, data: botAdapter.encodeCallbackData('location', 'Центр') } });
     await botAdapter.handleUpdate({ callback_query: { id: 'c3', from: testUser, message: { chat: testChat }, data: botAdapter.encodeCallbackData('requirements', 'без требований') } });
