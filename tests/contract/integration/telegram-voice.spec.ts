@@ -173,6 +173,7 @@ test.describe('CONTRACT: SC-INTEGRATION-002 Real Telegram Voice Input + STT Inte
 
   test('TV-07: STT failure keeps context intact and allows continuation', async () => {
     const sc = getScenario();
+    await adapter.handleMessage({ channel: 'text', raw_input: 'нужна няня' }, sessionUser);
     await adapter.handleMessage({ channel: 'button', button_payload: { slotName: 'date', slotValue: 'сегодня' } }, sessionUser);
 
     mockSTT.setFailure(new Error('STT_UNAVAILABLE'));
@@ -195,6 +196,7 @@ test.describe('CONTRACT: SC-INTEGRATION-002 Real Telegram Voice Input + STT Inte
 
   test('TV-08: Empty transcript leaves state untouched', async () => {
     const sc = getScenario();
+    await adapter.handleMessage({ channel: 'text', raw_input: 'нужна няня' }, sessionUser);
     await adapter.handleMessage({ channel: 'button', button_payload: { slotName: 'date', slotValue: 'сегодня' } }, sessionUser);
 
     mockSTT.setTranscript('   ');
@@ -233,6 +235,7 @@ test.describe('CONTRACT: SC-INTEGRATION-002 Real Telegram Voice Input + STT Inte
 
   test('TV-10: Telegram download failure stops pipeline before STT and preserves state', async () => {
     const sc = getScenario();
+    await adapter.handleMessage({ channel: 'text', raw_input: 'нужна няня' }, sessionUser);
     await adapter.handleMessage({ channel: 'button', button_payload: { slotName: 'date', slotValue: 'сегодня' } }, sessionUser);
 
     mockFileProvider.registerFile('file-fail', 'voice/fail.ogg', 'audio/ogg', Buffer.from('audio'));
