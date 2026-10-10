@@ -106,6 +106,7 @@ export class DialogueStateManager {
 
   // Per-Context Serialization Queues
   private contextMutationQueues: Map<string, Promise<any>> = new Map();
+  private executionDispatchPromises: Map<string, Promise<DispatchResult>> = new Map();
 
   constructor(configOrTimeout: DialogueManagerConfig | number = {}) {
     if (typeof configOrTimeout === 'number') {
@@ -137,6 +138,7 @@ export class DialogueStateManager {
     this.activeContextBySession.clear();
     this.executions.clear();
     this.contextMutationQueues.clear();
+    this.executionDispatchPromises.clear();
   }
 
   private validateIdentity(identity: SessionIdentity): void {
@@ -665,6 +667,10 @@ export class DialogueStateManager {
       throw new Error('CONTRACT_VIOLATION: Payload cannot be mutated for same executionId');
     }
 
+    // Concurrent retries for one execution must share the same in-flight dispatch.
+    const inFlight = this.executionDispatchPromises.get(executionId);
+    if (inFlight) return inFlight;
+
     if (execution.status === 'SUCCEEDED') {
       return { status: 'SUCCEEDED', executionId: execution.executionId, attempt: execution.attempt };
     }
@@ -810,6 +816,12 @@ export class DialogueStateManager {
     });
 
     this.contextMutationQueues.set(contextId, dispatchPromise);
+    this.executionDispatchPromises.set(executionId, dispatchPromise);
+    dispatchPromise.finally(() => {
+      if (this.executionDispatchPromises.get(executionId) === dispatchPromise) {
+        this.executionDispatchPromises.delete(executionId);
+      }
+    }).catch(() => undefined);
     return dispatchPromise;
   }
 
