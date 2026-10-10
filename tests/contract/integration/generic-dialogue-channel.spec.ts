@@ -131,6 +131,7 @@ test.describe('CONTRACT: SC-INTEGRATION-004 Generic Dialogue Channel Contract Su
     const serviceScenario: ScenarioDefinition = {
       id: 'service-booking',
       intent: 'BOOK_SERVICE',
+      triggerPhrases: ['book service'],
       requiredSlots: ['date', 'selected_service'],
       candidateBinding: {
         targetSlot: 'selected_service',
@@ -151,10 +152,11 @@ test.describe('CONTRACT: SC-INTEGRATION-004 Generic Dialogue Channel Contract Su
     };
 
     const userS = { ownerId: 'u-serv', sessionId: 's-serv' };
+    vc.registerScenarioSet({ version: 1, id: 'service-booking-set', scenarios: [serviceScenario] });
     const adapter = new MockGenericChannelAdapter(engine);
 
-    // Initial message to open context
-    await adapter.send({ modality: 'text', raw_input: 'завтра' }, userS, serviceScenario);
+    // Initial message explicitly resolves the registered service scenario.
+    await adapter.send({ modality: 'text', raw_input: 'book service завтра' }, userS, serviceScenario);
 
     // Attach custom candidate items with non-standard fields
     const ctx = dm.getActiveState(userS)!;
@@ -186,6 +188,7 @@ test.describe('CONTRACT: SC-INTEGRATION-004 Generic Dialogue Channel Contract Su
     };
 
     const userP = { ownerId: 'u-pres', sessionId: 's-pres' };
+    vc.registerScenarioSet({ version: 1, id: 'service-booking-pres-set', scenarios: [serviceScenario] });
     const adapter = new MockGenericChannelAdapter(engine);
 
     // Attach candidates before prompt
