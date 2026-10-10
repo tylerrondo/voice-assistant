@@ -658,7 +658,7 @@ export class VoiceChannel {
 
             const candidateSelectionKeys = new Set(['candidate_index', 'candidate_name', 'candidate_criteria', 'choice', targetSlot || '']);
           const normalizedInput = text.toLowerCase();
-          const selectionTriggerMatched = /выбира|выбрать|вариант|перв|втор|трет|четверт|choose|select|option|first|second|third|fourth/i.test(normalizedInput);
+          const selectionTriggerMatched = /выбира|выбрать|вариант|choose|select|option|тогда.{0,20}(перв|втор|трет|четверт)|хочу.{0,12}(перв|втор|трет|четверт)/i.test(normalizedInput) || /^(?:перв\\w*|втор\\w*|трет\\w*|четверт\\w*|first|second|third|fourth|\\d+)$/i.test(normalizedInput.trim());
           if (targetSlot && (
             Object.keys(extracted).some(key => candidateSelectionKeys.has(key)) ||
             selectionTriggerMatched
