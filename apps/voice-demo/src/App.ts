@@ -622,7 +622,7 @@ export function mountApp(root: HTMLElement, runtime: any, authenticatedIdentity:
     link.href = url;
     link.download = 'validation-report-' + Date.now() + '.json';
     link.click();
-    URL.revokeObjectURL(url);
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   });
   query('send-report-button').addEventListener('click', async () => {
     if (!lastReport) {
