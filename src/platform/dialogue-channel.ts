@@ -152,6 +152,7 @@ export class DialogueEngine {
 
     // 2. Extract slots using resolved scenario extractors
     let extractedSlots: Record<string, any> = {};
+    let slotAmbiguity: { candidates: Array<{ slotName: string; value: any; scenarioId: string }>; clarificationPrompt?: string } | undefined;
 
     if (inputModality === 'button') {
       if (input.payload?.slotName && input.payload?.slotValue !== undefined) {
@@ -160,6 +161,8 @@ export class DialogueEngine {
         const extracted = this.vc.extractSlotsDeterministically(rawText, activeScenario.slotExtractors, activeScenario.id);
         if (extracted.status === 'RESOLVED') {
           extractedSlots = extracted.slots;
+        } else if (extracted.status === 'AMBIGUOUS_SLOT') {
+          slotAmbiguity = extracted;
         }
       }
     } else {
@@ -167,6 +170,8 @@ export class DialogueEngine {
         const extracted = this.vc.extractSlotsDeterministically(rawText, activeScenario.slotExtractors, activeScenario.id);
         if (extracted.status === 'RESOLVED') {
           extractedSlots = extracted.slots;
+        } else if (extracted.status === 'AMBIGUOUS_SLOT') {
+          slotAmbiguity = extracted;
         }
       }
     }
@@ -182,6 +187,18 @@ export class DialogueEngine {
         identity,
         activeScenario.id
       );
+    }
+
+    if (slotAmbiguity) {
+      return {
+        status: 'AMBIGUOUS_SLOT',
+        contextId: ctx.contextId,
+        slots: ctx.slots,
+        missingSlots: ctx.missingSlots,
+        presentation: {
+          text: slotAmbiguity.clarificationPrompt || 'Уточните, пожалуйста, какое значение вы имели в виду.'
+        }
+      };
     }
 
     // 4. Declarative Cancellation check (strictly driven by Scenario definition)
