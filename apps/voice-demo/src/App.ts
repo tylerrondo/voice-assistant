@@ -215,7 +215,6 @@ export function mountApp(root: HTMLElement, runtime: any, authenticatedIdentity:
     }
     const trace = query('scenario-trace');
     trace.innerHTML = '';
-    setVisible('execution-terminal', false);
     let outputIndex = 0;
     const steps = Array.isArray(scenario.steps) ? scenario.steps : [];
     for (const step of steps) {
@@ -532,7 +531,6 @@ export function mountApp(root: HTMLElement, runtime: any, authenticatedIdentity:
 
   updateInjectActions();
   updateScenarioMetadata();
-  setVisible('execution-terminal', false);
   setVisible('inject-controls', true);
   setVisible('mic-controls', false);
   setVisible('interactive-next-button', false);
