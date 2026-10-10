@@ -657,7 +657,7 @@ export class VoiceChannel {
           if (activeCtx.offers && activeCtx.offers.length > 0) {
             const targetSlot = scenario.candidateBinding?.targetSlot
               || activeCtx.missingSlots.find(s => s !== 'confirmation') 
-              || activeCtx.requiredSlots?.find(s => s !== 'confirmation');
+              || scenario.requiredSlots?.find(s => s !== 'confirmation');
 
             const candidateSelectionKeys = new Set(['candidate_index', 'candidate_name', 'candidate_criteria', 'choice', targetSlot || '']);
           const normalizedInput = text.toLowerCase();
