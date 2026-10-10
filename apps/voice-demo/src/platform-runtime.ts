@@ -1,4 +1,4 @@
-import { ActionDispatcher, SessionIdentity } from "../../../src/platform/dialogue-manager";
+import type { ActionDispatcher, SessionIdentity } from "../../../src/platform/dialogue-manager";
 
 // Strict Authenticated Session Provider (Zero fallback)
 export function getAuthenticatedSessionIdentity(): SessionIdentity {
