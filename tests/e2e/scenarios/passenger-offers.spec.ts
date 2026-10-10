@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -6,6 +7,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const scenarioFilePath = path.resolve(__dirname, '../../../scenario-passenger-offers.json');
+const scenarioSet = JSON.parse(fs.readFileSync(scenarioFilePath, 'utf8'));
 
 test.describe('E2E: SC-PASS-002 Canonical Multi-Offer Dialogue Suite', () => {
 
@@ -18,14 +20,12 @@ test.describe('E2E: SC-PASS-002 Canonical Multi-Offer Dialogue Suite', () => {
     await page.goto('http://localhost:3000');
     await page.waitForSelector('#voice-app-ready', { timeout: 10000 });
 
-    const fileInput = page.locator('input[type="file"]').first();
-    await fileInput.setInputFiles(scenarioFilePath);
-
-    const result = await page.evaluate(async () => {
+    const result = await page.evaluate(async (scenarioSet) => {
       const vc = (window as any).__VOICE_CHANNEL__;
       const dm = (window as any).__DIALOGUE_MANAGER__;
       const app = (window as any).__VOICE_DEMO_APP__;
       const identity = app.getIdentity();
+      vc.registerScenarioSet(scenarioSet);
 
       // Шаг 1: Инициация контекста заказа с доступными офферами
       const initialCtx = dm.createContext(
@@ -83,7 +83,7 @@ test.describe('E2E: SC-PASS-002 Canonical Multi-Offer Dialogue Suite', () => {
         finalCtx,
         step6Res
       };
-    });
+    }, scenarioSet);
 
     // Zero execution on all intermediate queries and selections
     expect(result.step1Execs).toBe(0);
