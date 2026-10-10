@@ -49,6 +49,8 @@ test.describe('E2E: SC-PASS-001 Canonical Multi-turn Passenger Dialogue Suite', 
       // Шаг 4: Выбор класса авто
       await vc.handleIncomingVoice('Комфорт', identity);
       const step4Execs = dm.getExecutionLogs(identity).length;
+      const step4Contexts = dm.listContexts(identity);
+      const step4LogSnapshot = dm.getExecutionLogs(identity);
 
       // Шаг 5: Подтверждение
       const step5Res = await vc.handleIncomingVoice('Да', identity);
@@ -62,12 +64,16 @@ test.describe('E2E: SC-PASS-001 Canonical Multi-turn Passenger Dialogue Suite', 
         step2Execs,
         step3Execs,
         step4Execs,
+        step4Contexts,
+        step4LogSnapshot,
         finalLogsCount: finalLogs.length,
         execution: finalLogs[0],
         finalCtx,
         step5Res
       };
     });
+
+    console.log('PASSENGER DEBUG ' + JSON.stringify({ step4Execs: result.step4Execs, step4Contexts: result.step4Contexts, step4LogSnapshot: result.step4LogSnapshot }));
 
     // Zero execution on all steps prior to confirmation
     expect(result.step1Execs).toBe(0);
