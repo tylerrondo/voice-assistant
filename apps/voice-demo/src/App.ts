@@ -225,7 +225,7 @@ export function mountApp(root: HTMLElement, runtime: any, authenticatedIdentity:
     const resolved: Record<string, any> = {};
     for (const [key, value] of Object.entries(payload || {})) {
       if (typeof value === 'string') {
-        const match = value.match(/^\\{\\{slots\\.([A-Za-z0-9_]+)\\}\\}$/);
+        const match = value.match(/^\{\{slots\.([A-Za-z0-9_]+)\}\}$/);
         resolved[key] = match ? slots[match[1]] : value;
       } else {
         resolved[key] = value;
