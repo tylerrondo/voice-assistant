@@ -309,7 +309,14 @@ export class VoiceChannel {
           const mappingMatches: Array<{ enumValue: string; synonym: string }> = [];
           for (const [enumValue, synonyms] of Object.entries(extractor.mapping)) {
             const matchingSynonyms = synonyms
+              .filter(item => {
+                if (typeof item !== 'string' || item.length === 0) return false;
+                const escaped = item.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\const matchingSynonyms = synonyms
               .filter(item => typeof item === 'string' && item.length > 0 && normalizedText.includes(item.toLowerCase()))
+              .sort((a, b) => b.length - a.length);');
+                const phrasePattern = new RegExp('(^|[^\\p{L}\\p{N}_])' + escaped + '(?=$|[^\\p{L}\\p{N}_])', 'iu');
+                return phrasePattern.test(normalizedText);
+              })
               .sort((a, b) => b.length - a.length);
             if (matchingSynonyms.length > 0) {
               mappingMatches.push({ enumValue, synonym: matchingSynonyms[0] });
