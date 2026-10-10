@@ -223,7 +223,7 @@ export class DialogueEngine {
 
     // 5. Declarative Target Slot for Candidate Resolution
     const targetSlot = activeScenario.candidateBinding?.targetSlot;
-    const candidateSelectionKeys = new Set(['candidate_index', 'candidate_name', 'choice', targetSlot || '']);
+    const candidateSelectionKeys = new Set(['candidate_index', 'candidate_name', 'candidate_criteria', 'choice', targetSlot || '']);
 
     // 6. Resolve only explicit candidate-selection slots. Unrelated numeric slots
     // (for example children_count=2) must never select candidate #2 by accident.
