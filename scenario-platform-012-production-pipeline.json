@@ -73,6 +73,7 @@
         "value": "voice.arrived"
       },
       "intent": "DRIVER_ARRIVED",
+      "aliases": ["Я приехал", "Прибыл", "На месте", "Ожидаю пассажира"],
       "requiredSlots": [],
       "steps": [
         {
