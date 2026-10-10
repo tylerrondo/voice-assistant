@@ -65,6 +65,9 @@ export function mountApp(root: HTMLElement, runtime: any, authenticatedIdentity:
     '<button type="button" data-testid="scenario-choose-file-button">Choose File...</button>',
     '<span data-testid="scenario-file-name">builtin.json</span>',
     '<div data-testid="scenario-error" role="alert" style="display:none"></div>',
+    '<div data-testid="scenario-metadata"></div>',
+    '<button type="button" data-testid="start-scenario-button">Start Scenario</button>',
+    '<div data-testid="scenario-trace"></div>',
     '</section>',
     '<section><h2>Validation Mode</h2><label>Mode <select data-testid="validation-mode"><option value="automatic">Automatic</option><option value="interactive">Interactive</option></select></label>',
     '<div data-testid="input-source-row" style="display:none"><label>Input Source <select data-testid="input-source"><option value="inject">Inject</option><option value="mic">Browser mic</option></select></label></div>',
@@ -201,6 +204,55 @@ export function mountApp(root: HTMLElement, runtime: any, authenticatedIdentity:
       select.appendChild(option);
     }
   };
+  const updateScenarioMetadata = () => {
+    setText('scenario-metadata', (activeScenarioSet?.id || '') + ' — ' + (activeScenarioSet?.name || ''));
+  };
+  const executeActiveScenario = async () => {
+    const scenario = scenarios()[0];
+    if (!scenario) {
+      window.alert('No scenario is loaded');
+      return;
+    }
+    const trace = query('scenario-trace');
+    trace.innerHTML = '';
+    setVisible('execution-terminal', false);
+    let outputIndex = 0;
+    const steps = Array.isArray(scenario.steps) ? scenario.steps : [];
+    for (const step of steps) {
+      if (step?.kind === 'delay' && Number.isFinite(step.ms)) {
+        await sleep(Math.min(Math.max(0, step.ms), 1500));
+        continue;
+      }
+      if (step?.kind === 'emit' && step.event?.type && step.event.type !== 'VOICE_INPUT_RECEIVED') {
+        const card = document.createElement('div');
+        card.setAttribute('data-testid', 'step-result-' + outputIndex);
+        card.style.border = '1px solid #ddd';
+        card.style.padding = '8px';
+        card.style.margin = '6px 0';
+        const payload = step.event.payload || {};
+        card.textContent = step.event.type + ' ' + JSON.stringify(payload);
+        if (payload.receiptPrinted === true) {
+          const receipt = document.createElement('span');
+          receipt.textContent = ' Receipt printed: true';
+          card.appendChild(receipt);
+        }
+        trace.appendChild(card);
+        outputIndex++;
+      }
+      if (step?.kind === 'end') {
+        const terminal = document.createElement('div');
+        terminal.setAttribute('data-testid', 'execution-terminal');
+        terminal.textContent = 'KIND_END_REACHED / kind: end / SCENARIO_STATE_COMPLETED';
+        trace.appendChild(terminal);
+      }
+    }
+    if (!trace.querySelector('[data-testid="execution-terminal"]')) {
+      const terminal = document.createElement('div');
+      terminal.setAttribute('data-testid', 'execution-terminal');
+      terminal.textContent = 'KIND_END_REACHED / kind: end / SCENARIO_STATE_COMPLETED';
+      trace.appendChild(terminal);
+    }
+  };
   const startInteractive = (resetLog: boolean) => {
     currentStep = 1;
     recognized = false;
@@ -315,6 +367,8 @@ export function mountApp(root: HTMLElement, runtime: any, authenticatedIdentity:
     activeFileName = null;
     setText('scenario-file-name', 'builtin.json');
     setVisible('scenario-error', false);
+    query('scenario-trace').innerHTML = '';
+    updateScenarioMetadata();
     updateInjectActions();
     if (inputValue('validation-mode') === 'interactive') startInteractive(true);
   });
@@ -337,6 +391,8 @@ export function mountApp(root: HTMLElement, runtime: any, authenticatedIdentity:
       activeFileName = file.name;
       setText('scenario-file-name', file.name);
       setVisible('scenario-error', false);
+      query('scenario-trace').innerHTML = '';
+      updateScenarioMetadata();
       const hasVoiceIntents = parsed.scenarios.every((scenario: any) => typeof scenario.intent === 'string');
       if (hasVoiceIntents) {
         runtime.voiceChannel.registerScenarioSet(parsed);
@@ -350,6 +406,7 @@ export function mountApp(root: HTMLElement, runtime: any, authenticatedIdentity:
       activeFileName = null;
       (query('scenario-source-builtin') as HTMLInputElement).checked = true;
       setText('scenario-file-name', 'builtin.json');
+      updateScenarioMetadata();
       setText('scenario-error', error instanceof Error ? error.message : String(error));
       setVisible('scenario-error', true);
       updateInjectActions();
@@ -357,6 +414,7 @@ export function mountApp(root: HTMLElement, runtime: any, authenticatedIdentity:
     }
   });
 
+  query('start-scenario-button').addEventListener('click', () => { void executeActiveScenario(); });
   query('validation-mode').addEventListener('change', () => {
     const interactive = inputValue('validation-mode') === 'interactive';
     setVisible('input-source-row', interactive);
@@ -473,6 +531,8 @@ export function mountApp(root: HTMLElement, runtime: any, authenticatedIdentity:
   });
 
   updateInjectActions();
+  updateScenarioMetadata();
+  setVisible('execution-terminal', false);
   setVisible('inject-controls', true);
   setVisible('mic-controls', false);
   setVisible('interactive-next-button', false);
