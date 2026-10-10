@@ -1,7 +1,172 @@
-"candidateBinding": {
+{
+  "version": 1,
+  "id": "scenario-set-passenger-offers-002",
+  "name": "Passenger offer comparison and selection",
+  "description": "Domain-agnostic comparison, attribute queries, and selection of available passenger offers.",
+  "scenarios": [
+    {
+      "id": "sc-select-passenger-offer",
+      "intent": "SELECT_OFFER",
+      "priority": 10,
+      "requiredSlots": [
+        "selectedOfferId",
+        "confirmation"
+      ],
+      "candidateBinding": {
+        "targetSlot": "selectedOfferId",
         "idField": "offerId",
+        "labelField": "driver",
         "indexField": "index",
         "statusField": "status",
         "unavailableValue": "UNAVAILABLE",
-        "ambiguityTriggerValues": ["cheapest", "fastest"]
+        "unavailableTemplate": "Предложение {{targetId}} больше недоступно.",
+        "ambiguityTriggerValues": [
+          "cheapest",
+          "fastest",
+          "подешевле",
+          "побыстрее"
+        ]
       },
+      "ambiguityPrompt": {
+        "template": "Уточните, пожалуйста, какой вариант выбрать."
+      },
+      "slotExtractors": {
+        "candidate_index": {
+          "type": "integer",
+          "rules": [
+            {
+              "pattern": "\\b(первый|первую|первое|первым|вариант\\s*1)\\b",
+              "value": 1
+            },
+            {
+              "pattern": "\\b(второй|вторую|второе|вторым|вариант\\s*2)\\b",
+              "value": 2
+            },
+            {
+              "pattern": "\\b(третий|третью|третье|третьим|вариант\\s*3)\\b",
+              "value": 3
+            }
+          ]
+        },
+        "candidate_criteria": {
+          "type": "string",
+          "rules": [
+            {
+              "pattern": "\\b(подешевле|дешевле)\\b",
+              "value": "cheapest"
+            },
+            {
+              "pattern": "\\b(побыстрее|быстрее)\\b",
+              "value": "fastest"
+            }
+          ]
+        },
+        "confirmation": {
+          "type": "enum",
+          "rules": [
+            {
+              "pattern": "^\\s*да\\s*[.!?]*$",
+              "value": "CONFIRMED"
+            },
+            {
+              "pattern": "^\\s*нет\\s*[.!?]*$",
+              "value": "REJECTED"
+            }
+          ]
+        }
+      },
+      "confirmation": {
+        "slot": "confirmation",
+        "confirmedValue": "CONFIRMED",
+        "rejectedValue": "REJECTED",
+        "confirmedMessage": "Выбор подтверждён.",
+        "cancelledMessage": "Выбор отменён."
+      }
+    },
+    {
+      "id": "sc-compare-passenger-offers-fastest",
+      "intent": "COMPARE_OFFERS_FASTEST",
+      "triggerPhrases": [
+        "какой быстрее",
+        "какая машина быстрее",
+        "самый быстрый вариант"
+      ],
+      "evaluation": {
+        "kind": "compare",
+        "attribute": "etaMinutes",
+        "order": "min",
+        "responseTemplate": "Самый быстрый вариант — {{index}}."
+      },
+      "candidateBinding": {
+        "idField": "offerId",
+        "indexField": "index",
+        "statusField": "status",
+        "unavailableValue": "UNAVAILABLE"
+      }
+    },
+    {
+      "id": "sc-compare-passenger-offers-cheapest",
+      "intent": "COMPARE_OFFERS_CHEAPEST",
+      "triggerPhrases": [
+        "какой дешевле",
+        "какая машина дешевле",
+        "самый дешёвый вариант",
+        "самый дешевый вариант"
+      ],
+      "evaluation": {
+        "kind": "compare",
+        "attribute": "price",
+        "order": "min",
+        "responseTemplate": "Самый дешёвый вариант — {{index}}."
+      },
+      "candidateBinding": {
+        "idField": "offerId",
+        "indexField": "index",
+        "statusField": "status",
+        "unavailableValue": "UNAVAILABLE"
+      }
+    },
+    {
+      "id": "sc-query-passenger-offer-attribute",
+      "intent": "QUERY_PASSENGER_OFFER_ATTRIBUTE",
+      "triggerPhrases": [
+        "второй это комфорт",
+        "далеко находится второй водитель",
+        "характеристики второго варианта"
+      ],
+      "evaluation": {
+        "kind": "query_attribute",
+        "attribute": "vehicleType",
+        "targetIndex": 2,
+        "responseTemplate": "Тип автомобиля: {{vehicleType}}."
+      },
+      "candidateBinding": {
+        "idField": "offerId",
+        "indexField": "index",
+        "statusField": "status",
+        "unavailableValue": "UNAVAILABLE"
+      }
+    },
+    {
+      "id": "sc-query-passenger-offer-distance",
+      "intent": "QUERY_PASSENGER_OFFER_DISTANCE",
+      "triggerPhrases": [
+        "далеко находится второй водитель",
+        "расстояние до второго водителя"
+      ],
+      "priority": 20,
+      "evaluation": {
+        "kind": "query_attribute",
+        "attribute": "distanceKm",
+        "targetIndex": 2,
+        "responseTemplate": "Расстояние до водителя: {{distanceKm}} км."
+      },
+      "candidateBinding": {
+        "idField": "offerId",
+        "indexField": "index",
+        "statusField": "status",
+        "unavailableValue": "UNAVAILABLE"
+      }
+    }
+  ]
+}
