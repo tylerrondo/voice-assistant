@@ -209,7 +209,7 @@ export class VoiceChannel {
 
       const matches = triggers.some(trig => {
         const clean = trig.replace(/^voice\./, '').replace(/[-_]/g, ' ').toLowerCase().trim();
-        return text === clean || text.startsWith(clean + ' ') || (text.length >= 3 && clean.startsWith(text)) || clean.split(/\s+/).every(w => text.includes(w));
+        return text === clean || text.startsWith(clean + ' ') || (text.length >= 3 && !/^(?:перв\\w*|втор\\w*|трет\\w*|четверт\\w*|first|second|third|fourth|\\d+)$/i.test(text) && clean.startsWith(text)) || clean.split(/\s+/).every(w => text.includes(w));
       });
 
       if (matches) {
@@ -636,7 +636,7 @@ export class VoiceChannel {
         const clean = trigger.replace(/^voice\./i, '').replace(/[-_]/g, ' ').toLowerCase().trim();
         return text === clean ||
           text.startsWith(clean + ' ') ||
-          (text.length >= 3 && clean.startsWith(text)) ||
+          (text.length >= 3 && !/^(?:перв\\w*|втор\\w*|трет\\w*|четверт\\w*|first|second|third|fourth|\\d+)$/i.test(text) && clean.startsWith(text)) ||
           clean.split(/\s+/).every(word => text.includes(word));
       });
     })();
