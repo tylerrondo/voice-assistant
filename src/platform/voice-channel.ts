@@ -788,7 +788,7 @@ export class VoiceChannel {
                 const exec = this.dialogueManager.createExecution(updated, identity);
                 const dispatchRes = await this.dialogueManager.dispatchAction(exec.executionId, updated.slots, identity);
                 return {
-                  status: dispatchRes.status === 'SUCCEEDED' ? 'COMPLETED' : dispatchRes.status,
+                  status: dispatchRes.status,
                   dispatchStatus: dispatchRes.status,
                   contextId: updated.contextId,
                   executionId: exec.executionId,
@@ -814,7 +814,7 @@ export class VoiceChannel {
             const exec = this.dialogueManager.createExecution(latestContext, identity);
             const dispatchRes = await this.dialogueManager.dispatchAction(exec.executionId, latestContext.slots, identity);
             return {
-              status: dispatchRes.status === 'SUCCEEDED' ? 'COMPLETED' : dispatchRes.status,
+              status: dispatchRes.status,
                   dispatchStatus: dispatchRes.status,
               contextId: latestContext.contextId,
               executionId: exec.executionId,
@@ -934,7 +934,7 @@ export class VoiceChannel {
                   this.preferredContextBySession.delete(sessionKey);
                 }
                 return {
-                  status: dispatch.status === 'SUCCEEDED' ? 'COMPLETED' : dispatch.status,
+                  status: dispatch.status,
                   dispatchStatus: dispatch.status,
                   contextId: updated.contextId,
                   executionId: execution.executionId,
@@ -984,7 +984,7 @@ export class VoiceChannel {
         const exec = this.dialogueManager.createExecution(ctx, identity);
         const dispatchRes = await this.dialogueManager.dispatchAction(exec.executionId, ctx.slots, identity);
         return {
-          status: dispatchRes.status === 'SUCCEEDED' ? 'COMPLETED' : dispatchRes.status,
+          status: dispatchRes.status,
                   dispatchStatus: dispatchRes.status,
           contextId: ctx.contextId,
           executionId: exec.executionId,
