@@ -79,6 +79,9 @@ test.describe('CONTRACT: SC-INTEGRATION-004 Generic Dialogue Channel Contract Su
     const sc = getNannyScenario();
     const adapter = new MockGenericChannelAdapter(engine);
 
+    // Buttons require an existing context; start the registered scenario explicitly first.
+    await adapter.send({ modality: 'text', raw_input: 'нужна няня завтра' }, sessionUser, sc);
+
     await adapter.send({
       modality: 'button',
       payload: {
@@ -93,6 +96,9 @@ test.describe('CONTRACT: SC-INTEGRATION-004 Generic Dialogue Channel Contract Su
   test('GC-03: Voice — DialogueInput(voice with transcript) passes through the same DialogueEngine', async () => {
     const sc = getNannyScenario();
     const adapter = new MockGenericChannelAdapter(engine);
+
+    // Voice input continues an active scenario context rather than injecting a scenario definition.
+    await adapter.send({ modality: 'text', raw_input: 'нужна няня завтра' }, sessionUser, sc);
 
     await adapter.send({
       modality: 'voice',
