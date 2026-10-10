@@ -40,7 +40,7 @@ test.describe('E2E: PLATFORM-014 Intent Resolution & Slot Ambiguity Suite', () =
     await setupApp(page);
 
     const res = await emitVoice(page, 'экспресс заказ 1001', sessionA);
-    expect(res.status).toBe('COMPLETED');
+    expect(res.status).toBe('SUCCEEDED');
     expect(res.intent).toBe('ORDER_EXPRESS');
 
     const logs = await page.evaluate((id) => (window as any).__DIALOGUE_MANAGER__.getExecutionLogs(id), sessionA);
@@ -89,7 +89,7 @@ test.describe('E2E: PLATFORM-014 Intent Resolution & Slot Ambiguity Suite', () =
     });
 
     const res = await emitVoice(page, 'ride', sessionA);
-    expect(res.status).toBe('COMPLETED');
+    expect(res.status).toBe('SUCCEEDED');
     expect(res.intent).toBe('RIDE_VIP');
 
     const logs = await page.evaluate((id) => (window as any).__DIALOGUE_MANAGER__.getExecutionLogs(id), sessionA);
