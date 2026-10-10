@@ -61,8 +61,9 @@ test.describe('E2E: SC-004 Taxi Driver Multi-Turn Dialogue & Real FSM Suite (Ð¢Ð
     const state = await page.evaluate(() => {
       const dm = (window as any).__DIALOGUE_MANAGER__;
       const identity = (window as any).__VOICE_DEMO_APP__.getIdentity();
-      return dm ? dm.getActiveState(identity) : null;
+      return dm ? dm.listContexts(identity).find((context: any) => context.scenarioId === 'sc004-accept-order-dialogue') || null : null;
     });
+    expect(state).not.toBeNull();
     expect(state.status).toBe('COMPLETED');
     expect(state.slots).toEqual({ orderId: 1001 });
 
@@ -111,9 +112,10 @@ test.describe('E2E: SC-004 Taxi Driver Multi-Turn Dialogue & Real FSM Suite (Ð¢Ð
     const state = await page.evaluate(() => {
       const dm = (window as any).__DIALOGUE_MANAGER__;
       const identity = (window as any).__VOICE_DEMO_APP__.getIdentity();
-      return dm ? dm.getActiveState(identity) : null;
+      return dm ? dm.listContexts(identity).find((context: any) => context.scenarioId === 'sc004-accept-order-dialogue') || null : null;
     });
 
+    expect(state).not.toBeNull();
     expect(state.status).toBe('CANCELLED');
 
     await emitVoicePhrase(page, '1001');
