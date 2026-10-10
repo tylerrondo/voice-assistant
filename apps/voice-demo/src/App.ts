@@ -221,6 +221,18 @@ export function mountApp(root: HTMLElement, runtime: any, authenticatedIdentity:
     entry.textContent = (rejected ? 'FSM_REJECTED ' : '') + eventType + ' ' + JSON.stringify(payload || {});
     trace.appendChild(entry);
   };
+  const resolveEventPayload = (payload: any, slots: Record<string, any> = {}) => {
+    const resolved: Record<string, any> = {};
+    for (const [key, value] of Object.entries(payload || {})) {
+      if (typeof value === 'string') {
+        const match = value.match(/^\\{\\{slots\\.([A-Za-z0-9_]+)\\}\\}$/);
+        resolved[key] = match ? slots[match[1]] : value;
+      } else {
+        resolved[key] = value;
+      }
+    }
+    return resolved;
+  };
   const applyFsmTransition = (eventType: string, payload: any) => {
     const transitions: Record<string, { from: string[]; to: string }> = {
       'driver.order.accepted': { from: ['AVAILABLE', 'IDLE', 'ORDER_ASSIGNED'], to: 'ORDER_ACCEPTED' },
@@ -250,7 +262,7 @@ export function mountApp(root: HTMLElement, runtime: any, authenticatedIdentity:
         for (const step of steps) {
           if (step?.kind === 'delay' && Number.isFinite(step.ms)) await sleep(Math.min(Math.max(0, step.ms), 1500));
           if (step?.kind === 'emit' && step.event?.type && step.event.type !== 'VOICE_INPUT_RECEIVED') {
-            applyFsmTransition(step.event.type, step.event.payload || {});
+            applyFsmTransition(step.event.type, resolveEventPayload(step.event.payload || {}, result?.slots || result?.context?.slots || {}));
           }
         }
       }
@@ -295,7 +307,7 @@ export function mountApp(root: HTMLElement, runtime: any, authenticatedIdentity:
       for (const step of steps) {
         if (step?.kind === 'delay' && Number.isFinite(step.ms)) await sleep(Math.min(Math.max(0, step.ms), 1500));
         if (step?.kind === 'emit' && step.event?.type && step.event.type !== 'VOICE_INPUT_RECEIVED') {
-          applyFsmTransition(step.event.type, step.event.payload || {});
+          applyFsmTransition(step.event.type, resolveEventPayload(step.event.payload || {}, result?.slots || result?.context?.slots || {}));
         }
       }
     }
