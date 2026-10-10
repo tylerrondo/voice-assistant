@@ -260,9 +260,9 @@ export class VoiceChannel {
     const normalizedText = text.toLowerCase();
     const compilePattern = (pattern: string): RegExp => {
       const unicodePattern = pattern
-        .replace(/^\\\\b/, "(?:^|(?<=[^\\\\p{L}\\\\p{N}_]))")
-        .replace(/\\\\b$/, "(?:$|(?=[^\\\\p{L}\\\\p{N}_]))")
-        .replace(/\\\\b/g, "(?:(?<=[^\\\\p{L}\\\\p{N}_])|(?=[^\\\\p{L}\\\\p{N}_]))");
+        .replace(/^\\b/, "(?:^|(?<=[^\\p{L}\\p{N}_]))")
+        .replace(/\\b$/, "(?:$|(?=[^\\p{L}\\p{N}_]))")
+        .replace(/\\b/g, "(?:(?<=[^\\p{L}\\p{N}_])|(?=[^\\p{L}\\p{N}_]))");
       return new RegExp(unicodePattern, 'iu');
     };
     const matches: Array<{ slotName: string; value: any; token: string; priority: number }> = [];
@@ -615,11 +615,11 @@ export class VoiceChannel {
       if (Array.isArray(scenario.triggerPhrases)) triggers.push(...scenario.triggerPhrases);
       if (Array.isArray(scenario.aliases)) triggers.push(...scenario.aliases);
       return triggers.some(trigger => {
-        const clean = trigger.replace(/^voice\\./i, '').replace(/[-_]/g, ' ').toLowerCase().trim();
+        const clean = trigger.replace(/^voice\./i, '').replace(/[-_]/g, ' ').toLowerCase().trim();
         return text === clean ||
           text.startsWith(clean + ' ') ||
           clean.startsWith(text) ||
-          clean.split(/\\s+/).every(word => text.includes(word));
+          clean.split(/\s+/).every(word => text.includes(word));
       });
     })();
 
