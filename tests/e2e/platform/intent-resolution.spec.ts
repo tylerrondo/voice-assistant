@@ -59,8 +59,8 @@ test.describe('E2E: PLATFORM-014 Intent Resolution & Slot Ambiguity Suite', () =
         id: 'temp-amb-set',
         name: 'Temp Amb Set',
         scenarios: [
-          { id: 'sc-1', name: 'S1', activation: { type: 'voice', value: 'voice.order-taxi' }, priority: 100, intent: 'T1', steps: [{ kind: 'emit', event: { type: 't1', payload: {} } }] },
-          { id: 'sc-2', name: 'S2', activation: { type: 'voice', value: 'voice.order-food' }, priority: 100, intent: 'T2', steps: [{ kind: 'emit', event: { type: 't2', payload: {} } }] }
+          { id: 'sc-1', name: 'S1', activation: { type: 'voice', value: 'voice.order-taxi' }, priority: 200, intent: 'T1', steps: [{ kind: 'emit', event: { type: 't1', payload: {} } }] },
+          { id: 'sc-2', name: 'S2', activation: { type: 'voice', value: 'voice.order-food' }, priority: 200, intent: 'T2', steps: [{ kind: 'emit', event: { type: 't2', payload: {} } }] }
         ]
       });
     });
@@ -160,7 +160,7 @@ test.describe('E2E: PLATFORM-014 Intent Resolution & Slot Ambiguity Suite', () =
     await emitVoice(page, 'deliver', sessionA);
     const fillRes = await emitVoice(page, 'ташкент', sessionA);
 
-    expect(fillRes.status).toBe('COMPLETED');
+    expect(fillRes.status).toBe('SUCCEEDED');
     expect(fillRes.slots.city).toBe('ташкент');
 
     const logs = await page.evaluate((id) => (window as any).__DIALOGUE_MANAGER__.getExecutionLogs(id), sessionA);
