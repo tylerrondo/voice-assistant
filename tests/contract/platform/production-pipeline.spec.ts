@@ -44,14 +44,14 @@ test.describe('CONTRACT: PLATFORM-012 Production Pipeline Suite', () => {
   test('CONTRACT-03: Auto-Expiry Scheduler automatically transitions context to EXPIRED after TTL without manual calls', async () => {
     // 50ms TTL for fast contract verification
     const dm = new DialogueStateManager({ defaultTtlMs: 50, enableAutoExpiryScheduler: true });
-    const ctx = dm.createContext('ACCEPT_ORDER', { orderId: 1001 }, ['orderId', 'payment'], 'driver.order.accepted');
+    const ctx = dm.createContext('ACCEPT_ORDER', { orderId: 1001 }, ['orderId', 'payment'], 'driver.order.accepted', {}, identity);
 
     expect(ctx.status).toBe('WAITING_FOR_SLOT');
 
     // Wait for auto-expiry timer
     await new Promise(resolve => setTimeout(resolve, 80));
 
-    const expiredCtx = dm.getContext(ctx.contextId);
+    const expiredCtx = dm.getContext(ctx.contextId, identity);
     expect(expiredCtx?.status).toBe('EXPIRED');
   });
 
@@ -60,7 +60,7 @@ test.describe('CONTRACT: PLATFORM-012 Production Pipeline Suite', () => {
     dm.createContext('ACCEPT_ORDER', { orderId: 1001 }, ['orderId', 'payment'], 'driver.order.accepted');
 
     expect(() => {
-      dm.createContext('ACCEPT_ORDER', { orderId: 1002 }, ['orderId', 'payment'], 'driver.order.accepted');
+      dm.createContext('ACCEPT_ORDER', { orderId: 1002 }, ['orderId', 'payment'], 'driver.order.accepted', {}, identity);
     }).toThrow(/REJECT_NEW_CONTEXT/);
   });
 
@@ -73,9 +73,9 @@ test.describe('CONTRACT: PLATFORM-012 Production Pipeline Suite', () => {
     const cancelRes = await channel.handleIncomingVoice('Отмена', identity);
 
     expect(cancelRes).toBe(true);
-    const ctx = dm.listContexts()[0];
+    const ctx = dm.listContexts(identity)[0];
     expect(ctx.status).toBe('CANCELLED');
-    expect(dm.getExecutionLogs().length).toBe(0);
+    expect(dm.getExecutionLogs(identity).length).toBe(0);
   });
 
   test('CONTRACT-06: Strict Ambiguity prompt template enforcement without fallback values', async () => {
