@@ -700,11 +700,21 @@ export class VoiceChannel {
           }
 
           if (extracted.confirmation === 'REJECTED') {
+            if (scenario.confirmation?.cancelledMessage) {
+              const cancellation = await this.dialogueManager.cancelContext(activeCtx.contextId, identity);
+              if (cancellation.success) {
+                return {
+                  status: 'CANCELLED',
+                  contextId: activeCtx.contextId,
+                  message: scenario.confirmation.cancelledMessage
+                };
+              }
+            }
             return {
               status: 'SELECTION_REJECTED',
               contextId: activeCtx.contextId,
               slots: this.dialogueManager.getContext(activeCtx.contextId, identity)?.slots,
-              message: 'Выбор не подтвержден. Вы можете выбрать другой вариант.'
+              message: scenario.confirmation?.rejectedMessage || 'Выбор не подтвержден. Вы можете выбрать другой вариант.'
             };
           }
 
