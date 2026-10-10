@@ -678,8 +678,24 @@ export class VoiceChannel {
           return { status: 'NO_MATCH' };
         }
 
-        if (slotRes.status === 'RESOLVED' && Object.keys(slotRes.slots).length > 0) {
-          const extracted = slotRes.slots;
+        const ordinalMatch = text.match(/(?:^|\\s)(перв\\w*|втор\\w*|трет\\w*|четверт\\w*|first|second|third|fourth)(?:\\s|$)/i);
+        const ordinalIndex = ordinalMatch
+          ? (/^(?:перв|first)/i.test(ordinalMatch[1]) ? 1
+            : /^(?:втор|second)/i.test(ordinalMatch[1]) ? 2
+            : /^(?:трет|third)/i.test(ordinalMatch[1]) ? 3
+            : 4)
+          : undefined;
+
+        if (
+          slotRes.status === 'RESOLVED' &&
+          (Object.keys(slotRes.slots).length > 0 ||
+            (!!activeCtx.offers?.length && !!scenario.candidateBinding?.targetSlot && ordinalIndex !== undefined))
+        ) {
+          const extracted = { ...slotRes.slots };
+          if (activeCtx.offers?.length && scenario.candidateBinding?.targetSlot &&
+              extracted.candidate_index === undefined && ordinalIndex !== undefined) {
+            extracted.candidate_index = ordinalIndex;
+          }
 
           if (activeCtx.offers && activeCtx.offers.length > 0) {
             const targetSlot = scenario.candidateBinding?.targetSlot
