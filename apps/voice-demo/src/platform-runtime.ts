@@ -148,7 +148,15 @@ export class PlatformFsmExecutionBoundary {
       'ITEM_PRICE_UPDATED',
       'ITEM_STATUS_OUT_OF_STOCK_TRIGGERED',
       'CATALOG_ITEM_CREATED',
-      'INVENTORY_STOCK_UPDATED'
+      'INVENTORY_STOCK_UPDATED',
+      // Explicit scenario events used by the platform E2E fixtures.
+      'order.standard.created',
+      'order.express.created',
+      'ride.normal',
+      'ride.vip',
+      'fill.done',
+      'deliver.done',
+      'platform.test_action.processed'
     ]);
     if (supportedDomainEvents.has(event.type)) {
       return {
