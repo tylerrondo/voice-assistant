@@ -114,6 +114,9 @@ export function mountApp(root: HTMLElement, runtime: any, authenticatedIdentity:
   let heard = false;
   let interactiveLog: string[] = [];
   let reportSequence = 0;
+  const scenarioEngineFacade = {
+    getActiveScenarioSetId: () => activeScenarioSet?.id || runtime.voiceChannel.getActiveScenarioSetId()
+  };
 
   const scenarios = () => Array.isArray(activeScenarioSet?.scenarios) ? activeScenarioSet.scenarios : [];
   const triggerOf = (scenario: any) => scenario?.activation?.value || scenario?.trigger || '';
@@ -395,7 +398,7 @@ export function mountApp(root: HTMLElement, runtime: any, authenticatedIdentity:
       const hasVoiceIntents = parsed.scenarios.every((scenario: any) => typeof scenario.intent === 'string');
       if (hasVoiceIntents) {
         runtime.voiceChannel.registerScenarioSet(parsed);
-        (window as any).__SCENARIO_ENGINE__ = runtime.voiceChannel;
+        (window as any).__SCENARIO_ENGINE__ = scenarioEngineFacade;
       }
       updateInjectActions();
       if (inputValue('validation-mode') === 'interactive') startInteractive(true);
@@ -543,7 +546,7 @@ export function mountApp(root: HTMLElement, runtime: any, authenticatedIdentity:
 
   if (typeof window !== 'undefined') {
     (window as any).__VOICE_DEMO_APP__ = app;
-    (window as any).__SCENARIO_ENGINE__ = runtime.voiceChannel;
+    (window as any).__SCENARIO_ENGINE__ = scenarioEngineFacade;
   }
   return app;
 }
