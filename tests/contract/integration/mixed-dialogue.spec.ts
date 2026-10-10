@@ -232,10 +232,9 @@ test.describe('CONTRACT: SC-INTEGRATION-001 Mixed Button / Text / Voice Dialogue
   test('Test I — Confirmation: Проверить подтверждение всеми тремя каналами', async () => {
     const sc = getScenario();
 
-    // Explicitly establish the scenario context before any button-only continuation.
-    await adapter.handleMessage({ channel: 'text', raw_input: 'завтра' }, user);
-
     const fillSlots = async (user: { ownerId: string; sessionId: string }) => {
+      // Establish the registered scenario before the first button action.
+      await adapter.handleMessage({ channel: 'text', raw_input: 'завтра' }, user);
       await adapter.handleMessage({ channel: 'button', button_payload: { slotName: 'date', slotValue: 'завтра' } }, user, sc);
       await adapter.handleMessage({ channel: 'button', button_payload: { slotName: 'start_time', slotValue: '15:00' } }, user, sc);
       await adapter.handleMessage({ channel: 'button', button_payload: { slotName: 'end_time', slotValue: '20:00' } }, user, sc);
@@ -270,11 +269,9 @@ test.describe('CONTRACT: SC-INTEGRATION-001 Mixed Button / Text / Voice Dialogue
   test('Test J — Cancellation: Проверить отмену всеми тремя каналами', async () => {
     const sc = getScenario();
 
-    // Explicitly establish the scenario context before any button-only continuation.
-    await adapter.handleMessage({ channel: 'text', raw_input: 'завтра' }, userBtn);
-
     // 1. Button cancel
     const userBtn = { ownerId: 'u-can-btn', sessionId: 's-can-btn' };
+    await adapter.handleMessage({ channel: 'text', raw_input: 'завтра' }, userBtn);
     await adapter.handleMessage({ channel: 'button', button_payload: { slotName: 'date', slotValue: 'завтра' } }, userBtn, sc);
     const resBtn = await adapter.handleMessage({ channel: 'button', button_payload: { slotName: 'confirmation', slotValue: 'REJECTED' } }, userBtn, sc);
     expect(resBtn.status).toBe('CANCELLED');
