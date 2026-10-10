@@ -738,17 +738,104 @@ export class VoiceChannel {
         }
       }
     } else if (activeWaiting.length > 1) {
-      const anyScenario = this.scenarioRegistry.find(s => s.slotExtractors);
-      if (anyScenario?.slotExtractors) {
-        const testSlot = this.extractSlotsDeterministically(text, anyScenario.slotExtractors, anyScenario.id);
-        if (testSlot.status === 'RESOLVED') {
-          const hasCandidateSlot = Object.values(testSlot.slots).some(v => typeof v === 'number' || (typeof v === 'string' && v.includes('ambiguous')));
-          if (hasCandidateSlot) {
+      const matchedContexts: Array<{
+        context: DialogueContext;
+        scenario: ScenarioDefinition;
+        slots: Record<string, any>;
+      }> = [];
+
+      for (const context of activeWaiting) {
+        if (!context.scenarioId) continue;
+        const scenario = this.scenarioRegistry.find(item => item.id === context.scenarioId);
+        if (!scenario?.slotExtractors) continue;
+
+        const slotResult = this.extractSlotsDeterministically(
+          text,
+          scenario.slotExtractors,
+          scenario.id,
+          scenario.ambiguityPrompt?.template
+        );
+        if (slotResult.status === 'AMBIGUOUS_SLOT') return slotResult;
+        if (slotResult.status === 'RESOLVED' && Object.keys(slotResult.slots).length > 0) {
+          matchedContexts.push({ context, scenario, slots: slotResult.slots });
+        }
+      }
+
+      if (matchedContexts.length > 0) {
+        const slotNames = Array.from(new Set(
+          matchedContexts.flatMap(match => Object.keys(match.slots).filter(slot =>
+            match.context.missingSlots.includes(slot) || match.context.slots[slot] !== undefined
+          ))
+        ));
+
+        if (slotNames.length > 1) {
+          const candidates = matchedContexts.flatMap(match =>
+            Object.entries(match.slots)
+              .filter(([slot]) => match.context.missingSlots.includes(slot) || match.context.slots[slot] !== undefined)
+              .map(([slotName, value]) => ({ slotName, value, scenarioId: match.scenario.id }))
+          );
+          return {
+            status: 'AMBIGUOUS_SLOT',
+            candidates,
+            clarificationPrompt: matchedContexts.find(match => match.scenario.ambiguityPrompt?.template)
+              ?.scenario.ambiguityPrompt?.template || 'Уточните, пожалуйста, какое значение вы имели в виду.'
+          };
+        }
+
+        const selectorKeys = new Set(['candidate_index', 'candidate_name', 'choice']);
+        if (Object.keys(matchedContexts[0].slots).some(key => selectorKeys.has(key)) &&
+            activeWaiting.some(context => context.offers?.length && context.missingSlots.includes(
+              this.scenarioRegistry.find(item => item.id === context.scenarioId)?.candidateBinding?.targetSlot || ''
+            ))) {
+          return {
+            status: 'AMBIGUOUS_CONTEXT',
+            candidateContextIds: activeWaiting
+              .filter(context => context.offers?.length)
+              .map(context => context.contextId)
+          };
+        }
+
+        if (slotNames.length === 1) {
+          const route = this.dialogueManager.resolveRouting(text, slotNames, identity);
+          if (route.status === 'AMBIGUOUS_CONTEXT') {
+            const candidateContexts = activeWaiting.filter(context => route.candidateContextIds.includes(context.contextId));
+            const identifiers = candidateContexts.map(context => context.slots.orderId).filter(value => value !== undefined);
             return {
               status: 'AMBIGUOUS_CONTEXT',
-              candidateContextIds: activeWaiting.map(c => c.contextId)
+              candidateContextIds: route.candidateContextIds,
+              clarificationPrompt: identifiers.length > 0
+                ? `Уточните, пожалуйста, к какому заказу относится ответ: ${identifiers.join(', ')}.`
+                : 'Уточните, пожалуйста, к какому диалогу относится ответ.'
             };
           }
+
+          if (route.status === 'RESOLVED') {
+            const targetContext = this.dialogueManager.getContext(route.contextId, identity);
+            const match = matchedContexts.find(item => item.context.contextId === route.contextId);
+            if (targetContext && match) {
+              for (const [slotName, value] of Object.entries(match.slots)) {
+                if (targetContext.missingSlots.includes(slotName) || targetContext.slots[slotName] !== undefined) {
+                  await this.dialogueManager.fillSlot(slotName, value, targetContext.contextId, identity);
+                }
+              }
+
+              const updated = this.dialogueManager.getContext(targetContext.contextId, identity) || targetContext;
+              if (updated.missingSlots.length === 0 && !match.scenario.confirmation) {
+                const execution = this.dialogueManager.createExecution(updated, identity);
+                const dispatch = await this.dialogueManager.dispatchAction(execution.executionId, updated.slots, identity);
+                return {
+                  status: dispatch.status,
+                  contextId: updated.contextId,
+                  executionId: execution.executionId,
+                  attempt: dispatch.attempt,
+                  context: this.dialogueManager.getContext(updated.contextId, identity)
+                };
+              }
+              return updated;
+            }
+          }
+
+          return route;
         }
       }
     }
