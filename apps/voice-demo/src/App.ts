@@ -68,6 +68,8 @@ export function mountApp(root: HTMLElement, runtime: any, authenticatedIdentity:
     '<div data-testid="scenario-metadata"></div>',
     '<button type="button" data-testid="start-scenario-button">Start Scenario</button>',
     '<div data-testid="scenario-trace"></div>',
+    '<section><h2>Voice Runtime</h2><label>Voice input <input data-testid="voice-input" name="voiceText" placeholder="Enter voice command"></label><button type="button" data-testid="voice-submit-button">Send voice command</button>',
+    '<div class="driver-status" data-testid="driver-status">AVAILABLE</div><div class="trace-container" data-testid="execution-trace"></div></section>',
     '</section>',
     '<section><h2>Validation Mode</h2><label>Mode <select data-testid="validation-mode"><option value="automatic">Automatic</option><option value="interactive">Interactive</option></select></label>',
     '<div data-testid="input-source-row" style="display:none"><label>Input Source <select data-testid="input-source"><option value="inject">Inject</option><option value="mic">Browser mic</option></select></label></div>',
@@ -114,6 +116,7 @@ export function mountApp(root: HTMLElement, runtime: any, authenticatedIdentity:
   let heard = false;
   let interactiveLog: string[] = [];
   let reportSequence = 0;
+  let fsmState = 'AVAILABLE';
   const scenarioEngineFacade = {
     getActiveScenarioSetId: () => activeScenarioSet?.id || runtime.voiceChannel.getActiveScenarioSetId()
   };
@@ -209,6 +212,94 @@ export function mountApp(root: HTMLElement, runtime: any, authenticatedIdentity:
   };
   const updateScenarioMetadata = () => {
     setText('scenario-metadata', (activeScenarioSet?.id || '') + ' — ' + (activeScenarioSet?.name || ''));
+  };
+  const updateFsmStatus = () => setText('driver-status', fsmState);
+  const appendTrace = (eventType: string, payload: any, rejected = false) => {
+    const trace = query('execution-trace');
+    const entry = document.createElement('div');
+    entry.className = 'trace-entry';
+    entry.textContent = (rejected ? 'FSM_REJECTED ' : '') + eventType + ' ' + JSON.stringify(payload || {});
+    trace.appendChild(entry);
+  };
+  const applyFsmTransition = (eventType: string, payload: any) => {
+    const transitions: Record<string, { from: string[]; to: string }> = {
+      'driver.order.accepted': { from: ['AVAILABLE', 'IDLE', 'ORDER_ASSIGNED'], to: 'ORDER_ACCEPTED' },
+      'driver.arrived': { from: ['ORDER_ACCEPTED'], to: 'DRIVER_ARRIVED' },
+      'driver.trip.started': { from: ['DRIVER_ARRIVED'], to: 'IN_TRIP' },
+      'driver.trip.finished': { from: ['IN_TRIP'], to: 'TRIP_FINISHED' },
+      'driver.available': { from: ['TRIP_FINISHED'], to: 'AVAILABLE' }
+    };
+    const transition = transitions[eventType];
+    if (transition) {
+      if (!transition.from.includes(fsmState)) {
+        appendTrace(eventType, payload, true);
+        return false;
+      }
+      fsmState = transition.to;
+      updateFsmStatus();
+    }
+    appendTrace(eventType, payload);
+    return true;
+  };
+  const executeScenarioForVoice = async (scenario: any, dispatchThroughVoiceChannel: boolean, phrase: string) => {
+    if (dispatchThroughVoiceChannel) {
+      const result = await runtime.voiceChannel.handleIncomingVoice(phrase, app.getIdentity());
+      appendTrace('VOICE_DISPATCH_RESULT', result);
+      if (result?.status === 'SUCCEEDED' || result?.dispatchStatus === 'SUCCEEDED') {
+        const steps = Array.isArray(scenario?.steps) ? scenario.steps : [];
+        for (const step of steps) {
+          if (step?.kind === 'delay' && Number.isFinite(step.ms)) await sleep(Math.min(Math.max(0, step.ms), 1500));
+          if (step?.kind === 'emit' && step.event?.type && step.event.type !== 'VOICE_INPUT_RECEIVED') {
+            applyFsmTransition(step.event.type, step.event.payload || {});
+          }
+        }
+      }
+      return result;
+    }
+
+    const steps = Array.isArray(scenario?.steps) ? scenario.steps : [];
+    for (const step of steps) {
+      if (step?.kind === 'delay' && Number.isFinite(step.ms)) {
+        await sleep(Math.min(Math.max(0, step.ms), 1500));
+      } else if (step?.kind === 'emit' && step.event?.type) {
+        applyFsmTransition(step.event.type, step.event.payload || {});
+      }
+    }
+    return { status: 'COMPLETED', scenarioId: scenario?.id };
+  };
+  const handleVoiceCommand = async (phrase: string) => {
+    const normalized = String(phrase || '').trim().toLowerCase();
+    if (!normalized) return;
+    const entries = scenarios();
+    const scenario = entries.find((candidate: any) => {
+      const candidates = [candidate?.expectedPhrase, candidate?.activation?.value, candidate?.intent, ...(Array.isArray(candidate?.aliases) ? candidate.aliases : [])]
+        .filter((value: any) => typeof value === 'string' && value.trim());
+      return candidates.some((candidatePhrase: string) => {
+        const value = candidatePhrase.toLowerCase().trim();
+        return normalized === value || normalized.includes(value);
+      });
+    });
+    if (scenario && typeof scenario.intent !== 'string') {
+      await executeScenarioForVoice(scenario, false, phrase);
+      return;
+    }
+    const result = await runtime.voiceChannel.handleIncomingVoice(phrase, app.getIdentity());
+    appendTrace('VOICE_DISPATCH_RESULT', result);
+    const resolvedScenario = entries.find((candidate: any) =>
+      (typeof result?.intent === 'string' && candidate?.intent === result.intent) ||
+      (typeof result?.scenarioId === 'string' && candidate?.id === result.scenarioId) ||
+      (typeof result?.context?.scenarioId === 'string' && candidate?.id === result.context.scenarioId)
+    ) || scenario;
+    if (resolvedScenario && (result?.status === 'SUCCEEDED' || result?.dispatchStatus === 'SUCCEEDED')) {
+      const steps = Array.isArray(resolvedScenario.steps) ? resolvedScenario.steps : [];
+      for (const step of steps) {
+        if (step?.kind === 'delay' && Number.isFinite(step.ms)) await sleep(Math.min(Math.max(0, step.ms), 1500));
+        if (step?.kind === 'emit' && step.event?.type && step.event.type !== 'VOICE_INPUT_RECEIVED') {
+          applyFsmTransition(step.event.type, step.event.payload || {});
+        }
+      }
+    }
+    return result;
   };
   const executeActiveScenario = async () => {
     const entries = scenarios();
@@ -411,6 +502,20 @@ export function mountApp(root: HTMLElement, runtime: any, authenticatedIdentity:
   });
 
   query('start-scenario-button').addEventListener('click', () => { void executeActiveScenario(); });
+  const voiceInput = query('voice-input') as HTMLInputElement;
+  const submitVoice = () => {
+    const phrase = voiceInput.value;
+    void handleVoiceCommand(phrase);
+  };
+  query('voice-submit-button').addEventListener('click', submitVoice);
+  voiceInput.addEventListener('keydown', event => {
+    if (event.key === 'Enter') submitVoice();
+  });
+  window.addEventListener('voice:command', (event: Event) => {
+    const detail = (event as CustomEvent).detail;
+    if (detail?.phrase) void handleVoiceCommand(detail.phrase);
+  });
+  (window as any).__DISPATCH_VOICE_COMMAND__ = (phrase: string) => handleVoiceCommand(phrase);
   query('validation-mode').addEventListener('change', () => {
     const interactive = inputValue('validation-mode') === 'interactive';
     setVisible('input-source-row', interactive);
@@ -528,6 +633,7 @@ export function mountApp(root: HTMLElement, runtime: any, authenticatedIdentity:
 
   updateInjectActions();
   updateScenarioMetadata();
+  updateFsmStatus();
   setVisible('inject-controls', true);
   setVisible('mic-controls', false);
   setVisible('interactive-next-button', false);
