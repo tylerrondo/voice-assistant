@@ -671,13 +671,6 @@ export class VoiceChannel {
           !!scenario.candidateBinding?.targetSlot &&
           /выбира|выбрать|вариант|choose|select|option|перв|втор|трет|четверт|first|second|third|fourth/i.test(text);
 
-        if (
-          hasExplicitCandidateSelection &&
-          (slotRes.status !== 'RESOLVED' || Object.keys(slotRes.slots).length === 0)
-        ) {
-          return { status: 'NO_MATCH' };
-        }
-
         const ordinalMatch = text.match(/(?:^|\s)(перв\w*|втор\w*|трет\w*|четверт\w*|first|second|third|fourth)(?:\s|$)/i);
         const ordinalIndex = ordinalMatch
           ? (/^(?:перв|first)/i.test(ordinalMatch[1]) ? 1
@@ -685,6 +678,14 @@ export class VoiceChannel {
             : /^(?:трет|third)/i.test(ordinalMatch[1]) ? 3
             : 4)
           : undefined;
+
+        if (
+          hasExplicitCandidateSelection &&
+          ordinalIndex === undefined &&
+          (slotRes.status !== 'RESOLVED' || Object.keys(slotRes.slots).length === 0)
+        ) {
+          return { status: 'NO_MATCH' };
+        }
 
         if (
           slotRes.status === 'RESOLVED' &&
