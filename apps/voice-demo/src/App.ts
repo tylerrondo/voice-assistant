@@ -90,7 +90,7 @@ export function mountApp(root: HTMLElement, runtime: any, authenticatedIdentity:
     '<button type="button" data-testid="interactive-stop-button">Pause</button><button type="button" data-testid="interactive-resume-button">Resume</button>',
     '<button type="button" data-testid="interactive-reset-button">Start New Session</button>',
     '<div data-testid="interactive-summary"></div>',
-    '<div id="manual-feedback" style="display:none"><button type="button" data-testid="manual-recognized-yes-button">Recognized correctly</button><button type="button" data-testid="manual-recognized-no-button">Not recognized</button><button type="button" data-testid="manual-heard-yes-button">Speech heard</button><button type="button" data-testid="manual-heard-no-button">Speech not heard</button></div>',
+    '<div id="manual-feedback" data-testid="manual-feedback" style="display:none"><button type="button" data-testid="manual-recognized-yes-button">Recognized correctly</button><button type="button" data-testid="manual-recognized-no-button">Not recognized</button><button type="button" data-testid="manual-heard-yes-button">Speech heard</button><button type="button" data-testid="manual-heard-no-button">Speech not heard</button></div>',
     '</section>',
     '<section data-testid="manual-validation"><h2>Manual Validation</h2><textarea data-testid="manual-comment"></textarea><button type="button" data-testid="manual-save-comment-button">Save comment</button><span id="manual-comment-status"></span></section>',
     '<section data-testid="verification-panel"><h2>Verification</h2><div id="verification-status">No report</div></section>',
