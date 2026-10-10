@@ -657,7 +657,20 @@ export class VoiceChannel {
               || activeCtx.requiredSlots?.find(s => s !== 'confirmation');
 
             const candidateSelectionKeys = new Set(['candidate_index', 'candidate_name', 'candidate_criteria', 'choice', targetSlot || '']);
-          if (targetSlot && Object.keys(extracted).some(key => candidateSelectionKeys.has(key))) {
+          const normalizedInput = text.toLowerCase();
+          const selectionTriggerMatched = [
+            scenario.activation?.value,
+            ...(scenario.triggerPhrases || []),
+            ...(scenario.aliases || [])
+          ].filter((trigger): trigger is string => typeof trigger === 'string')
+            .some(trigger => {
+              const clean = trigger.replace(/^voice\./i, '').replace(/[-_]/g, ' ').toLowerCase().trim();
+              return normalizedInput.includes(clean) || clean.split(/\s+/).every(word => normalizedInput.includes(word));
+            });
+          if (targetSlot && (
+            Object.keys(extracted).some(key => candidateSelectionKeys.has(key)) ||
+            selectionTriggerMatched
+          )) {
               const candidateResolution = this.resolveCandidate(
                 extracted,
                 activeCtx.offers as unknown as CandidateItem[],
