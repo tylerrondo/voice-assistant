@@ -43,7 +43,6 @@ export function mountApp(root: HTMLElement, runtime: any, authenticatedIdentity:
 
   root.innerHTML = [
     '<main id="validation-bench" style="font-family:system-ui,sans-serif;padding:16px;max-width:1200px;margin:auto">',
-    '<div id="voice-app-ready" role="status">Voice Platform Production Runtime Ready</div>',
     '<h1>Validation Bench</h1>',
     '<section id="session-panel"><h2>Session</h2>',
     '<label>Tester <input data-testid="session-tester" value="Tester-1"></label>',
@@ -661,5 +660,12 @@ export function mountApp(root: HTMLElement, runtime: any, authenticatedIdentity:
     (window as any).__VOICE_DEMO_APP__ = app;
     (window as any).__SCENARIO_ENGINE__ = scenarioEngineFacade;
   }
+  // The readiness marker is a synchronization point for E2E clients; publish it
+  // only after the runtime globals and UI event handlers have been installed.
+  const readyMarker = document.createElement('div');
+  readyMarker.id = 'voice-app-ready';
+  readyMarker.setAttribute('role', 'status');
+  readyMarker.textContent = 'Voice Platform Production Runtime Ready';
+  root.prepend(readyMarker);
   return app;
 }
