@@ -14,19 +14,19 @@ for (const name of files) {
       if (typeof value.id !== 'string' || !value.id) throw new Error('ScenarioSet.id is required');
       const ids = new Set();
       for (const [index, scenario] of value.scenarios.entries()) {
-        if (!scenario || typeof scenario.id !== 'string' || !scenario.id) throw new Error(\`scenarios[\${index}].id is required\`);
-        if (ids.has(scenario.id)) throw new Error(\`duplicate scenario id: \${scenario.id}\`);
+        if (!scenario || typeof scenario.id !== 'string' || !scenario.id) throw new Error(`scenarios[${index}].id is required`);
+        if (ids.has(scenario.id)) throw new Error(`duplicate scenario id: ${scenario.id}`);
         ids.add(scenario.id);
-        if (typeof scenario.intent !== 'string' || !scenario.intent) throw new Error(\`scenarios[\${index}].intent is required\`);
+        if (typeof scenario.intent !== 'string' || !scenario.intent) throw new Error(`scenarios[${index}].intent is required`);
       }
     }
   } catch (error) {
-    errors.push(\`\${name}: \${error instanceof Error ? error.message : String(error)}\`);
+    errors.push(`${name}: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 if (errors.length) {
-  console.error('Scenario JSON validation failed:\n' + errors.map((error) => \`- \${error}\`).join('\n'));
+  console.error('Scenario JSON validation failed:\n' + errors.map((error) => `- ${error}`).join('\n'));
   process.exitCode = 1;
 } else {
-  console.log(\`Validated \${files.length} scenario JSON files.\`);
+  console.log(`Validated ${files.length} scenario JSON files.`);
 }
