@@ -33,6 +33,15 @@ test.describe('E2E: Strict Platform Dialogue State & Multi-Turn Slot-Filling Sui
     }, phrase);
   }
 
+  async function latestContext(page: any) {
+    return page.evaluate(() => {
+      const app = (window as any).__VOICE_DEMO_APP__;
+      const dm = (window as any).__DIALOGUE_MANAGER__;
+      if (!app || !dm) return null;
+      return dm.listContexts(app.getIdentity()).sort((a: any, b: any) => b.createdAt - a.createdAt)[0] || null;
+    });
+  }
+
   test('DIALOGUE-E2E-01 & 02: Incomplete Voice Command -> WAITING_FOR_SLOT, missing quantity & Clarification Prompt', async ({ page }) => {
     await setupApp(page);
     await emitVoicePhrase(page, 'Обработай яблоки');
@@ -57,7 +66,7 @@ test.describe('E2E: Strict Platform Dialogue State & Multi-Turn Slot-Filling Sui
 
     const state = await page.evaluate(() => {
       const dm = (window as any).__DIALOGUE_MANAGER__;
-      return dm ? dm.getActiveState() : null;
+      return dm ? dm.listContexts((window as any).__VOICE_DEMO_APP__.getIdentity()).sort((a: any, b: any) => b.createdAt - a.createdAt)[0] || null : null;
     });
 
     expect(state.status).toBe('COMPLETED');
@@ -113,7 +122,7 @@ test.describe('E2E: Strict Platform Dialogue State & Multi-Turn Slot-Filling Sui
 
     const hasExecuted = await page.evaluate(() => {
       const dm = (window as any).__DIALOGUE_MANAGER__;
-      const logs = dm ? dm.getExecutionLogs() : [];
+      const logs = dm ? dm.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity()) : [];
       return logs.some((l: any) => l.intent === 'PROCESS_TEST_ACTION');
     });
     expect(hasExecuted).toBe(false);
@@ -142,7 +151,9 @@ test.describe('E2E: Strict Platform Dialogue State & Multi-Turn Slot-Filling Sui
 
     await page.evaluate(() => {
       const dm = (window as any).__DIALOGUE_MANAGER__;
-      if (dm) dm.triggerTimeout();
+      const app = (window as any).__VOICE_DEMO_APP__;
+      const state = app && dm ? dm.getActiveState(app.getIdentity()) : null;
+      if (state && app && dm) await dm.expireContext(state.contextId, app.getIdentity());
     });
 
     const state = await page.evaluate(() => {
@@ -163,7 +174,7 @@ test.describe('E2E: Strict Platform Dialogue State & Multi-Turn Slot-Filling Sui
 
     const executionCount = await page.evaluate(() => {
       const dm = (window as any).__DIALOGUE_MANAGER__;
-      const logs = dm ? dm.getExecutionLogs() : [];
+      const logs = dm ? dm.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity()) : [];
       return logs.filter((l: any) => l.intent === 'PROCESS_TEST_ACTION').length;
     });
 
