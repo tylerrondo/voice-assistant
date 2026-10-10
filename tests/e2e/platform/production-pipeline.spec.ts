@@ -51,8 +51,8 @@ test.describe('E2E: PLATFORM-012 Production Voice Pipeline Integration Suite', (
 
     const logs = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity()));
     expect(logs.length).toBe(1);
-    expect(logs[0].event.type).toBe('driver.order.accepted');
-    expect(logs[0].event.payload).toEqual({ orderId: 1001, payment: 'card' });
+    expect(logs[0].actionType).toBe('driver.order.accepted');
+    expect(logs[0].payload).toEqual({ orderId: 1001, payment: 'card' });
   });
 
   test('PIPELINE-E2E-02: Concurrent Multi-Context execution on production pipeline', async ({ page }) => {
@@ -72,8 +72,8 @@ test.describe('E2E: PLATFORM-012 Production Voice Pipeline Integration Suite', (
     await emitVoicePhrase(page, 'Наличными');
 
     const logs = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity()));
-    const matchA = logs.filter((l: any) => l.contextId === idA && l.event.payload.orderId === 1001 && l.event.payload.payment === 'card');
-    const matchB = logs.filter((l: any) => l.contextId === idB && l.event.payload.orderId === 1002 && l.event.payload.payment === 'cash');
+    const matchA = logs.filter((l: any) => l.contextId === idA && l.payload.orderId === 1001 && l.payload.payment === 'card');
+    const matchB = logs.filter((l: any) => l.contextId === idB && l.payload.orderId === 1002 && l.payload.payment === 'cash');
 
     expect(matchA.length).toBe(1);
     expect(matchB.length).toBe(1);
@@ -98,7 +98,7 @@ test.describe('E2E: PLATFORM-012 Production Voice Pipeline Integration Suite', (
 
     logs = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity()));
     expect(logs.length).toBe(1);
-    expect(logs[0].event.payload.orderId).toBe(1002);
+    expect(logs[0].payload.orderId).toBe(1002);
   });
 
   test('PIPELINE-E2E-04: Ambiguity-safe cancellation protects multiple contexts on production pipeline', async ({ page }) => {
@@ -139,7 +139,7 @@ test.describe('E2E: PLATFORM-012 Production Voice Pipeline Integration Suite', (
 
     const logs = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity()));
     expect(logs.length).toBe(1);
-    expect(logs[0].event.type).toBe('driver.arrived');
+    expect(logs[0].actionType).toBe('driver.arrived');
   });
 
 });
