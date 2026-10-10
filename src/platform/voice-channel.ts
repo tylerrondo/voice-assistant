@@ -259,7 +259,10 @@ export class VoiceChannel {
 
     const normalizedText = text.toLowerCase();
     const compilePattern = (pattern: string): RegExp => {
-      const unicodePattern = pattern
+      // Scenario JSON currently stores regex escapes double-escaped (e.g. "\\\\b").
+      // Unescape one level before converting ASCII word boundaries to Unicode-aware ones.
+      const unescapedPattern = pattern.replace(/\\\\/g, '\\');
+      const unicodePattern = unescapedPattern
         .replace(/^\\b/, "(?:^|(?<=[^\\p{L}\\p{N}_]))")
         .replace(/\\b$/, "(?:$|(?=[^\\p{L}\\p{N}_]))")
         .replace(/\\b/g, "(?:(?<=[^\\p{L}\\p{N}_])|(?=[^\\p{L}\\p{N}_]))");
