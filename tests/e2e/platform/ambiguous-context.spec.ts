@@ -10,6 +10,10 @@ const scenarioFilePath = path.resolve(__dirname, '../../../scenario-platform-011
 test.describe('E2E: PLATFORM-011 Ambiguous Input & Context Selection Suite', () => {
 
   async function setupApp(page: any) {
+    await page.addInitScript(() => {
+      (window as any).__AUTH_OWNER_ID__ = 'driver-ambiguous-001';
+      (window as any).__AUTH_SESSION_ID__ = 'session-ambiguous-001';
+    });
     const appUrl = process.env.APP_URL || 'https://voice-assistant-two-olive.vercel.app';
     await page.goto(appUrl);
     await expect(page.locator('body')).toBeVisible();
@@ -29,7 +33,9 @@ test.describe('E2E: PLATFORM-011 Ambiguous Input & Context Selection Suite', () 
       if (!channel) {
         throw new Error('VoiceChannel production instance is not initialized on window.__VOICE_CHANNEL__');
       }
-      return channel.handleIncomingVoice(text);
+      const app = (window as any).__VOICE_DEMO_APP__;
+      if (!app) throw new Error('VoiceDemoApp is not initialized');
+      return channel.handleIncomingVoice(text, app.getIdentity());
     }, phrase);
   }
 
@@ -40,7 +46,7 @@ test.describe('E2E: PLATFORM-011 Ambiguous Input & Context Selection Suite', () 
     await emitVoicePhrase(page, 'Прими заказ 1001');
     await emitVoicePhrase(page, 'Прими заказ 1002');
 
-    const contexts = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.listContexts());
+    const contexts = await page.evaluate(() => { const w = window as any; return w.__DIALOGUE_MANAGER__.listContexts(w.__VOICE_DEMO_APP__.getIdentity()); });
     expect(contexts.length).toBe(2);
     const idA = contexts.find((c: any) => c.slots.orderId === 1001).contextId;
     const idB = contexts.find((c: any) => c.slots.orderId === 1002).contextId;
@@ -54,7 +60,7 @@ test.describe('E2E: PLATFORM-011 Ambiguous Input & Context Selection Suite', () 
     expect(ambResult.clarificationPrompt).toContain('1002');
 
     // 3. Verify zero execution
-    let logs = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getExecutionLogs());
+    let logs = await page.evaluate(() => { const w = window as any; return w.__DIALOGUE_MANAGER__.getExecutionLogs(w.__VOICE_DEMO_APP__.getIdentity()); });
     expect(logs.length).toBe(0);
 
     // 4. Clarification via explicit entity
@@ -74,7 +80,7 @@ test.describe('E2E: PLATFORM-011 Ambiguous Input & Context Selection Suite', () 
     expect(logs[0].event.payload.payment).toBe('card');
 
     // Verify 1001 remains in WAITING_FOR_SLOT with 0 executions
-    const ctxA = await page.evaluate((id: string) => (window as any).__DIALOGUE_MANAGER__.getContext(id), idA);
+    const ctxA = await page.evaluate((id: string) => { const w = window as any; return w.__DIALOGUE_MANAGER__.getContext(id, w.__VOICE_DEMO_APP__.getIdentity()); }, idA);
     expect(ctxA.status).toBe('WAITING_FOR_SLOT');
   });
 
@@ -88,7 +94,7 @@ test.describe('E2E: PLATFORM-011 Ambiguous Input & Context Selection Suite', () 
     const idA = contexts.find((c: any) => c.slots.orderId === 1001).contextId;
 
     // Set activeContext to 1001
-    await page.evaluate((id: string) => (window as any).__DIALOGUE_MANAGER__.activateContext(id), idA);
+    await page.evaluate((id: string) => { const w = window as any; return w.__DIALOGUE_MANAGER__.activateContext(id, w.__VOICE_DEMO_APP__.getIdentity()); }, idA);
     const currentActive = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getActiveContextId());
     expect(currentActive).toBe(idA);
 
@@ -156,7 +162,7 @@ test.describe('E2E: PLATFORM-011 Ambiguous Input & Context Selection Suite', () 
     expect(cancelAmbRes.candidateContextIds).toContain(idB);
 
     // Verify 0 contexts cancelled
-    let activeWaiting = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.listContexts().filter((c: any) => c.status === 'WAITING_FOR_SLOT'));
+    let activeWaiting = await page.evaluate(() => { const w = window as any; return w.__DIALOGUE_MANAGER__.listContexts(w.__VOICE_DEMO_APP__.getIdentity()).filter((c: any) => c.status === 'WAITING_FOR_SLOT'); });
     expect(activeWaiting.length).toBe(2);
 
     // 3. Explicit cancellation of 1002
