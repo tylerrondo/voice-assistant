@@ -578,6 +578,12 @@ export class VoiceChannel {
       if (routeResult.status === 'RESOLVED') {
         return this.dialogueManager.cancelContext(routeResult.contextId, identity);
       }
+      if (routeResult.status === 'CONTEXT_ACCESS_DENIED') {
+        return { status: 'CONTEXT_ACCESS_DENIED' };
+      }
+      if (routeResult.status === 'AMBIGUOUS_CONTEXT') {
+        return { status: 'AMBIGUOUS_CONTEXT', candidateContextIds: routeResult.candidateContextIds };
+      }
       return { status: 'NO_MATCH' };
     }
 
