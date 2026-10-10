@@ -16,7 +16,10 @@ test.describe('E2E: PLATFORM-016 Concurrency Control Suite', () => {
     });
 
     await page.goto('http://localhost:3000');
-    await page.waitForSelector('#voice-app-ready', { timeout: 10000 });
+    await page.waitForFunction(() => {
+      const w = window as any;
+      return !!w.__VOICE_CHANNEL__ && !!w.__DIALOGUE_MANAGER__ && !!w.__VOICE_DEMO_APP__;
+    }, { timeout: 10000 });
 
     const fileInput = page.locator('input[type="file"]').first();
     await fileInput.setInputFiles(scenarioFilePath);
