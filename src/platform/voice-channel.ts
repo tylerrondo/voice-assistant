@@ -306,13 +306,28 @@ export class VoiceChannel {
             }
           }
         } else if (extractor.mapping) {
+          const mappingMatches: Array<{ enumValue: string; synonym: string }> = [];
           for (const [enumValue, synonyms] of Object.entries(extractor.mapping)) {
-            const synonym = synonyms.find(item => typeof item === 'string' && item.length > 0 && normalizedText.includes(item.toLowerCase()));
-            if (synonym) {
-              value = enumValue;
-              token = synonym;
-              break;
+            const matchingSynonyms = synonyms
+              .filter(item => typeof item === 'string' && item.length > 0 && normalizedText.includes(item.toLowerCase()))
+              .sort((a, b) => b.length - a.length);
+            if (matchingSynonyms.length > 0) {
+              mappingMatches.push({ enumValue, synonym: matchingSynonyms[0] });
             }
+          }
+
+          if (mappingMatches.length > 0) {
+            const longestMatch = Math.max(...mappingMatches.map(match => match.synonym.length));
+            const mostSpecific = mappingMatches.filter(match => match.synonym.length === longestMatch);
+            for (const match of mostSpecific) {
+              matches.push({
+                slotName,
+                value: match.enumValue,
+                token: match.synonym.toLowerCase().trim(),
+                priority
+              });
+            }
+            continue;
           }
         }
       } else if ((extractor.type === 'integer' || extractor.type === 'string') && extractor.pattern) {
