@@ -256,58 +256,104 @@ export class VoiceChannel {
       return { status: 'RESOLVED', slots: {} };
     }
 
-    const resolvedSlots: Record<string, any> = {};
+    const normalizedText = text.toLowerCase();
+    const matches: Array<{ slotName: string; value: any; token: string; priority: number }> = [];
 
-    for (const [slotKey, extractor] of Object.entries(extractors)) {
-      if (extractor.rules && Array.isArray(extractor.rules)) {
+    for (const [slotName, extractor] of Object.entries(extractors)) {
+      const priority = typeof extractor.priority === 'number' && Number.isFinite(extractor.priority)
+        ? extractor.priority
+        : 0;
+      let value: any;
+      let token: string | undefined;
+
+      if (Array.isArray(extractor.rules)) {
         for (const rule of extractor.rules) {
-          let regex: RegExp;
           try {
-            const pUnicode = rule.pattern
-              .replace(/^\\b/, "(?:^|(?<=[^\\p{L}\\p{N}_]))")
-              .replace(/\\b$/, "(?:$|(?=[^\\p{L}\\p{N}_]))")
-              .replace(/\\b/g, "(?:(?<=[^\\p{L}\\p{N}_])|(?=[^\\p{L}\\p{N}_]))");
-            regex = new RegExp(pUnicode, 'iu');
+            const regex = new RegExp(rule.pattern, 'iu');
+            const match = regex.exec(text);
+            if (match) {
+              value = rule.value;
+              token = match[0];
+              break;
+            }
           } catch {
-            regex = new RegExp(rule.pattern, 'i');
-          }
-          if (regex.test(text)) {
-            resolvedSlots[slotKey] = rule.value;
-            break;
+            // An invalid individual rule is ignored; other rules/extractors may still match.
           }
         }
       } else if (extractor.type === 'enum') {
-        if (extractor.patterns && Array.isArray(extractor.patterns)) {
-          for (const pat of extractor.patterns) {
-            const match = text.match(new RegExp(pat, 'i'));
-            if (match) {
-              resolvedSlots[slotKey] = 'CONFIRMED';
-              break;
+        if (Array.isArray(extractor.patterns)) {
+          for (const pattern of extractor.patterns) {
+            try {
+              const match = new RegExp(pattern, 'iu').exec(text);
+              if (match) {
+                value = 'CONFIRMED';
+                token = match[0];
+                break;
+              }
+            } catch {
+              // Ignore invalid patterns instead of failing the whole input.
             }
           }
         } else if (extractor.mapping) {
           for (const [enumValue, synonyms] of Object.entries(extractor.mapping)) {
-            if (synonyms.some(synonym => text.includes(synonym.toLowerCase()))) {
-              resolvedSlots[slotKey] = enumValue;
+            const synonym = synonyms.find(item => typeof item === 'string' && item.length > 0 && normalizedText.includes(item.toLowerCase()));
+            if (synonym) {
+              value = enumValue;
+              token = synonym;
               break;
             }
           }
         }
-      } else if (extractor.type === 'integer' && extractor.pattern) {
-        const match = text.match(new RegExp(extractor.pattern, 'i'));
-        if (match) {
-          resolvedSlots[slotKey] = parseInt(match[0], 10);
+      } else if ((extractor.type === 'integer' || extractor.type === 'string') && extractor.pattern) {
+        try {
+          const match = new RegExp(extractor.pattern, 'iu').exec(text);
+          if (match) {
+            token = match[0];
+            value = extractor.type === 'integer' ? parseInt(match[0], 10) : match[0];
+          }
+        } catch {
+          // Ignore invalid patterns; no value is extracted for this slot.
         }
-      } else if (extractor.type === 'string' && extractor.pattern) {
-        const match = text.match(new RegExp(extractor.pattern, 'i'));
-        if (match) {
-          resolvedSlots[slotKey] = match[0];
-        }
+      }
+
+      if (token !== undefined && value !== undefined) {
+        matches.push({ slotName, value, token: token.toLowerCase().trim(), priority });
       }
     }
 
-    if (Object.keys(resolvedSlots).length === 0) {
-      return { status: 'NO_MATCH' };
+    if (matches.length === 0) return { status: 'NO_MATCH' };
+
+    // Ambiguity is scoped to the same matched phrase. Independent phrases may fill
+    // multiple slots in one utterance; a shared phrase must be resolved by priority.
+    const byToken = new Map<string, typeof matches>();
+    for (const match of matches) {
+      const group = byToken.get(match.token) || [];
+      group.push(match);
+      byToken.set(match.token, group);
+    }
+
+    const resolvedSlots: Record<string, any> = {};
+    for (const group of byToken.values()) {
+      if (group.length === 1) {
+        resolvedSlots[group[0].slotName] = group[0].value;
+        continue;
+      }
+
+      const maxPriority = Math.max(...group.map(match => match.priority));
+      const highest = group.filter(match => match.priority === maxPriority);
+      if (highest.length > 1) {
+        return {
+          status: 'AMBIGUOUS_SLOT',
+          candidates: highest.map(match => ({
+            slotName: match.slotName,
+            value: match.value,
+            scenarioId
+          })),
+          clarificationPrompt: ambiguityPromptTemplate
+        };
+      }
+
+      resolvedSlots[highest[0].slotName] = highest[0].value;
     }
 
     return { status: 'RESOLVED', slots: resolvedSlots };
