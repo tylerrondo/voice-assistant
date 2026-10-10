@@ -64,6 +64,74 @@ export class DialogueEngine {
     return this.vc;
   }
 
+  /**
+   * Starts a registered scenario from an explicit channel action (for example,
+   * a Telegram menu button or /order_nanny command). This creates the same
+   * DialogueContext used by text, voice and callback-button inputs.
+   */
+  public startScenario(scenarioId: string, identity: SessionIdentity): DialogueEngineResult {
+    const scenario = this.vc.getScenarioById(scenarioId);
+    if (!scenario) {
+      return {
+        status: 'SCENARIO_NOT_FOUND',
+        presentation: { text: 'Сценарий не найден.' }
+      };
+    }
+
+    const existing = this.dm.getActiveState(identity);
+    if (existing) {
+      if (existing.scenarioId !== scenarioId) {
+        return {
+          status: 'ACTIVE_DIALOGUE_EXISTS',
+          contextId: existing.contextId,
+          slots: existing.slots,
+          missingSlots: existing.missingSlots,
+          presentation: {
+            text: 'У вас уже есть незавершённый диалог. Продолжите его или отмените перед началом нового.'
+          }
+        };
+      }
+
+      const nextMissing = existing.missingSlots.find(slot => slot !== scenario.confirmation?.slot);
+      const question = nextMissing
+        ? scenario.clarificationPrompts?.[nextMissing] || `Укажите ${nextMissing}`
+        : scenario.clarificationPrompts?.[scenario.confirmation?.slot || 'confirmation'] || 'Подтвердите действие.';
+      return {
+        status: existing.status,
+        contextId: existing.contextId,
+        slots: existing.slots,
+        missingSlots: existing.missingSlots,
+        nextQuestion: question,
+        presentation: { text: question }
+      };
+    }
+
+    const firstStep = scenario.steps?.find(step => step.kind === 'emit');
+    const context = this.dm.createContext(
+      scenario.intent,
+      {},
+      scenario.requiredSlots || [],
+      firstStep?.event?.type || `${scenario.intent.toLowerCase()}.action`,
+      scenario.clarificationPrompts || {},
+      identity,
+      scenario.id
+    );
+
+    const nextMissing = context.missingSlots.find(slot => slot !== scenario.confirmation?.slot);
+    const question = nextMissing
+      ? scenario.clarificationPrompts?.[nextMissing] || `Укажите ${nextMissing}`
+      : scenario.clarificationPrompts?.[scenario.confirmation?.slot || 'confirmation'] || 'Подтвердите действие.';
+
+    return {
+      status: context.status,
+      contextId: context.contextId,
+      slots: context.slots,
+      missingSlots: context.missingSlots,
+      nextQuestion: question,
+      presentation: { text: question }
+    };
+  }
+
   public async processInput(
     input: DialogueInput,
     identity: SessionIdentity
