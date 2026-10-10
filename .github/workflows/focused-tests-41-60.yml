@@ -3,6 +3,8 @@ name: Focused Tests 41-60
 on:
   push:
     branches: [sc-integration-005]
+  pull_request:
+    branches: [master]
   workflow_dispatch:
 
 jobs:
