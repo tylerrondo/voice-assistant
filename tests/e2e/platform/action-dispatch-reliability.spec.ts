@@ -26,6 +26,21 @@ test.describe('E2E: PLATFORM-015 Production Action Dispatch Reliability Suite', 
 
       const identity = app.getIdentity();
 
+      // The production runtime starts with no intent-bearing scenario set; register the
+      // deterministic scenario required by this dispatch contract test explicitly.
+      vc.registerScenarioSet({
+        version: 2,
+        id: 'scenario-e2e-reliability-01',
+        scenarios: [{
+          id: 'e2e-reliability-order-1001',
+          activation: { type: 'voice', value: 'voice.accept-order' },
+          aliases: ['заказ'],
+          intent: 'ACCEPT_ORDER',
+          requiredSlots: [],
+          steps: [{ kind: 'emit', event: { type: 'driver.order.accepted', payload: { orderId: 1001 } } }, { kind: 'end' }]
+        }]
+      });
+
       // 1. Voice phrase triggers VoiceChannel
       const voiceRes = await vc.handleIncomingVoice('заказ 1001', identity);
 
