@@ -50,13 +50,20 @@
         },
         "quantity": {
           "type": "enum",
-          "mapping": {
-            "5": [
-              "пять",
-              "пятеро",
-              "five"
-            ]
-          }
+          "rules": [
+            {
+              "pattern": "пять",
+              "value": 5
+            },
+            {
+              "pattern": "пятеро",
+              "value": 5
+            },
+            {
+              "pattern": "five",
+              "value": 5
+            }
+          ]
         }
       }
     },
@@ -88,13 +95,20 @@
         },
         "quantity": {
           "type": "enum",
-          "mapping": {
-            "5": [
-              "пять",
-              "пятеро",
-              "five"
-            ]
-          }
+          "rules": [
+            {
+              "pattern": "пять",
+              "value": 5
+            },
+            {
+              "pattern": "пятеро",
+              "value": 5
+            },
+            {
+              "pattern": "five",
+              "value": 5
+            }
+          ]
         }
       },
       "clarificationPrompts": {
