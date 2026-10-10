@@ -87,7 +87,7 @@ test.describe('CONTRACT: SC-PLATFORM-001 Declarative Scenario Portability Suite'
     ]
   };
 
-  beforeEach(() => {
+  test.beforeEach(() => {
     dispatcherCalls = 0;
     dm = new DialogueStateManager({
       actionDispatcher: async (event, ctx, exec) => {

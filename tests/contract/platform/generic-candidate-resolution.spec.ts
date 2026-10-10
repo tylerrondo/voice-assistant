@@ -1,6 +1,10 @@
 import { test, expect } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 import { DialogueStateManager } from '../../../src/platform/dialogue-manager';
 import { VoiceChannel, type ScenarioSet } from '../../../src/platform/voice-channel';
 
@@ -124,7 +128,7 @@ test.describe('CONTRACT: SC-PLATFORM-003 Generic Candidate Resolution Portabilit
     ]
   };
 
-  beforeEach(() => {
+  test.beforeEach(() => {
     dispatcherCalls = 0;
     dm = new DialogueStateManager({
       actionDispatcher: async (event, ctx, exec) => {

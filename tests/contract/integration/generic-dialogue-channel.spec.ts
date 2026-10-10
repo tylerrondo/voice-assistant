@@ -11,7 +11,11 @@ import {
 import { TelegramBotAdapter, MockTelegramClient } from '../../../src/platform/telegram-bot-adapter';
 import { TelegramVoiceTransport } from '../../../src/platform/telegram-voice-transport';
 import { MockSTTProvider } from '../../../src/platform/stt-provider';
-import { MockTelegramFileProvider } from './telegram-voice.spec';
+import { MockTelegramFileProvider } from './mock-telegram-file-provider';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 class MockGenericChannelAdapter {
   constructor(private engine: DialogueEngine) {}
@@ -39,7 +43,7 @@ test.describe('CONTRACT: SC-INTEGRATION-004 Generic Dialogue Channel Contract Su
   let nannyScenarioSet: ScenarioSet;
   let dispatcherCalls: number;
 
-  beforeEach(() => {
+  test.beforeEach(() => {
     dispatcherCalls = 0;
     dm = new DialogueStateManager({
       actionDispatcher: async (event, ctx, exec) => {

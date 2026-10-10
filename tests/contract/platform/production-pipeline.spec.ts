@@ -3,6 +3,10 @@ import { DialogueStateManager } from '../../../src/platform/dialogue-manager';
 import { VoiceChannel, ScenarioSet } from '../../../src/platform/voice-channel';
 import * as fs from 'fs';
 import * as path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const scenarioPath = path.resolve(__dirname, '../../../scenario-platform-012-production-pipeline.json');
 const rawContent = fs.readFileSync(scenarioPath, 'utf-8');

@@ -1,6 +1,10 @@
 import { test, expect } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 import { DialogueStateManager } from '../../../src/platform/dialogue-manager';
 import { VoiceChannel, type ScenarioSet } from '../../../src/platform/voice-channel';
 import {
@@ -18,7 +22,7 @@ test.describe('CONTRACT: SC-INTEGRATION-001 Mixed Button / Text / Voice Dialogue
   let dispatcherCalls: number;
   let dispatchedPayloads: any[];
 
-  beforeEach(() => {
+  test.beforeEach(() => {
     dispatcherCalls = 0;
     dispatchedPayloads = [];
     dm = new DialogueStateManager({
