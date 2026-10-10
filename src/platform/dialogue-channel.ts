@@ -225,7 +225,7 @@ export class DialogueEngine {
     const targetSlot = activeScenario.candidateBinding?.targetSlot;
     const candidateSelectionKeys = new Set(['candidate_index', 'candidate_name', 'candidate_criteria', 'choice', targetSlot || '']);
     const normalizedInput = rawText.toLowerCase();
-    const selectionTriggerMatched = /выбира|выбрать|вариант|перв|втор|трет|четверт|choose|select|option|first|second|third|fourth/i.test(normalizedInput);
+    const selectionTriggerMatched = /выбира|выбрать|вариант|choose|select|option|тогда.{0,20}(перв|втор|трет|четверт)|хочу.{0,12}(перв|втор|трет|четверт)/i.test(normalizedInput) || /^(?:перв\\w*|втор\\w*|трет\\w*|четверт\\w*|first|second|third|fourth|\\d+)$/i.test(normalizedInput.trim());
 
     // 6. Resolve only explicit candidate-selection input. Unrelated numeric slots
     // (for example children_count=2) must never select candidate #2 by accident.
