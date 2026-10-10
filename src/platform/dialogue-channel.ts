@@ -221,18 +221,49 @@ export class DialogueEngine {
 
     // 5. Declarative Target Slot for Candidate Resolution
     const targetSlot = activeScenario.candidateBinding?.targetSlot;
+    const candidateSelectionKeys = new Set(['candidate_index', 'candidate_name', 'choice', targetSlot || '']);
 
-    // 6. Generic Candidate Resolution using existing SC-PLATFORM-003
-    if (targetSlot && ctx.offers && ctx.offers.length > 0 && extractedSlots[targetSlot] === undefined) {
+    // 6. Resolve only explicit candidate-selection slots. Unrelated numeric slots
+    // (for example children_count=2) must never select candidate #2 by accident.
+    if (
+      targetSlot &&
+      ctx.offers &&
+      ctx.offers.length > 0 &&
+      extractedSlots[targetSlot] === undefined &&
+      Object.keys(extractedSlots).some(key => candidateSelectionKeys.has(key))
+    ) {
       const resolution = this.vc.resolveCandidate(
         extractedSlots,
         ctx.offers as any,
         activeScenario.candidateBinding,
         activeScenario.id,
-        targetSlot
+        targetSlot,
+        activeScenario.ambiguityPrompt?.template
       );
       if (resolution.status === 'RESOLVED') {
         extractedSlots[targetSlot] = resolution.targetId;
+      } else if (resolution.status === 'AMBIGUOUS_SLOT') {
+        return {
+          status: 'AMBIGUOUS_SLOT',
+          contextId: ctx.contextId,
+          slots: ctx.slots,
+          missingSlots: ctx.missingSlots,
+          presentation: { text: resolution.clarificationPrompt || 'Выберите конкретный вариант.' }
+        };
+      } else if (resolution.status === 'CANDIDATE_UNAVAILABLE') {
+        return {
+          status: 'CANDIDATE_UNAVAILABLE',
+          contextId: ctx.contextId,
+          presentation: { text: resolution.message }
+        };
+      } else {
+        return {
+          status: 'NO_MATCH',
+          contextId: ctx.contextId,
+          slots: ctx.slots,
+          missingSlots: ctx.missingSlots,
+          presentation: { text: 'Не удалось найти выбранный вариант.' }
+        };
       }
     }
 
