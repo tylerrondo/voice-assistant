@@ -43,6 +43,7 @@ export function mountApp(root: HTMLElement, runtime: any, authenticatedIdentity:
 
   root.innerHTML = [
     '<main id="validation-bench" style="font-family:system-ui,sans-serif;padding:16px;max-width:1200px;margin:auto">',
+    '<div id="voice-app-ready" role="status">Voice Platform Production Runtime Ready</div>',
     '<h1>Validation Bench</h1>',
     '<section id="session-panel"><h2>Session</h2>',
     '<label>Tester <input data-testid="session-tester" value="Tester-1"></label>',
