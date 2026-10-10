@@ -153,7 +153,7 @@ test.describe('CONTRACT: SC-PASS-002 Multi-Offer Dialogue & Selection Suite', ()
 
     const res = await vc.handleIncomingVoice('тогда давайте второй', sessionPassengerA);
 
-    expect(res.status).toBe('OFFER_UNAVAILABLE');
+    expect(res.status).toBe('CANDIDATE_UNAVAILABLE');
     expect(res.offerId).toBe('OFFER-B');
 
     const ctx = dm.getActiveState(sessionPassengerA);
