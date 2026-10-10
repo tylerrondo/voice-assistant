@@ -128,6 +128,9 @@ export class VoiceChannel {
     }
 
     const seenIds = new Set<string>();
+    const triggerOwners = new Map<string, string>();
+    const normalizeTrigger = (trigger: string): string =>
+      trigger.replace(/^voice\\./i, '').replace(/[-_]/g, ' ').trim().toLowerCase();
 
     for (const sc of scenarioSet.scenarios) {
       if (!sc.id || typeof sc.id !== 'string') {
@@ -140,6 +143,26 @@ export class VoiceChannel {
 
       if (!sc.intent || typeof sc.intent !== 'string') {
         throw new Error(`CONTRACT_VIOLATION: Scenario "${sc.id}" missing intent`);
+      }
+      if (sc.priority !== undefined && (typeof sc.priority !== 'number' || !Number.isFinite(sc.priority))) {
+        throw new Error(`CONTRACT_VIOLATION: Scenario "${sc.id}" has invalid priority`);
+      }
+
+      const triggers: string[] = [];
+      if (sc.activation?.value) triggers.push(sc.activation.value);
+      if (Array.isArray(sc.triggerPhrases)) triggers.push(...sc.triggerPhrases);
+      if (Array.isArray(sc.aliases)) triggers.push(...sc.aliases);
+      const ownTriggers = new Set<string>();
+      for (const trigger of triggers) {
+        if (typeof trigger !== 'string' || !trigger.trim()) continue;
+        const normalized = normalizeTrigger(trigger);
+        if (ownTriggers.has(normalized)) continue;
+        ownTriggers.add(normalized);
+        const owner = triggerOwners.get(normalized);
+        if (owner && owner !== sc.id) {
+          throw new Error(`CONTRACT_VIOLATION: Trigger or alias collision "${trigger}" between "${owner}" and "${sc.id}"`);
+        }
+        triggerOwners.set(normalized, sc.id);
       }
     }
 
@@ -185,7 +208,7 @@ export class VoiceChannel {
 
       const matches = triggers.some(trig => {
         const clean = trig.replace(/^voice\./, '').replace(/[-_]/g, ' ').toLowerCase().trim();
-        return text === clean || text.startsWith(clean) || clean.split(/\s+/).every(w => text.includes(w));
+        return text === clean || text.startsWith(clean + ' ') || clean.startsWith(text) || clean.split(/\s+/).every(w => text.includes(w));
       });
 
       if (matches) {
