@@ -10,7 +10,10 @@ test.describe('E2E: PLATFORM-015 Production Action Dispatch Reliability Suite', 
     });
 
     await page.goto('http://localhost:3000');
-    await page.waitForSelector('#voice-app-ready', { timeout: 10000 });
+    await page.waitForFunction(() => {
+      const w = window as any;
+      return !!w.__VOICE_CHANNEL__ && !!w.__DIALOGUE_MANAGER__ && !!w.__VOICE_DEMO_APP__;
+    }, { timeout: 10000 });
 
     const result = await page.evaluate(async () => {
       const vc = (window as any).__VOICE_CHANNEL__;
