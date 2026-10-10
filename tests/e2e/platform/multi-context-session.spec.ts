@@ -118,8 +118,7 @@ test.describe('E2E: PLATFORM-010 Multi-Context Session Manager Runtime Suite', (
     await emitVoicePhrase(page, 'Прими заказ 1001');
     await emitVoicePhrase(page, 'Прими заказ 1002');
 
-    await emitVoicePhrase(page, 'Заказ 1001');
-    await emitVoicePhrase(page, 'Отмена');
+    await emitVoicePhrase(page, 'Заказ 1001 отмена');
 
     const contexts = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.listContexts((window as any).__VOICE_DEMO_APP__.getIdentity()));
     const ctxA = contexts.find((c: any) => c.slots.orderId === 1001);
