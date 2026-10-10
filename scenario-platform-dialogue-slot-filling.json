@@ -12,7 +12,91 @@
         "value": "voice.process-test-action"
       },
       "intent": "PROCESS_TEST_ACTION",
-      "requiredSlots": ["item", "quantity"],
+      "requiredSlots": [
+        "item",
+        "quantity"
+      ],
+      "clarificationPrompts": {
+        "quantity": "Сколько?"
+      },
+      "steps": [
+        {
+          "kind": "emit",
+          "event": {
+            "type": "platform.test_action.processed",
+            "payload": {
+              "item": "{{slots.item}}",
+              "quantity": "{{slots.quantity}}"
+            }
+          }
+        },
+        {
+          "kind": "end"
+        }
+      ],
+      "aliases": [
+        "обработай яблоки",
+        "обработай"
+      ],
+      "slotExtractors": {
+        "item": {
+          "type": "enum",
+          "mapping": {
+            "apples": [
+              "яблоки",
+              "яблоко"
+            ]
+          }
+        },
+        "quantity": {
+          "type": "enum",
+          "mapping": {
+            "5": [
+              "пять",
+              "пятеро",
+              "five"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "sc-dialogue-process-sale",
+      "name": "Продажа тестового товара со слот-филлингом",
+      "activation": {
+        "type": "voice",
+        "value": "voice.process-sale"
+      },
+      "aliases": [
+        "продай помидоры",
+        "продай"
+      ],
+      "intent": "PROCESS_SALE",
+      "requiredSlots": [
+        "item",
+        "quantity"
+      ],
+      "slotExtractors": {
+        "item": {
+          "type": "enum",
+          "mapping": {
+            "tomatoes": [
+              "помидоры",
+              "помидор"
+            ]
+          }
+        },
+        "quantity": {
+          "type": "enum",
+          "mapping": {
+            "5": [
+              "пять",
+              "пятеро",
+              "five"
+            ]
+          }
+        }
+      },
       "clarificationPrompts": {
         "quantity": "Сколько?"
       },
