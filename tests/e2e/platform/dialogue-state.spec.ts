@@ -25,7 +25,11 @@ test.describe('E2E: Strict Platform Dialogue State & Multi-Turn Slot-Filling Sui
       if (!channel) {
         throw new Error('VoiceChannel production instance is not initialized on window.__VOICE_CHANNEL__');
       }
-      return channel.handleIncomingVoice(text);
+      const app = (window as any).__VOICE_DEMO_APP__;
+      if (!app || typeof app.getIdentity !== 'function') {
+        throw new Error('Voice demo app identity is not initialized');
+      }
+      return channel.handleIncomingVoice(text, app.getIdentity());
     }, phrase);
   }
 
@@ -35,7 +39,7 @@ test.describe('E2E: Strict Platform Dialogue State & Multi-Turn Slot-Filling Sui
 
     const state = await page.evaluate(() => {
       const dm = (window as any).__DIALOGUE_MANAGER__;
-      return dm ? dm.getActiveState() : null;
+      return dm ? dm.getActiveState((window as any).__VOICE_DEMO_APP__.getIdentity()) : null;
     });
 
     expect(state).not.toBeNull();
@@ -61,7 +65,7 @@ test.describe('E2E: Strict Platform Dialogue State & Multi-Turn Slot-Filling Sui
 
     const executedPayload = await page.evaluate(() => {
       const dm = (window as any).__DIALOGUE_MANAGER__;
-      const logs = dm ? dm.getExecutionLogs() : [];
+      const logs = dm ? dm.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity()) : [];
       const targetAction = logs.find((l: any) => l.intent === 'PROCESS_TEST_ACTION');
       return targetAction ? targetAction.payload : null;
     });
