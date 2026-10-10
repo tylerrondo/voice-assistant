@@ -15,6 +15,8 @@ export function getAuthenticatedSessionIdentity(): SessionIdentity {
 // Real FSM / State Execution Engine Boundary
 export class PlatformFsmExecutionBoundary {
   private activeOrders: Map<number, { status: string; executionId: string; updatedAt: number }> = new Map();
+  private sessionOrders: Map<string, Map<number, { status: string; executionId: string; updatedAt: number }>> = new Map();
+  private lastOrderBySession: Map<string, number> = new Map();
 
   public async execute(event: { type: string; payload: Record<string, any> }, exec: any) {
     // 1. Strict Payload Validation
@@ -58,12 +60,18 @@ export class PlatformFsmExecutionBoundary {
         };
       }
 
-      // Transition order state in FSM
-      this.activeOrders.set(orderId, {
+      // Transition order state in FSM, scoped to the authenticated session.
+      const orderState = {
         status: 'DISPATCHED',
         executionId: exec.executionId,
         updatedAt: Date.now()
-      });
+      };
+      this.activeOrders.set(orderId, orderState);
+      const sessionKey = String(exec.ownerId) + ':' + String(exec.sessionId);
+      const sessionOrders = this.sessionOrders.get(sessionKey) || new Map<number, { status: string; executionId: string; updatedAt: number }>();
+      sessionOrders.set(orderId, orderState);
+      this.sessionOrders.set(sessionKey, sessionOrders);
+      this.lastOrderBySession.set(sessionKey, orderId);
 
       return {
         status: 'SUCCEEDED' as const,
@@ -81,11 +89,11 @@ export class PlatformFsmExecutionBoundary {
     };
     const driverTransition = driverTransitions[event.type];
     if (driverTransition) {
-      const latestOrder = [...this.activeOrders.entries()].sort((a, b) => b[1].updatedAt - a[1].updatedAt)[0];
+      const sessionKey = String(exec.ownerId) + ':' + String(exec.sessionId);
       const payloadOrderId = Number(event.payload.orderId);
       const orderId = Number.isFinite(payloadOrderId) && payloadOrderId > 0
         ? payloadOrderId
-        : event.type === 'driver.order.accepted' ? NaN : latestOrder?.[0];
+        : event.type === 'driver.order.accepted' ? NaN : this.lastOrderBySession.get(sessionKey);
 
       if (!Number.isFinite(orderId) || !orderId || orderId <= 0) {
         return {
@@ -96,7 +104,8 @@ export class PlatformFsmExecutionBoundary {
         };
       }
 
-      const current = this.activeOrders.get(orderId)?.status;
+      const sessionOrders = this.sessionOrders.get(sessionKey) || new Map<number, { status: string; executionId: string; updatedAt: number }>();
+      const current = sessionOrders.get(orderId)?.status;
       if (current && !driverTransition.from.includes(current)) {
         return {
           status: 'FAILED' as const,
@@ -114,11 +123,15 @@ export class PlatformFsmExecutionBoundary {
         };
       }
 
-      this.activeOrders.set(orderId, {
+      const orderState = {
         status: driverTransition.to,
         executionId: exec.executionId,
         updatedAt: Date.now()
-      });
+      };
+      sessionOrders.set(orderId, orderState);
+      this.sessionOrders.set(sessionKey, sessionOrders);
+      this.lastOrderBySession.set(sessionKey, orderId);
+      this.activeOrders.set(orderId, orderState);
       return {
         status: 'SUCCEEDED' as const,
         executionId: exec.executionId,
