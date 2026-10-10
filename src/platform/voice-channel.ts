@@ -607,7 +607,7 @@ export class VoiceChannel {
 
     // 3. Declarative Active Context Processing
     const activeWaiting = this.dialogueManager.listContexts(identity).filter(c => c.status === 'WAITING_FOR_SLOT');
-    const isFreshScenarioActivation = intentRes.status === 'RESOLVED' && (() => {
+    const isFreshScenarioActivation = intentRes.status === 'RESOLVED' && !(intentRes.scenario.candidateBinding?.targetSlot && activeWaiting.some(context => (context.offers?.length || 0) > 0)) && (() => {
       const scenario = intentRes.scenario;
       const triggers: string[] = [];
       if (scenario.activation?.value) triggers.push(scenario.activation.value);
