@@ -465,8 +465,12 @@ export class VoiceChannel {
     const unavailTemplate = binding?.unavailableTemplate;
     const ambiguityTriggers = binding?.ambiguityTriggerValues || [];
 
-    const hasAmbiguousCriteria = Object.values(extractedSlots).some(
-      v => typeof v === 'string' && (ambiguityTriggers.includes(v) || v.toLowerCase().includes('ambiguous'))
+    const candidateKeys = new Set(['candidate_index', 'candidate_name', 'choice', 'index', 'name', 'offerId', targetSlotName]);
+    const selectionEntries = Object.entries(extractedSlots).filter(([key]) => candidateKeys.has(key));
+    const selectionValues = selectionEntries.map(([, value]) => value);
+
+    const hasAmbiguousCriteria = selectionValues.some(
+      value => typeof value === 'string' && (ambiguityTriggers.includes(value) || value.toLowerCase().includes('ambiguous'))
     );
 
     if (hasAmbiguousCriteria) {
@@ -486,7 +490,7 @@ export class VoiceChannel {
 
     let matchedItem: CandidateItem | undefined;
 
-    for (const val of Object.values(extractedSlots)) {
+    for (const val of selectionValues) {
       if (typeof val === 'number') {
         matchedItem = candidates.find(c => c[indexKey] === val);
         if (matchedItem) break;
@@ -629,7 +633,8 @@ export class VoiceChannel {
               || activeCtx.missingSlots.find(s => s !== 'confirmation') 
               || activeCtx.requiredSlots?.find(s => s !== 'confirmation');
 
-            if (targetSlot) {
+            const candidateSelectionKeys = new Set(['candidate_index', 'candidate_name', 'choice', targetSlot || '']);
+          if (targetSlot && Object.keys(extracted).some(key => candidateSelectionKeys.has(key))) {
               const candidateResolution = this.resolveCandidate(
                 extracted,
                 activeCtx.offers as unknown as CandidateItem[],
@@ -654,6 +659,10 @@ export class VoiceChannel {
                   offerId: candidateResolution.targetId,
                   message: candidateResolution.message
                 };
+              }
+
+              if (candidateResolution.status === 'NO_MATCH') {
+                return { status: 'NO_MATCH' };
               }
 
               if (candidateResolution.status === 'RESOLVED' && candidateResolution.targetId) {
