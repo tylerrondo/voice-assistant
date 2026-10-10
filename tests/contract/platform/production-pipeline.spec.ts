@@ -72,7 +72,7 @@ test.describe('CONTRACT: PLATFORM-012 Production Pipeline Suite', () => {
     await channel.handleIncomingVoice('Прими заказ 1001', identity);
     const cancelRes = await channel.handleIncomingVoice('Отмена', identity);
 
-    expect(cancelRes).toBe(true);
+    expect(cancelRes.success).toBe(true);
     const ctx = dm.listContexts(identity)[0];
     expect(ctx.status).toBe('CANCELLED');
     expect(dm.getExecutionLogs(identity).length).toBe(0);
