@@ -625,10 +625,18 @@ export class VoiceChannel {
 
     if (activeWaiting.length === 1 && !isFreshScenarioActivation) {
       const activeCtx = activeWaiting[0];
-      const scenario = (activeCtx.scenarioId ? this.scenarioRegistry.find(s => s.id === activeCtx.scenarioId) : undefined)
-        || this.getDeterministicScenarioForIntent(activeCtx.intent);
+      const scenario = activeCtx.scenarioId
+        ? this.scenarioRegistry.find(s => s.id === activeCtx.scenarioId)
+        : undefined;
+      if (!scenario) {
+        return {
+          status: 'SCENARIO_NOT_FOUND',
+          contextId: activeCtx.contextId,
+          message: 'Active context scenario not found.'
+        };
+      }
 
-      if (scenario && scenario.slotExtractors) {
+      if (scenario.slotExtractors) {
         const slotRes = this.extractSlotsDeterministically(
           text,
           scenario.slotExtractors,
