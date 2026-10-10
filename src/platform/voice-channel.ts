@@ -257,6 +257,13 @@ export class VoiceChannel {
     }
 
     const normalizedText = text.toLowerCase();
+    const compilePattern = (pattern: string): RegExp => {
+      const unicodePattern = pattern
+        .replace(/^\\\\b/, "(?:^|(?<=[^\\\\p{L}\\\\p{N}_]))")
+        .replace(/\\\\b$/, "(?:$|(?=[^\\\\p{L}\\\\p{N}_]))")
+        .replace(/\\\\b/g, "(?:(?<=[^\\\\p{L}\\\\p{N}_])|(?=[^\\\\p{L}\\\\p{N}_]))");
+      return new RegExp(unicodePattern, 'iu');
+    };
     const matches: Array<{ slotName: string; value: any; token: string; priority: number }> = [];
 
     for (const [slotName, extractor] of Object.entries(extractors)) {
@@ -269,7 +276,7 @@ export class VoiceChannel {
       if (Array.isArray(extractor.rules)) {
         for (const rule of extractor.rules) {
           try {
-            const regex = new RegExp(rule.pattern, 'iu');
+            const regex = compilePattern(rule.pattern);
             const match = regex.exec(text);
             if (match) {
               value = rule.value;
@@ -284,7 +291,7 @@ export class VoiceChannel {
         if (Array.isArray(extractor.patterns)) {
           for (const pattern of extractor.patterns) {
             try {
-              const match = new RegExp(pattern, 'iu').exec(text);
+              const match = compilePattern(pattern).exec(text);
               if (match) {
                 value = 'CONFIRMED';
                 token = match[0];
@@ -306,7 +313,7 @@ export class VoiceChannel {
         }
       } else if ((extractor.type === 'integer' || extractor.type === 'string') && extractor.pattern) {
         try {
-          const match = new RegExp(extractor.pattern, 'iu').exec(text);
+          const match = compilePattern(extractor.pattern).exec(text);
           if (match) {
             token = match[0];
             value = extractor.type === 'integer' ? parseInt(match[0], 10) : match[0];
