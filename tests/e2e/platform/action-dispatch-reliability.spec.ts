@@ -36,8 +36,9 @@ test.describe('E2E: PLATFORM-015 Production Action Dispatch Reliability Suite', 
           activation: { type: 'voice', value: 'voice.accept-order' },
           aliases: ['заказ'],
           intent: 'ACCEPT_ORDER',
-          requiredSlots: [],
-          steps: [{ kind: 'emit', event: { type: 'driver.order.accepted', payload: { orderId: 1001 } } }, { kind: 'end' }]
+          requiredSlots: ['orderId'],
+          slotExtractors: { orderId: { type: 'integer', pattern: '\\b\\d+\\b' } },
+          steps: [{ kind: 'emit', event: { type: 'driver.order.accepted', payload: { orderId: '{{slots.orderId}}' } } }, { kind: 'end' }]
         }]
       });
 
