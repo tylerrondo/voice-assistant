@@ -209,7 +209,7 @@ export class VoiceChannel {
 
       const matches = triggers.some(trig => {
         const clean = trig.replace(/^voice\./, '').replace(/[-_]/g, ' ').toLowerCase().trim();
-        return text === clean || text.startsWith(clean + ' ') || (text.length >= 3 && !/^(?:перв\\w*|втор\\w*|трет\\w*|четверт\\w*|first|second|third|fourth|\\d+)$/i.test(text) && clean.startsWith(text)) || clean.split(/\s+/).every(w => text.includes(w));
+        return text === clean || text.startsWith(clean + ' ') || (text.length >= 3 && !/^(?:перв\w*|втор\w*|трет\w*|четверт\w*|first|second|third|fourth|\d+)$/i.test(text) && clean.startsWith(text)) || clean.split(/\s+/).every(w => text.includes(w));
       });
 
       if (matches) {
@@ -636,7 +636,7 @@ export class VoiceChannel {
         const clean = trigger.replace(/^voice\./i, '').replace(/[-_]/g, ' ').toLowerCase().trim();
         return text === clean ||
           text.startsWith(clean + ' ') ||
-          (text.length >= 3 && !/^(?:перв\\w*|втор\\w*|трет\\w*|четверт\\w*|first|second|third|fourth|\\d+)$/i.test(text) && clean.startsWith(text)) ||
+          (text.length >= 3 && !/^(?:перв\w*|втор\w*|трет\w*|четверт\w*|first|second|third|fourth|\d+)$/i.test(text) && clean.startsWith(text)) ||
           clean.split(/\s+/).every(word => text.includes(word));
       });
     })();
@@ -678,7 +678,7 @@ export class VoiceChannel {
           return { status: 'NO_MATCH' };
         }
 
-        const ordinalMatch = text.match(/(?:^|\\s)(перв\\w*|втор\\w*|трет\\w*|четверт\\w*|first|second|third|fourth)(?:\\s|$)/i);
+        const ordinalMatch = text.match(/(?:^|\s)(перв\w*|втор\w*|трет\w*|четверт\w*|first|second|third|fourth)(?:\s|$)/i);
         const ordinalIndex = ordinalMatch
           ? (/^(?:перв|first)/i.test(ordinalMatch[1]) ? 1
             : /^(?:втор|second)/i.test(ordinalMatch[1]) ? 2
