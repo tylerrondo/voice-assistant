@@ -466,7 +466,7 @@ export class VoiceChannel {
     const unavailTemplate = binding?.unavailableTemplate;
     const ambiguityTriggers = binding?.ambiguityTriggerValues || [];
 
-    const candidateKeys = new Set(['candidate_index', 'candidate_name', 'choice', 'index', 'name', 'offerId', targetSlotName]);
+    const candidateKeys = new Set(['candidate_index', 'candidate_name', 'candidate_criteria', 'choice', 'index', 'name', 'offerId', targetSlotName]);
     const selectionEntries = Object.entries(extractedSlots).filter(([key]) => candidateKeys.has(key));
     const selectionValues = selectionEntries.map(([, value]) => value);
 
@@ -656,7 +656,7 @@ export class VoiceChannel {
               || activeCtx.missingSlots.find(s => s !== 'confirmation') 
               || activeCtx.requiredSlots?.find(s => s !== 'confirmation');
 
-            const candidateSelectionKeys = new Set(['candidate_index', 'candidate_name', 'choice', targetSlot || '']);
+            const candidateSelectionKeys = new Set(['candidate_index', 'candidate_name', 'candidate_criteria', 'choice', targetSlot || '']);
           if (targetSlot && Object.keys(extracted).some(key => candidateSelectionKeys.has(key))) {
               const candidateResolution = this.resolveCandidate(
                 extracted,
@@ -815,7 +815,7 @@ export class VoiceChannel {
           };
         }
 
-        const selectorKeys = new Set(['candidate_index', 'candidate_name', 'choice']);
+        const selectorKeys = new Set(['candidate_index', 'candidate_name', 'candidate_criteria', 'choice']);
         if (Object.keys(matchedContexts[0].slots).some(key => selectorKeys.has(key)) &&
             activeWaiting.some(context => context.offers?.length && context.missingSlots.includes(
               this.scenarioRegistry.find(item => item.id === context.scenarioId)?.candidateBinding?.targetSlot || ''
