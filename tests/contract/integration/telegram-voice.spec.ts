@@ -12,39 +12,11 @@ import {
   type TelegramFileMetadata
 } from '../../../src/platform/telegram-voice-transport';
 
-export class MockTelegramFileProvider implements TelegramFileProvider {
-  public files: Map<string, { meta: TelegramFileMetadata; buffer: Buffer }> = new Map();
-  public shouldFailDownload = false;
-  public downloadCalls = 0;
+import { fileURLToPath } from 'url';
+import { MockTelegramFileProvider } from './mock-telegram-file-provider';
 
-  public registerFile(fileId: string, filePath: string, mimeType: string, buffer: Buffer) {
-    this.files.set(fileId, {
-      meta: { fileId, filePath, mimeType, fileSize: buffer.length },
-      buffer
-    });
-  }
-
-  async getFile(fileId: string): Promise<TelegramFileMetadata> {
-    const entry = this.files.get(fileId);
-    if (!entry) {
-      throw new Error(`TELEGRAM_FILE_NOT_FOUND: ${fileId}`);
-    }
-    return entry.meta;
-  }
-
-  async downloadFile(filePath: string): Promise<Buffer> {
-    this.downloadCalls++;
-    if (this.shouldFailDownload) {
-      throw new Error('TELEGRAM_FILE_DOWNLOAD_FAILED');
-    }
-    for (const entry of this.files.values()) {
-      if (entry.meta.filePath === filePath) {
-        return entry.buffer;
-      }
-    }
-    throw new Error(`TELEGRAM_FILE_NOT_FOUND_BY_PATH: ${filePath}`);
-  }
-}
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 test.describe('CONTRACT: SC-INTEGRATION-002 Real Telegram Voice Input + STT Integration Suite', () => {
 
@@ -59,7 +31,7 @@ test.describe('CONTRACT: SC-INTEGRATION-002 Real Telegram Voice Input + STT Inte
   let nannyScenarioSet: ScenarioSet;
   let dispatcherCalls: number;
 
-  beforeEach(() => {
+  test.beforeEach(() => {
     dispatcherCalls = 0;
     dm = new DialogueStateManager({
       actionDispatcher: async (event, ctx, exec) => {

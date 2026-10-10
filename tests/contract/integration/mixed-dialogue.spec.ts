@@ -1,6 +1,10 @@
 import { test, expect } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 import { DialogueStateManager } from '../../../src/platform/dialogue-manager';
 import { VoiceChannel, type ScenarioSet } from '../../../src/platform/voice-channel';
 import {
@@ -18,7 +22,7 @@ test.describe('CONTRACT: SC-INTEGRATION-001 Mixed Button / Text / Voice Dialogue
   let dispatcherCalls: number;
   let dispatchedPayloads: any[];
 
-  beforeEach(() => {
+  test.beforeEach(() => {
     dispatcherCalls = 0;
     dispatchedPayloads = [];
     dm = new DialogueStateManager({
@@ -48,6 +52,9 @@ test.describe('CONTRACT: SC-INTEGRATION-001 Mixed Button / Text / Voice Dialogue
 
   test('Test A — Buttons only: Полный заказ только кнопками', async () => {
     const sc = getScenario();
+
+    // Explicitly establish the scenario context before any button-only continuation.
+    await adapter.handleMessage({ channel: 'text', raw_input: 'завтра' }, sessionUser);
 
     await adapter.handleMessage({ channel: 'button', button_payload: { slotName: 'date', slotValue: 'сегодня' } }, sessionUser, sc);
     await adapter.handleMessage({ channel: 'button', button_payload: { slotName: 'start_time', slotValue: '15:00' } }, sessionUser, sc);
@@ -95,6 +102,9 @@ test.describe('CONTRACT: SC-INTEGRATION-001 Mixed Button / Text / Voice Dialogue
   test('Test C — Button -> Voice: Начать кнопками, продолжить voice', async () => {
     const sc = getScenario();
 
+    // Explicitly establish the scenario context before any button-only continuation.
+    await adapter.handleMessage({ channel: 'text', raw_input: 'завтра' }, sessionUser);
+
     await adapter.handleMessage({ channel: 'button', button_payload: { slotName: 'date', slotValue: 'завтра' } }, sessionUser, sc);
     await adapter.handleMessage({ channel: 'button', button_payload: { slotName: 'start_time', slotValue: '15:00' } }, sessionUser, sc);
     await adapter.handleMessage({ channel: 'voice', transcript: 'до восьми вечера' }, sessionUser, sc);
@@ -140,6 +150,9 @@ test.describe('CONTRACT: SC-INTEGRATION-001 Mixed Button / Text / Voice Dialogue
   test('Test F — Correction: button -> voice correction («нет, давайте в четыре»)', async () => {
     const sc = getScenario();
 
+    // Explicitly establish the scenario context before any button-only continuation.
+    await adapter.handleMessage({ channel: 'text', raw_input: 'завтра' }, sessionUser);
+
     // Button sets 15:00
     await adapter.handleMessage({ channel: 'button', button_payload: { slotName: 'start_time', slotValue: '15:00' } }, sessionUser, sc);
     expect(dm.getActiveState(sessionUser)?.slots.start_time).toBe('15:00');
@@ -154,6 +167,9 @@ test.describe('CONTRACT: SC-INTEGRATION-001 Mixed Button / Text / Voice Dialogue
 
   test('Test G — Reverse correction: voice -> button correction', async () => {
     const sc = getScenario();
+
+    // Explicitly establish the scenario context before any button-only continuation.
+    await adapter.handleMessage({ channel: 'text', raw_input: 'завтра' }, sessionUser);
 
     await adapter.handleMessage({ channel: 'voice', transcript: 'в три часа' }, sessionUser, sc);
     expect(dm.getActiveState(sessionUser)?.slots.start_time).toBe('15:00');
@@ -217,6 +233,8 @@ test.describe('CONTRACT: SC-INTEGRATION-001 Mixed Button / Text / Voice Dialogue
     const sc = getScenario();
 
     const fillSlots = async (user: { ownerId: string; sessionId: string }) => {
+      // Establish the registered scenario before the first button action.
+      await adapter.handleMessage({ channel: 'text', raw_input: 'завтра' }, user);
       await adapter.handleMessage({ channel: 'button', button_payload: { slotName: 'date', slotValue: 'завтра' } }, user, sc);
       await adapter.handleMessage({ channel: 'button', button_payload: { slotName: 'start_time', slotValue: '15:00' } }, user, sc);
       await adapter.handleMessage({ channel: 'button', button_payload: { slotName: 'end_time', slotValue: '20:00' } }, user, sc);
@@ -253,6 +271,7 @@ test.describe('CONTRACT: SC-INTEGRATION-001 Mixed Button / Text / Voice Dialogue
 
     // 1. Button cancel
     const userBtn = { ownerId: 'u-can-btn', sessionId: 's-can-btn' };
+    await adapter.handleMessage({ channel: 'text', raw_input: 'завтра' }, userBtn);
     await adapter.handleMessage({ channel: 'button', button_payload: { slotName: 'date', slotValue: 'завтра' } }, userBtn, sc);
     const resBtn = await adapter.handleMessage({ channel: 'button', button_payload: { slotName: 'confirmation', slotValue: 'REJECTED' } }, userBtn, sc);
     expect(resBtn.status).toBe('CANCELLED');
@@ -275,6 +294,9 @@ test.describe('CONTRACT: SC-INTEGRATION-001 Mixed Button / Text / Voice Dialogue
 
   test('Test K — Arbitrary channel switching: button -> voice -> button -> text -> voice -> button', async () => {
     const sc = getScenario();
+
+    // Explicitly establish the scenario context before any button-only continuation.
+    await adapter.handleMessage({ channel: 'text', raw_input: 'завтра' }, sessionUser);
 
     await adapter.handleMessage({ channel: 'button', button_payload: { slotName: 'date', slotValue: 'завтра' } }, sessionUser, sc);
     await adapter.handleMessage({ channel: 'voice', transcript: 'с трех' }, sessionUser, sc);

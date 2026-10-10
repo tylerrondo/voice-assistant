@@ -238,7 +238,17 @@ export class VoiceChannel {
     for (const [slotKey, extractor] of Object.entries(extractors)) {
       if (extractor.rules && Array.isArray(extractor.rules)) {
         for (const rule of extractor.rules) {
-          if (new RegExp(rule.pattern, 'i').test(text)) {
+          let regex: RegExp;
+          try {
+            const pUnicode = rule.pattern
+              .replace(/^\\b/, "(?:^|(?<=[^\\p{L}\\p{N}_]))")
+              .replace(/\\b$/, "(?:$|(?=[^\\p{L}\\p{N}_]))")
+              .replace(/\\b/g, "(?:(?<=[^\\p{L}\\p{N}_])|(?=[^\\p{L}\\p{N}_]))");
+            regex = new RegExp(pUnicode, 'iu');
+          } catch {
+            regex = new RegExp(rule.pattern, 'i');
+          }
+          if (regex.test(text)) {
             resolvedSlots[slotKey] = rule.value;
             break;
           }
@@ -619,7 +629,27 @@ export class VoiceChannel {
             }
           }
 
-          return updatedCtxState || this.dialogueManager.getContext(activeCtx.contextId, identity);
+          const latestContext = this.dialogueManager.getContext(activeCtx.contextId, identity) || activeCtx;
+
+          // Non-confirmation scenarios execute once their required slots are complete.
+          // Confirmation-driven scenarios continue through the explicit confirmation branch above.
+          if (
+            latestContext.missingSlots.length === 0 &&
+            !scenario.confirmation &&
+            extracted.confirmation === undefined
+          ) {
+            const exec = this.dialogueManager.createExecution(latestContext, identity);
+            const dispatchRes = await this.dialogueManager.dispatchAction(exec.executionId, latestContext.slots, identity);
+            return {
+              status: dispatchRes.status,
+              contextId: latestContext.contextId,
+              executionId: exec.executionId,
+              attempt: dispatchRes.attempt,
+              context: this.dialogueManager.getContext(latestContext.contextId, identity)
+            };
+          }
+
+          return updatedCtxState || latestContext;
         }
       }
     } else if (activeWaiting.length > 1) {
@@ -678,17 +708,18 @@ export class VoiceChannel {
 
       return ctx;
     }
-public getScenarioById(id: string): ScenarioDefinition | undefined {
-    return this.scenarioRegistry.find(s => s.id === id);
-  }
-
-  public getScenarioRegistry(): ScenarioDefinition[] {
-    return [...this.scenarioRegistry];
-  }
     if (intentRes.status === 'AMBIGUOUS_INTENT') {
       return intentRes;
     }
 
     return { status: 'NO_MATCH' };
+  }
+
+  public getScenarioById(id: string): ScenarioDefinition | undefined {
+    return this.scenarioRegistry.find(s => s.id === id);
+  }
+
+  public getScenarioRegistry(): ScenarioDefinition[] {
+    return [...this.scenarioRegistry];
   }
 }

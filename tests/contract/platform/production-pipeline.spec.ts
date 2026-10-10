@@ -3,12 +3,17 @@ import { DialogueStateManager } from '../../../src/platform/dialogue-manager';
 import { VoiceChannel, ScenarioSet } from '../../../src/platform/voice-channel';
 import * as fs from 'fs';
 import * as path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const scenarioPath = path.resolve(__dirname, '../../../scenario-platform-012-production-pipeline.json');
 const rawContent = fs.readFileSync(scenarioPath, 'utf-8');
 const scenarioSet: ScenarioSet = JSON.parse(rawContent);
 
 test.describe('CONTRACT: PLATFORM-012 Production Pipeline Suite', () => {
+  const identity = { ownerId: 'driver-platform-012', sessionId: 'session-platform-012' };
 
   test('CONTRACT-01: VoiceChannel registers ScenarioSet and exposes activeScenarioSetId', async () => {
     const dm = new DialogueStateManager();
@@ -28,8 +33,8 @@ test.describe('CONTRACT: PLATFORM-012 Production Pipeline Suite', () => {
     const channel = new VoiceChannel(dm);
     channel.registerScenarioSet(scenarioSet);
 
-    await channel.handleIncomingVoice('Прими заказ 1001');
-    await channel.handleIncomingVoice('Картой');
+    await channel.handleIncomingVoice('Прими заказ 1001', identity);
+    await channel.handleIncomingVoice('Картой', identity);
 
     expect(dispatchedEvents.length).toBe(1);
     expect(dispatchedEvents[0].event.type).toBe('driver.order.accepted');
@@ -39,14 +44,14 @@ test.describe('CONTRACT: PLATFORM-012 Production Pipeline Suite', () => {
   test('CONTRACT-03: Auto-Expiry Scheduler automatically transitions context to EXPIRED after TTL without manual calls', async () => {
     // 50ms TTL for fast contract verification
     const dm = new DialogueStateManager({ defaultTtlMs: 50, enableAutoExpiryScheduler: true });
-    const ctx = dm.createContext('ACCEPT_ORDER', { orderId: 1001 }, ['orderId', 'payment'], 'driver.order.accepted');
+    const ctx = dm.createContext('ACCEPT_ORDER', { orderId: 1001 }, ['orderId', 'payment'], 'driver.order.accepted', {}, identity);
 
     expect(ctx.status).toBe('WAITING_FOR_SLOT');
 
     // Wait for auto-expiry timer
     await new Promise(resolve => setTimeout(resolve, 80));
 
-    const expiredCtx = dm.getContext(ctx.contextId);
+    const expiredCtx = dm.getContext(ctx.contextId, identity);
     expect(expiredCtx?.status).toBe('EXPIRED');
   });
 
@@ -55,7 +60,7 @@ test.describe('CONTRACT: PLATFORM-012 Production Pipeline Suite', () => {
     dm.createContext('ACCEPT_ORDER', { orderId: 1001 }, ['orderId', 'payment'], 'driver.order.accepted');
 
     expect(() => {
-      dm.createContext('ACCEPT_ORDER', { orderId: 1002 }, ['orderId', 'payment'], 'driver.order.accepted');
+      dm.createContext('ACCEPT_ORDER', { orderId: 1002 }, ['orderId', 'payment'], 'driver.order.accepted', {}, identity);
     }).toThrow(/REJECT_NEW_CONTEXT/);
   });
 
@@ -64,13 +69,13 @@ test.describe('CONTRACT: PLATFORM-012 Production Pipeline Suite', () => {
     const channel = new VoiceChannel(dm);
     channel.registerScenarioSet(scenarioSet);
 
-    await channel.handleIncomingVoice('Прими заказ 1001');
-    const cancelRes = await channel.handleIncomingVoice('Отмена');
+    await channel.handleIncomingVoice('Прими заказ 1001', identity);
+    const cancelRes = await channel.handleIncomingVoice('Отмена', identity);
 
     expect(cancelRes).toBe(true);
-    const ctx = dm.listContexts()[0];
+    const ctx = dm.listContexts(identity)[0];
     expect(ctx.status).toBe('CANCELLED');
-    expect(dm.getExecutionLogs().length).toBe(0);
+    expect(dm.getExecutionLogs(identity).length).toBe(0);
   });
 
   test('CONTRACT-06: Strict Ambiguity prompt template enforcement without fallback values', async () => {
@@ -78,10 +83,10 @@ test.describe('CONTRACT: PLATFORM-012 Production Pipeline Suite', () => {
     const channel = new VoiceChannel(dm);
     channel.registerScenarioSet(scenarioSet);
 
-    await channel.handleIncomingVoice('Прими заказ 1001');
-    await channel.handleIncomingVoice('Прими заказ 1002');
+    await channel.handleIncomingVoice('Прими заказ 1001', identity);
+    await channel.handleIncomingVoice('Прими заказ 1002', identity);
 
-    const ambResult = await channel.handleIncomingVoice('Картой');
+    const ambResult = await channel.handleIncomingVoice('Картой', identity);
     expect(ambResult.status).toBe('AMBIGUOUS_CONTEXT');
     expect(ambResult.clarificationPrompt).toContain('1001');
     expect(ambResult.clarificationPrompt).toContain('1002');

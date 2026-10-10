@@ -11,7 +11,11 @@ import {
 import { TelegramBotAdapter, MockTelegramClient } from '../../../src/platform/telegram-bot-adapter';
 import { TelegramVoiceTransport } from '../../../src/platform/telegram-voice-transport';
 import { MockSTTProvider } from '../../../src/platform/stt-provider';
-import { MockTelegramFileProvider } from './telegram-voice.spec';
+import { MockTelegramFileProvider } from './mock-telegram-file-provider';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 class MockGenericChannelAdapter {
   constructor(private engine: DialogueEngine) {}
@@ -39,7 +43,7 @@ test.describe('CONTRACT: SC-INTEGRATION-004 Generic Dialogue Channel Contract Su
   let nannyScenarioSet: ScenarioSet;
   let dispatcherCalls: number;
 
-  beforeEach(() => {
+  test.beforeEach(() => {
     dispatcherCalls = 0;
     dm = new DialogueStateManager({
       actionDispatcher: async (event, ctx, exec) => {
@@ -75,6 +79,9 @@ test.describe('CONTRACT: SC-INTEGRATION-004 Generic Dialogue Channel Contract Su
     const sc = getNannyScenario();
     const adapter = new MockGenericChannelAdapter(engine);
 
+    // Buttons require an existing context; start the registered scenario explicitly first.
+    await adapter.send({ modality: 'text', raw_input: 'нужна няня завтра' }, sessionUser, sc);
+
     await adapter.send({
       modality: 'button',
       payload: {
@@ -89,6 +96,9 @@ test.describe('CONTRACT: SC-INTEGRATION-004 Generic Dialogue Channel Contract Su
   test('GC-03: Voice — DialogueInput(voice with transcript) passes through the same DialogueEngine', async () => {
     const sc = getNannyScenario();
     const adapter = new MockGenericChannelAdapter(engine);
+
+    // Voice input continues an active scenario context rather than injecting a scenario definition.
+    await adapter.send({ modality: 'text', raw_input: 'нужна няня завтра' }, sessionUser, sc);
 
     await adapter.send({
       modality: 'voice',
@@ -121,6 +131,8 @@ test.describe('CONTRACT: SC-INTEGRATION-004 Generic Dialogue Channel Contract Su
     const serviceScenario: ScenarioDefinition = {
       id: 'service-booking',
       intent: 'BOOK_SERVICE',
+      priority: 10,
+      triggerPhrases: ['book service'],
       requiredSlots: ['date', 'selected_service'],
       candidateBinding: {
         targetSlot: 'selected_service',
@@ -141,10 +153,11 @@ test.describe('CONTRACT: SC-INTEGRATION-004 Generic Dialogue Channel Contract Su
     };
 
     const userS = { ownerId: 'u-serv', sessionId: 's-serv' };
+    vc.registerScenarioSet({ version: 1, id: 'service-booking-set', scenarios: [serviceScenario] });
     const adapter = new MockGenericChannelAdapter(engine);
 
-    // Initial message to open context
-    await adapter.send({ modality: 'text', raw_input: 'завтра' }, userS, serviceScenario);
+    // Initial message explicitly resolves the registered service scenario.
+    await adapter.send({ modality: 'text', raw_input: 'book service завтра' }, userS, serviceScenario);
 
     // Attach custom candidate items with non-standard fields
     const ctx = dm.getActiveState(userS)!;
@@ -176,6 +189,7 @@ test.describe('CONTRACT: SC-INTEGRATION-004 Generic Dialogue Channel Contract Su
     };
 
     const userP = { ownerId: 'u-pres', sessionId: 's-pres' };
+    vc.registerScenarioSet({ version: 1, id: 'service-booking-pres-set', scenarios: [serviceScenario] });
     const adapter = new MockGenericChannelAdapter(engine);
 
     // Attach candidates before prompt
@@ -199,6 +213,7 @@ test.describe('CONTRACT: SC-INTEGRATION-004 Generic Dialogue Channel Contract Su
     const approvalScenario: ScenarioDefinition = {
       id: 'custom-approval-scenario',
       intent: 'CUSTOM_ORDER',
+      triggerPhrases: ['custom order'],
       requiredSlots: ['target_item', 'approval'],
       confirmation: {
         slot: 'approval',
@@ -211,7 +226,11 @@ test.describe('CONTRACT: SC-INTEGRATION-004 Generic Dialogue Channel Contract Su
     };
 
     const userAppr = { ownerId: 'u-appr', sessionId: 's-appr' };
+    vc.registerScenarioSet({ version: 1, id: 'custom-approval-set', scenarios: [approvalScenario] });
     const adapter = new MockGenericChannelAdapter(engine);
+
+    // Establish context via the scenario's registered trigger before using buttons.
+    await adapter.send({ modality: 'text', raw_input: 'custom order' }, userAppr, approvalScenario);
 
     // 1. Fill target_item
     const resPrompt = await adapter.send({ modality: 'button', payload: { slotName: 'target_item', slotValue: 'item-777' } }, userAppr, approvalScenario);

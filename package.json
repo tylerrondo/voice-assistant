@@ -10,7 +10,11 @@
     "preview": "vite preview --port 3000 --host 0.0.0.0",
     "test": "playwright test",
     "test:e2e": "playwright test tests/e2e",
-    "test:contract": "playwright test tests/contract"
+    "test:contract": "playwright test tests/contract",
+    "validate:scenarios": "node scripts/validate-scenarios.mjs",
+    "pretest": "npm run validate:scenarios",
+    "pretest:contract": "npm run validate:scenarios",
+    "pretest:e2e": "npm run validate:scenarios"
   },
   "dependencies": {
     "react": "^18.3.1",
