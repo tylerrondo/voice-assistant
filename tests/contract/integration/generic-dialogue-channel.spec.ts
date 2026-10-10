@@ -131,6 +131,7 @@ test.describe('CONTRACT: SC-INTEGRATION-004 Generic Dialogue Channel Contract Su
     const serviceScenario: ScenarioDefinition = {
       id: 'service-booking',
       intent: 'BOOK_SERVICE',
+      priority: 10,
       triggerPhrases: ['book service'],
       requiredSlots: ['date', 'selected_service'],
       candidateBinding: {
@@ -212,6 +213,7 @@ test.describe('CONTRACT: SC-INTEGRATION-004 Generic Dialogue Channel Contract Su
     const approvalScenario: ScenarioDefinition = {
       id: 'custom-approval-scenario',
       intent: 'CUSTOM_ORDER',
+      triggerPhrases: ['custom order'],
       requiredSlots: ['target_item', 'approval'],
       confirmation: {
         slot: 'approval',
@@ -224,7 +226,11 @@ test.describe('CONTRACT: SC-INTEGRATION-004 Generic Dialogue Channel Contract Su
     };
 
     const userAppr = { ownerId: 'u-appr', sessionId: 's-appr' };
+    vc.registerScenarioSet({ version: 1, id: 'custom-approval-set', scenarios: [approvalScenario] });
     const adapter = new MockGenericChannelAdapter(engine);
+
+    // Establish context via the scenario's registered trigger before using buttons.
+    await adapter.send({ modality: 'text', raw_input: 'custom order' }, userAppr, approvalScenario);
 
     // 1. Fill target_item
     const resPrompt = await adapter.send({ modality: 'button', payload: { slotName: 'target_item', slotValue: 'item-777' } }, userAppr, approvalScenario);
