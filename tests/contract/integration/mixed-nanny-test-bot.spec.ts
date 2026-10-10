@@ -122,10 +122,10 @@ test.describe('MIXED-NANNY-TEST-BOT: one dialogue state across Telegram buttons,
 
     const context = dm.getActiveState(identity);
     expect(context).not.toBeNull();
-    context!.offers = [
-      { id: 'nanny-82', name: 'Мария', index: 1, status: 'AVAILABLE' },
-      { id: 'nanny-93', name: 'Анна', index: 2, status: 'AVAILABLE' }
-    ];
+    expect(dm.setOffersForContext(context!.contextId, [
+      { offerId: 'nanny-82', id: 'nanny-82', name: 'Мария', index: 1, driver: 'Мария', vehicleType: 'nanny', etaMinutes: 0, price: 0, distanceKm: 0, status: 'AVAILABLE' },
+      { offerId: 'nanny-93', id: 'nanny-93', name: 'Анна', index: 2, driver: 'Анна', vehicleType: 'nanny', etaMinutes: 0, price: 0, distanceKm: 0, status: 'AVAILABLE' }
+    ] as any, identity)).toBe(true);
 
     voiceTranscript = 'вторая';
     await bot.handleUpdate(updateVoice());
@@ -147,10 +147,13 @@ test.describe('MIXED-NANNY-TEST-BOT: one dialogue state across Telegram buttons,
 
   test('cancel through voice cancels the same context created by the menu command', async () => {
     await bot.handleUpdate(updateText('/order_nanny'));
+    const contextId = dm.getActiveState(identity)?.contextId;
+    expect(contextId).toBeTruthy();
+
     voiceTranscript = 'отмена';
     await bot.handleUpdate(updateVoice());
 
-    expect(dm.getActiveState(identity)).toBeNull();
+    expect(dm.getContext(contextId!, identity)?.status).toBe('CANCELLED');
     expect(dispatched).toHaveLength(0);
     expect(telegram.getLastMessage()?.text).toContain('отмен');
   });
