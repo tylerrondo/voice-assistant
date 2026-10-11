@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
+import { fileURLToPath } from 'node:url';
 import { DialogueStateManager } from '../../../src/platform/dialogue-manager';
 import { VoiceChannel } from '../../../src/platform/voice-channel';
 
@@ -15,7 +16,7 @@ test.describe('CONTRACT: SC-PASS-001 Passenger Order Multi-turn Dialogue Suite',
   let dispatcherCalls: number;
 
   test.beforeAll(() => {
-    const jsonPath = path.resolve(__dirname, '../../../scenario-passenger-order.json');
+    const jsonPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../scenario-passenger-order.json');
     scenarioSet = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
   });
 
