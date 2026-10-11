@@ -42,6 +42,20 @@ test.describe('CONTRACT: PLATFORM-011 Ambiguous Input Policy Suite', () => {
     }
   });
 
+  test('CONTRACT-03A: Numeric order IDs must match whole tokens, not substrings', async () => {
+    const dm = new DialogueStateManager();
+    const ctxA = dm.createContext('ACCEPT_ORDER', { orderId: 1001 }, ['orderId', 'payment'], 'driver.order.accepted', {}, identity);
+    const ctxB = dm.createContext('ACCEPT_ORDER', { orderId: 10010 }, ['orderId', 'payment'], 'driver.order.accepted', {}, identity);
+
+    const result = dm.resolveRouting('заказ 10010', [], identity);
+
+    expect(result.status).toBe('RESOLVED');
+    if (result.status === 'RESOLVED') {
+      expect(result.contextId).toBe(ctxB.contextId);
+      expect(result.contextId).not.toBe(ctxA.contextId);
+    }
+  });
+
   test('CONTRACT-04: Ambiguity produces zero execution in DialogueStateManager', async () => {
     const dm = new DialogueStateManager();
     dm.createContext('ACCEPT_ORDER', { orderId: 1001 }, ['orderId', 'payment'], 'driver.order.accepted', {}, identity);
