@@ -126,8 +126,15 @@ export class VoiceChannel {
     if (!scenarioSet || !Array.isArray(scenarioSet.scenarios)) {
       throw new Error('CONTRACT_VIOLATION: Invalid ScenarioSet structure');
     }
+    if (typeof scenarioSet.id !== 'string' || !scenarioSet.id.trim()) {
+      throw new Error('CONTRACT_VIOLATION: ScenarioSet missing valid id');
+    }
 
     const seenIds = new Set<string>();
+    const triggerOwners = new Map<string, string>();
+
+    const normalizeTrigger = (value: string): string =>
+      value.replace(/^voice\./i, '').replace(/[-_]/g, ' ').toLowerCase().trim().replace(/\s+/g, ' ');
 
     for (const sc of scenarioSet.scenarios) {
       if (!sc.id || typeof sc.id !== 'string') {
@@ -141,16 +148,33 @@ export class VoiceChannel {
       if (!sc.intent || typeof sc.intent !== 'string') {
         throw new Error(`CONTRACT_VIOLATION: Scenario "${sc.id}" missing intent`);
       }
-    }
+      if (sc.priority !== undefined && !Number.isFinite(sc.priority)) {
+        throw new Error(`CONTRACT_VIOLATION: Scenario "${sc.id}" priority must be a finite number`);
+      }
 
-    for (const sc of scenarioSet.scenarios) {
-      const idx = this.scenarioRegistry.findIndex(s => s.id === sc.id);
-      if (idx >= 0) {
-        this.scenarioRegistry[idx] = sc;
-      } else {
-        this.scenarioRegistry.push(sc);
+      const triggers = [
+        sc.activation?.value,
+        ...(Array.isArray(sc.triggerPhrases) ? sc.triggerPhrases : []),
+        ...(Array.isArray(sc.aliases) ? sc.aliases : [])
+      ].filter((value): value is string => typeof value === 'string' && value.trim().length > 0);
+
+      for (const trigger of triggers) {
+        const normalized = normalizeTrigger(trigger);
+        const owner = triggerOwners.get(normalized);
+        if (owner && owner !== sc.id) {
+          throw new Error(`CONTRACT_VIOLATION: Trigger or alias collision "${normalized}" between scenarios "${owner}" and "${sc.id}"`);
+        }
+        triggerOwners.set(normalized, sc.id);
       }
     }
+
+    // Validate the entire set before mutating the active registry. A bad replacement
+    // must leave the previous, working set available.
+    this.scenarioRegistry = scenarioSet.scenarios.map(sc => ({
+      ...sc,
+      triggerPhrases: sc.triggerPhrases ? [...sc.triggerPhrases] : undefined,
+      aliases: sc.aliases ? [...sc.aliases] : undefined
+    }));
     this.activeScenarioSetId = scenarioSet.id;
   }
 
@@ -240,14 +264,27 @@ export class VoiceChannel {
       return { status: 'RESOLVED', slots: {} };
     }
 
-    const resolvedSlots: Record<string, any> = {};
+    type MatchCandidate = {
+      slotName: string;
+      value: any;
+      matchedText: string;
+      priority: number;
+    };
+    const candidates: MatchCandidate[] = [];
 
-    for (const [slotKey, extractor] of Object.entries(extractors)) {
-      if (extractor.rules && Array.isArray(extractor.rules)) {
+    const addCandidate = (slotName: string, value: any, matchedText: string, priority = 0) => {
+      if (!matchedText) return;
+      candidates.push({ slotName, value, matchedText: matchedText.toLocaleLowerCase(), priority });
+    };
+
+    for (const [slotName, extractor] of Object.entries(extractors)) {
+      const priority = Number.isFinite(extractor.priority) ? Number(extractor.priority) : 0;
+      let found = false;
+
+      if (Array.isArray(extractor.rules)) {
         for (const rule of extractor.rules) {
-          // JavaScript's \\b is ASCII-only and does not recognize Cyrillic letters.
-          // Scenario rules use paired \\b boundaries, so translate them to Unicode letter/digit
-          // lookarounds before compiling. This keeps the scenario JSON portable and unchanged.
+          // JavaScript's \\b is ASCII-only for Cyrillic. Translate paired boundaries
+          // to Unicode letter/digit lookarounds without changing the declarative JSON.
           let boundaryIndex = 0;
           const unicodePattern = rule.pattern.replace(/\\b/g, () => {
             const isLeftBoundary = boundaryIndex++ % 2 === 0;
@@ -255,46 +292,84 @@ export class VoiceChannel {
               ? '(?<![\\p{L}\\p{N}_])'
               : '(?![\\p{L}\\p{N}_])';
           });
-          if (new RegExp(unicodePattern, 'iu').test(text)) {
-            resolvedSlots[slotKey] = rule.value;
+          const match = new RegExp(unicodePattern, 'iu').exec(text);
+          if (match) {
+            addCandidate(slotName, rule.value, match[0], priority);
+            found = true;
             break;
           }
         }
       } else if (extractor.type === 'enum') {
-        if (extractor.patterns && Array.isArray(extractor.patterns)) {
-          for (const pat of extractor.patterns) {
-            const match = text.match(new RegExp(pat, 'i'));
+        if (Array.isArray(extractor.patterns)) {
+          for (const pattern of extractor.patterns) {
+            const match = new RegExp(pattern, 'iu').exec(text);
             if (match) {
-              resolvedSlots[slotKey] = 'CONFIRMED';
+              addCandidate(slotName, 'CONFIRMED', match[0], priority);
+              found = true;
               break;
             }
           }
         } else if (extractor.mapping) {
           for (const [enumValue, synonyms] of Object.entries(extractor.mapping)) {
-            if (synonyms.some(synonym => text.includes(synonym.toLowerCase()))) {
-              resolvedSlots[slotKey] = enumValue;
+            const synonym = synonyms.find(item => text.toLocaleLowerCase().includes(item.toLocaleLowerCase()));
+            if (synonym) {
+              addCandidate(slotName, enumValue, synonym, priority);
+              found = true;
               break;
             }
           }
         }
-      } else if (extractor.type === 'integer' && extractor.pattern) {
-        const match = text.match(new RegExp(extractor.pattern, 'i'));
+      } else if (extractor.pattern) {
+        const match = new RegExp(extractor.pattern, 'iu').exec(text);
         if (match) {
-          resolvedSlots[slotKey] = parseInt(match[0], 10);
-        }
-      } else if (extractor.type === 'string' && extractor.pattern) {
-        const match = text.match(new RegExp(extractor.pattern, 'i'));
-        if (match) {
-          resolvedSlots[slotKey] = match[0];
+          const value = extractor.type === 'integer' ? Number.parseInt(match[0], 10) : match[0];
+          if (extractor.type !== 'integer' || Number.isFinite(value)) {
+            addCandidate(slotName, value, match[0], priority);
+            found = true;
+          }
         }
       }
+
+      // Keep this explicit: an extractor that did not match must not create an empty slot.
+      void found;
     }
 
-    if (Object.keys(resolvedSlots).length === 0) {
+    if (candidates.length === 0) {
       return { status: 'NO_MATCH' };
     }
 
-    return { status: 'RESOLVED', slots: resolvedSlots };
+    // Extractors that matched the same text compete for that value. Highest priority
+    // wins; an equal-priority tie is reported as ambiguity instead of using object order.
+    const byMatchedText = new Map<string, MatchCandidate[]>();
+    for (const candidate of candidates) {
+      const group = byMatchedText.get(candidate.matchedText) || [];
+      group.push(candidate);
+      byMatchedText.set(candidate.matchedText, group);
+    }
+
+    const slots: Record<string, any> = {};
+    for (const group of byMatchedText.values()) {
+      const maxPriority = Math.max(...group.map(candidate => candidate.priority));
+      const highest = group
+        .filter(candidate => candidate.priority === maxPriority)
+        .sort((a, b) => a.slotName.localeCompare(b.slotName));
+
+      if (highest.length > 1) {
+        return {
+          status: 'AMBIGUOUS_SLOT',
+          candidates: highest.map(candidate => ({
+            slotName: candidate.slotName,
+            value: candidate.value,
+            scenarioId
+          })),
+          clarificationPrompt: ambiguityPromptTemplate
+        };
+      }
+
+      slots[highest[0].slotName] = highest[0].value;
+    }
+
+    return { status: 'RESOLVED', slots };
   }
 
   // Pure generic evaluation of query/comparison descriptors (100% Domain-Agnostic)
