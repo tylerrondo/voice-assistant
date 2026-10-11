@@ -718,7 +718,7 @@ export class VoiceChannel {
       const activeCtx = activeWaiting[0];
       const newScenario = intentRes.scenario;
       const normalize = (value: string) =>
-        value.replace(/^voice\\./i, '').replace(/[-_]/g, ' ').toLowerCase().trim().replace(/\\s+/g, ' ');
+        value.replace(/^voice\./i, '').replace(/[-_]/g, ' ').toLowerCase().trim().replace(/\s+/g, ' ');
       const activationTriggers = [
         newScenario.activation?.value,
         newScenario.expectedPhrase,
