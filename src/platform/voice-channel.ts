@@ -750,18 +750,72 @@ export class VoiceChannel {
         }
       }
     } else if (activeWaiting.length > 1) {
-      const anyScenario = this.scenarioRegistry.find(s => s.slotExtractors);
-      if (anyScenario?.slotExtractors) {
-        const testSlot = this.extractSlotsDeterministically(text, anyScenario.slotExtractors, anyScenario.id);
-        if (testSlot.status === 'RESOLVED') {
-          const hasCandidateSlot = Object.values(testSlot.slots).some(v => typeof v === 'number' || (typeof v === 'string' && v.includes('ambiguous')));
-          if (hasCandidateSlot) {
-            return {
-              status: 'AMBIGUOUS_CONTEXT',
-              candidateContextIds: activeWaiting.map(c => c.contextId)
-            };
-          }
+      const contextMatches: Array<{
+        contextId: string;
+        slotNames: string[];
+        candidates: Array<{ slotName: string; value: any; scenarioId: string }>;
+        clarificationPrompt?: string;
+        ambiguousSlot: boolean;
+      }> = [];
+
+      for (const ctx of activeWaiting) {
+        const scenario = (ctx.scenarioId ? this.scenarioRegistry.find(s => s.id === ctx.scenarioId) : undefined)
+          || this.getDeterministicScenarioForIntent(ctx.intent);
+        if (!scenario?.slotExtractors) continue;
+
+        const extraction = this.extractSlotsDeterministically(
+          text,
+          scenario.slotExtractors,
+          scenario.id,
+          scenario.ambiguityPrompt?.template
+        );
+
+        if (extraction.status === 'AMBIGUOUS_SLOT') {
+          contextMatches.push({
+            contextId: ctx.contextId,
+            slotNames: [...new Set(extraction.candidates.map(candidate => candidate.slotName))],
+            candidates: extraction.candidates,
+            clarificationPrompt: extraction.clarificationPrompt,
+            ambiguousSlot: true
+          });
+          continue;
         }
+
+        if (extraction.status !== 'RESOLVED') continue;
+        const matchingSlots = Object.entries(extraction.slots)
+          .filter(([slotName]) => ctx.missingSlots.includes(slotName) || ctx.slots[slotName] !== undefined);
+        if (matchingSlots.length === 0) continue;
+
+        contextMatches.push({
+          contextId: ctx.contextId,
+          slotNames: matchingSlots.map(([slotName]) => slotName),
+          candidates: matchingSlots.map(([slotName, value]) => ({ slotName, value, scenarioId: scenario.id })),
+          clarificationPrompt: scenario.ambiguityPrompt?.template,
+          ambiguousSlot: false
+        });
+      }
+
+      if (contextMatches.length > 1) {
+        const slotNames = [...new Set(contextMatches.flatMap(match => match.slotNames))];
+        if (slotNames.length > 1) {
+          return {
+            status: 'AMBIGUOUS_SLOT',
+            candidates: contextMatches.flatMap(match => match.candidates),
+            clarificationPrompt: contextMatches.find(match => match.clarificationPrompt)?.clarificationPrompt
+          };
+        }
+        return {
+          status: 'AMBIGUOUS_CONTEXT',
+          candidateContextIds: contextMatches.map(match => match.contextId)
+        };
+      }
+
+      if (contextMatches.length === 1 && contextMatches[0].ambiguousSlot) {
+        return {
+          status: 'AMBIGUOUS_SLOT',
+          candidates: contextMatches[0].candidates,
+          clarificationPrompt: contextMatches[0].clarificationPrompt
+        };
       }
     }
 
