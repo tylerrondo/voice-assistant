@@ -40,7 +40,31 @@
         "принять заказ",
         "принимаю заказ",
         "беру заказ"
-      ]
+      ],
+      "slotExtractors": {
+        "orderId": {
+          "type": "integer",
+          "pattern": "\\\\b\\\\d+\\\\b",
+          "priority": 100
+        },
+        "payment": {
+          "type": "enum",
+          "mapping": {
+            "card": [
+              "картой",
+              "карта",
+              "безнал",
+              "card"
+            ],
+            "cash": [
+              "наличными",
+              "наличка",
+              "cash"
+            ]
+          },
+          "priority": 100
+        }
+      }
     }
   ]
 }
