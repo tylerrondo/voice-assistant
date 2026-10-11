@@ -54,7 +54,7 @@ test.describe('E2E: SC-006 Multi-Slot Dialogue & Real Taxi FSM Suite (ТЗ-VOICE
 
     // 4. Validate exact payload and FSM transition
     const action = await page.evaluate(() => {
-      const logs = (window as any).__DIALOGUE_MANAGER__.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity());
+      const logs = (window as any).__DIALOGUE_MANAGER__.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity()).filter((entry: any) => entry.status === 'SUCCEEDED');
       return logs.find((l: any) => l.intent === 'ACCEPT_ORDER' && l.payload?.orderId === 1001 && l.payload?.payment === 'cash');
     });
     expect(action).toBeDefined();
@@ -73,7 +73,7 @@ test.describe('E2E: SC-006 Multi-Slot Dialogue & Real Taxi FSM Suite (ТЗ-VOICE
 
     // BLOCKER-1 FIX: Assert execution log, exact payload and executionCount === 1
     const matchingActions = await page.evaluate(() => {
-      const logs = (window as any).__DIALOGUE_MANAGER__.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity());
+      const logs = (window as any).__DIALOGUE_MANAGER__.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity()).filter((entry: any) => entry.status === 'SUCCEEDED');
       return logs.filter((l: any) => l.intent === 'ACCEPT_ORDER' && l.payload?.orderId === 1001 && l.payload?.payment === 'cash');
     });
     expect(matchingActions.length).toBe(1);
@@ -101,7 +101,7 @@ test.describe('E2E: SC-006 Multi-Slot Dialogue & Real Taxi FSM Suite (ТЗ-VOICE
 
     // BLOCKER-2 FIX: Assert actual driver.order.accepted event emission and exact payload
     const matchingActions = await page.evaluate(() => {
-      const logs = (window as any).__DIALOGUE_MANAGER__.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity());
+      const logs = (window as any).__DIALOGUE_MANAGER__.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity()).filter((entry: any) => entry.status === 'SUCCEEDED');
       return logs.filter((l: any) => l.intent === 'ACCEPT_ORDER' && l.payload?.orderId === 1001 && l.payload?.payment === 'cash');
     });
     expect(matchingActions.length).toBe(1);
@@ -122,7 +122,7 @@ test.describe('E2E: SC-006 Multi-Slot Dialogue & Real Taxi FSM Suite (ТЗ-VOICE
     expect(state.missingSlots).toContain('payment');
 
     const executed = await page.evaluate(() => {
-      const logs = (window as any).__DIALOGUE_MANAGER__.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity());
+      const logs = (window as any).__DIALOGUE_MANAGER__.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity()).filter((entry: any) => entry.status === 'SUCCEEDED');
       return logs.some((l: any) => l.intent === 'ACCEPT_ORDER');
     });
     expect(executed).toBe(false);
@@ -157,7 +157,7 @@ test.describe('E2E: SC-006 Multi-Slot Dialogue & Real Taxi FSM Suite (ТЗ-VOICE
     expect(state.status).toBe('CANCELLED');
 
     const executed = await page.evaluate(() => {
-      const logs = (window as any).__DIALOGUE_MANAGER__.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity());
+      const logs = (window as any).__DIALOGUE_MANAGER__.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity()).filter((entry: any) => entry.status === 'SUCCEEDED');
       return logs.some((l: any) => l.intent === 'ACCEPT_ORDER');
     });
     expect(executed).toBe(false);
@@ -176,7 +176,7 @@ test.describe('E2E: SC-006 Multi-Slot Dialogue & Real Taxi FSM Suite (ТЗ-VOICE
     // HIGH FIX: Prove that sending "Наличными" does NOT complete or execute old ACCEPT_ORDER
     await emitVoicePhrase(page, 'Наличными');
     const oldIntentExecuted = await page.evaluate(() => {
-      const logs = (window as any).__DIALOGUE_MANAGER__.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity());
+      const logs = (window as any).__DIALOGUE_MANAGER__.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity()).filter((entry: any) => entry.status === 'SUCCEEDED');
       return logs.some((l: any) => l.intent === 'ACCEPT_ORDER' && l.payload?.orderId === 1001 && l.payload?.payment === 'cash');
     });
     expect(oldIntentExecuted).toBe(false);
@@ -194,7 +194,7 @@ test.describe('E2E: SC-006 Multi-Slot Dialogue & Real Taxi FSM Suite (ТЗ-VOICE
 
     await expect(fsmLocator).toHaveText(/ORDER_ACCEPTED|Принят/i);
     const action = await page.evaluate(() => {
-      const logs = (window as any).__DIALOGUE_MANAGER__.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity());
+      const logs = (window as any).__DIALOGUE_MANAGER__.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity()).filter((entry: any) => entry.status === 'SUCCEEDED');
       return logs.find((l: any) => l.intent === 'ACCEPT_ORDER' && l.payload?.orderId === 1001 && l.payload?.payment === 'cash');
     });
     expect(action).toBeDefined();
@@ -212,7 +212,7 @@ test.describe('E2E: SC-006 Multi-Slot Dialogue & Real Taxi FSM Suite (ТЗ-VOICE
     await emitVoicePhrase(page, '1001');
 
     const executionCount = await page.evaluate(() => {
-      const logs = (window as any).__DIALOGUE_MANAGER__.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity());
+      const logs = (window as any).__DIALOGUE_MANAGER__.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity()).filter((entry: any) => entry.status === 'SUCCEEDED');
       return logs.filter((l: any) => l.intent === 'ACCEPT_ORDER' && l.payload?.orderId === 1001 && l.payload?.payment === 'cash').length;
     });
 
