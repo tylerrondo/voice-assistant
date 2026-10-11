@@ -42,7 +42,7 @@ test.describe('CONTRACT: PLATFORM-010 Multi-Context Session Manager Suite', () =
     const ctxA = dm.createContext('ACCEPT_ORDER', { orderId: 1001 }, ['orderId', 'payment'], 'driver.order.accepted', {}, identity);
     const ctxB = dm.createContext('ACCEPT_ORDER', { orderId: 1002 }, ['orderId', 'payment'], 'driver.order.accepted', {}, identity);
 
-    dm.cancelContext(ctxA.contextId, identity);
+    await dm.cancelContext(ctxA.contextId, identity);
     expect(dm.getContext(ctxA.contextId, identity)?.status).toBe('CANCELLED');
     expect(dm.getContext(ctxB.contextId, identity)?.status).toBe('WAITING_FOR_SLOT');
   });
@@ -52,7 +52,7 @@ test.describe('CONTRACT: PLATFORM-010 Multi-Context Session Manager Suite', () =
     const ctxA = dm.createContext('ACCEPT_ORDER', { orderId: 1001 }, ['orderId', 'payment'], 'driver.order.accepted', {}, identity);
     const ctxB = dm.createContext('ACCEPT_ORDER', { orderId: 1002 }, ['orderId', 'payment'], 'driver.order.accepted', {}, identity);
 
-    dm.expireContext(ctxA.contextId, identity);
+    await dm.expireContext(ctxA.contextId, identity);
     expect(dm.getContext(ctxA.contextId, identity)?.status).toBe('EXPIRED');
     expect(dm.getContext(ctxB.contextId, identity)?.status).toBe('WAITING_FOR_SLOT');
   });
@@ -60,7 +60,7 @@ test.describe('CONTRACT: PLATFORM-010 Multi-Context Session Manager Suite', () =
   test('CONTRACT-06: Execution log contains contextId and strict actionType without fallback', async () => {
     const dm = new DialogueStateManager();
     const ctxA = dm.createContext('ACCEPT_ORDER', { orderId: 1001 }, ['orderId', 'payment'], 'driver.order.accepted', {}, identity);
-    dm.fillSlot('payment', 'card', ctxA.contextId, identity);
+    await dm.fillSlot('payment', 'card', ctxA.contextId, identity);
 
     const logs = dm.getExecutionLogs(identity);
     expect(logs.length).toBe(1);
@@ -74,10 +74,10 @@ test.describe('CONTRACT: PLATFORM-010 Multi-Context Session Manager Suite', () =
     const ctxA = dm.createContext('ACCEPT_ORDER', { orderId: 1001 }, ['orderId', 'payment'], 'driver.order.accepted', {}, identity);
     const ctxB = dm.createContext('ACCEPT_ORDER', { orderId: 1002 }, ['orderId', 'payment'], 'driver.order.accepted', {}, identity);
 
-    dm.fillSlot('payment', 'card', ctxA.contextId, identity);
-    dm.fillSlot('payment', 'card', ctxA.contextId, identity); // duplicate
+    await dm.fillSlot('payment', 'card', ctxA.contextId, identity);
+    await dm.fillSlot('payment', 'card', ctxA.contextId, identity); // duplicate
 
-    dm.fillSlot('payment', 'cash', ctxB.contextId, identity);
+    await dm.fillSlot('payment', 'cash', ctxB.contextId, identity);
 
     const logs = dm.getExecutionLogs(identity);
     const matchA = logs.filter(l => l.contextId === ctxA.contextId);
