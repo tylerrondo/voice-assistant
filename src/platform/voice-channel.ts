@@ -764,18 +764,76 @@ export class VoiceChannel {
         }
       }
     } else if (activeWaiting.length > 1 && intentRes.status === 'NO_MATCH') {
-      const anyScenario = this.scenarioRegistry.find(s => s.slotExtractors);
-      if (anyScenario?.slotExtractors) {
-        const testSlot = this.extractSlotsDeterministically(text, anyScenario.slotExtractors, anyScenario.id);
-        if (testSlot.status === 'RESOLVED') {
-          const hasCandidateSlot = Object.values(testSlot.slots).some(v => typeof v === 'number' || (typeof v === 'string' && v.includes('ambiguous')));
-          if (hasCandidateSlot) {
-            return {
-              status: 'AMBIGUOUS_CONTEXT',
-              candidateContextIds: activeWaiting.map(c => c.contextId)
-            };
+      const slotMatches: Array<{ contextId: string; slotName: string; value: any; scenarioId: string }> = [];
+
+      for (const activeCtx of activeWaiting) {
+        const scenario = this.scenarioRegistry.find(s => s.id === activeCtx.scenarioId)
+          || this.getDeterministicScenarioForIntent(activeCtx.intent);
+        if (!scenario?.slotExtractors) continue;
+
+        const slotResult = this.extractSlotsDeterministically(
+          text,
+          scenario.slotExtractors,
+          scenario.id,
+          scenario.ambiguityPrompt?.template
+        );
+
+        if (slotResult.status === 'AMBIGUOUS_SLOT') {
+          return slotResult;
+        }
+
+        if (slotResult.status === 'RESOLVED') {
+          for (const [slotName, value] of Object.entries(slotResult.slots)) {
+            if (activeCtx.missingSlots.includes(slotName) || activeCtx.slots[slotName] !== undefined) {
+              slotMatches.push({ contextId: activeCtx.contextId, slotName, value, scenarioId: scenario.id });
+            }
           }
         }
+      }
+
+      const matchedContextIds = [...new Set(slotMatches.map(match => match.contextId))];
+      if (matchedContextIds.length > 1) {
+        const distinctSlots = [...new Set(slotMatches.map(match => match.slotName))];
+        if (distinctSlots.length > 1) {
+          return {
+            status: 'AMBIGUOUS_SLOT',
+            candidates: slotMatches.map(({ slotName, value, scenarioId }) => ({ slotName, value, scenarioId }))
+          };
+        }
+        return {
+          status: 'AMBIGUOUS_CONTEXT',
+          candidateContextIds: matchedContextIds
+        };
+      }
+
+      if (matchedContextIds.length === 1) {
+        const targetContextId = matchedContextIds[0];
+        let updatedContext: DialogueContext | null = null;
+
+        for (const match of slotMatches.filter(item => item.contextId === targetContextId)) {
+          const fillResult = await this.dialogueManager.fillSlot(
+            match.slotName,
+            match.value,
+            targetContextId,
+            identity
+          );
+          if (fillResult.success && fillResult.data) updatedContext = fillResult.data;
+        }
+
+        const latestContext = this.dialogueManager.getContext(targetContextId, identity);
+        if (updatedContext && latestContext && latestContext.missingSlots.length === 0 && !latestContext.requiredSlots?.includes('confirmation')) {
+          const execution = this.dialogueManager.createExecution(latestContext, identity);
+          const dispatchResult = await this.dialogueManager.dispatchAction(execution.executionId, latestContext.slots, identity);
+          return {
+            status: dispatchResult.status,
+            contextId: latestContext.contextId,
+            executionId: execution.executionId,
+            attempt: dispatchResult.attempt,
+            context: this.dialogueManager.getContext(latestContext.contextId, identity)
+          };
+        }
+
+        return latestContext || updatedContext;
       }
     }
 
