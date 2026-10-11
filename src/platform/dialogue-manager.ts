@@ -584,7 +584,8 @@ export class DialogueStateManager {
   public createExecution(
     ctx: DialogueContext,
     identity: SessionIdentity,
-    providedExecutionId?: string
+    providedExecutionId?: string,
+    payloadOverride?: Record<string, any>
   ): ActionExecution {
     this.validateIdentity(identity);
     if (ctx.ownerId !== identity.ownerId || ctx.sessionId !== identity.sessionId) {
@@ -611,7 +612,8 @@ export class DialogueStateManager {
       const sameOwner = existing.ownerId === identity.ownerId && existing.sessionId === identity.sessionId;
       const sameCtx = existing.contextId === ctx.contextId;
       const sameAction = existing.actionType === authoritativeCtx.actionType;
-      const samePayload = JSON.stringify(existing.payload) === JSON.stringify(authoritativeCtx.slots);
+      const expectedPayload = { ...(payloadOverride || {}), ...authoritativeCtx.slots };
+      const samePayload = JSON.stringify(existing.payload) === JSON.stringify(expectedPayload);
 
       if (sameOwner && sameCtx && sameAction && samePayload) {
         return existing;
@@ -631,7 +633,7 @@ export class DialogueStateManager {
       scenarioId: authoritativeCtx.scenarioId || 'sc-default',
       intent: authoritativeCtx.intent,
       actionType: authoritativeCtx.actionType,
-      payload: { ...authoritativeCtx.slots },
+      payload: { ...(payloadOverride || {}), ...authoritativeCtx.slots },
       status: 'PENDING',
       attempt: 0,
       createdAt: now,
