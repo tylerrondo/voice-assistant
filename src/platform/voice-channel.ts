@@ -238,7 +238,17 @@ export class VoiceChannel {
     for (const [slotKey, extractor] of Object.entries(extractors)) {
       if (extractor.rules && Array.isArray(extractor.rules)) {
         for (const rule of extractor.rules) {
-          if (new RegExp(rule.pattern, 'i').test(text)) {
+          // JavaScript's \\b is ASCII-only and does not recognize Cyrillic letters.
+          // Scenario rules use paired \\b boundaries, so translate them to Unicode letter/digit
+          // lookarounds before compiling. This keeps the scenario JSON portable and unchanged.
+          let boundaryIndex = 0;
+          const unicodePattern = rule.pattern.replace(/\\\\b/g, () => {
+            const isLeftBoundary = boundaryIndex++ % 2 === 0;
+            return isLeftBoundary
+              ? '(?<![\\p{L}\\p{N}_])'
+              : '(?![\\p{L}\\p{N}_])';
+          });
+          if (new RegExp(unicodePattern, 'iu').test(text)) {
             resolvedSlots[slotKey] = rule.value;
             break;
           }
