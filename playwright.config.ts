@@ -4,7 +4,7 @@ export default defineConfig({
   testDir: './tests',
   testMatch: ['**/*.spec.ts'],
   // Ignore accidentally nested copies of test suites (e.g. tests/e2e/scenarios/tests/...).
-  testIgnore: ['**/tests/**'],
+  testIgnore: ['**/tests/**/tests/**'],
   fullyParallel: false,
   workers: 1,
   retries: 0,
