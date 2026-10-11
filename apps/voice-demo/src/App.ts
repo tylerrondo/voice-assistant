@@ -494,7 +494,7 @@ export function mountApp(root: HTMLElement, runtime: any, authenticatedIdentity:
       updateScenarioMetadata();
       const hasVoiceIntents = parsed.scenarios.every((scenario: any) => typeof scenario.intent === 'string');
       if (hasVoiceIntents) {
-        runtime.voiceChannel.registerScenarioSet(parsed);
+        runtime.voiceChannel.registerScenarioSet(parsed, true);
         (window as any).__SCENARIO_ENGINE__ = scenarioEngineFacade;
       }
       updateInjectActions();
