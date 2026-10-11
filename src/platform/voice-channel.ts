@@ -626,9 +626,16 @@ export class VoiceChannel {
     const isCandidateSelectionIntent = intentRes.status === 'RESOLVED' && !!intentRes.scenario.candidateBinding;
 
     if (isCandidateSelectionIntent && activeWaiting.length > 1) {
+      const contextLabels = activeWaiting.map(ctx =>
+        Object.entries(ctx.slots)
+          .filter(([, value]) => value !== undefined && value !== null)
+          .map(([key, value]) => `${key} ${String(value)}`)
+          .join(', ') || ctx.contextId
+      );
       return {
         status: 'AMBIGUOUS_CONTEXT',
-        candidateContextIds: activeWaiting.map(ctx => ctx.contextId)
+        candidateContextIds: activeWaiting.map(ctx => ctx.contextId),
+        clarificationPrompt: `Уточните, к какому контексту относится ответ: ${contextLabels.join(' или ')}`
       };
     }
 
@@ -800,9 +807,18 @@ export class VoiceChannel {
             candidates: slotMatches.map(({ slotName, value, scenarioId }) => ({ slotName, value, scenarioId }))
           };
         }
+        const contextLabels = activeWaiting
+          .filter(ctx => matchedContextIds.includes(ctx.contextId))
+          .map(ctx =>
+            Object.entries(ctx.slots)
+              .filter(([, value]) => value !== undefined && value !== null)
+              .map(([key, value]) => `${key} ${String(value)}`)
+              .join(', ') || ctx.contextId
+          );
         return {
           status: 'AMBIGUOUS_CONTEXT',
-          candidateContextIds: matchedContextIds
+          candidateContextIds: matchedContextIds,
+          clarificationPrompt: `Уточните, к какому контексту относится ответ: ${contextLabels.join(' или ')}`
         };
       }
 
