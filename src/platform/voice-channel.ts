@@ -795,6 +795,7 @@ export class VoiceChannel {
                 const dispatchRes = await this.dialogueManager.dispatchAction(exec.executionId, exec.payload, identity);
                 return {
                   status: dispatchRes.status === 'SUCCEEDED' ? 'COMPLETED' : dispatchRes.status,
+                  intent: updated.intent,
                   contextId: updated.contextId,
                   executionId: exec.executionId,
                   attempt: dispatchRes.attempt,
@@ -828,6 +829,7 @@ export class VoiceChannel {
             const dispatchResult = await this.dialogueManager.dispatchAction(execution.executionId, execution.payload, identity);
             return {
               status: dispatchResult.status === 'SUCCEEDED' ? 'COMPLETED' : dispatchResult.status,
+              intent: currentCtx.intent,
               contextId: currentCtx.contextId,
               executionId: execution.executionId,
               attempt: dispatchResult.attempt,
@@ -949,6 +951,7 @@ export class VoiceChannel {
         const dispatchRes = await this.dialogueManager.dispatchAction(exec.executionId, exec.payload, identity);
         return {
           status: dispatchRes.status === 'SUCCEEDED' ? 'COMPLETED' : dispatchRes.status,
+          intent: ctx.intent,
           contextId: ctx.contextId,
           executionId: exec.executionId,
           attempt: dispatchRes.attempt,

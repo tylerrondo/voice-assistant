@@ -88,8 +88,10 @@ export class PlatformFsmExecutionBoundary {
         this.activeOrderId = Number(orderIdValue);
         break;
       default:
-        // Generic domain events are accepted and recorded; driver.* events remain
-        // governed by the explicit FSM transition table above.
+        if (event.type.startsWith('driver.')) {
+          return { status: 'FAILED' as const, executionId: exec.executionId, errorCode: 'UNKNOWN_DRIVER_EVENT', attempt: exec.attempt };
+        }
+        // Generic non-driver domain events are accepted and recorded.
         break;
     }
 

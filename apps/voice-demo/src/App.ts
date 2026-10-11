@@ -73,6 +73,7 @@ export function mountApp(root: HTMLElement, runtime: any, authenticatedIdentity:
   const form = root.querySelector<HTMLFormElement>('#voice-command-form');
 
   let pendingScenarioSetId: string | null = null;
+  let isScenarioLoading = false;
   let activeScenarioSet: ScenarioSet | null = null;
   let pendingScenarioLoad: Promise<void> = Promise.resolve();
 
@@ -115,12 +116,14 @@ export function mountApp(root: HTMLElement, runtime: any, authenticatedIdentity:
 
       const fileMatch = file.name.match(/^scenario-(.+)\.json$/i);
       pendingScenarioSetId = fileMatch ? `scenario-set-${fileMatch[1]}` : null;
+      isScenarioLoading = true;
       pendingScenarioLoad = file.text().then(raw => {
         const scenarioSet = JSON.parse(raw) as ScenarioSet;
         runtime.voiceChannel.registerScenarioSet(scenarioSet);
         activeScenarioSet = scenarioSet;
         pendingScenarioSetId = scenarioSet.id;
         if (title) title.textContent = scenarioSet.name || scenarioSet.id;
+        isScenarioLoading = false;
         renderRuntimeState();
       });
     });
@@ -139,7 +142,7 @@ export function mountApp(root: HTMLElement, runtime: any, authenticatedIdentity:
   if (typeof window !== 'undefined') {
     (window as any).__VOICE_DEMO_APP__ = app;
     (window as any).__SCENARIO_ENGINE__ = {
-      getActiveScenarioSetId: () => pendingScenarioSetId || runtime.voiceChannel.getActiveScenarioSetId(),
+      getActiveScenarioSetId: () => isScenarioLoading ? pendingScenarioSetId : runtime.voiceChannel.getActiveScenarioSetId(),
       getActiveScenarioSetName: () => activeScenarioSet?.name || null
     };
     (window as any).__DISPATCH_VOICE_COMMAND__ = (phrase: string) =>
