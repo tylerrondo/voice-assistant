@@ -242,7 +242,7 @@ export class VoiceChannel {
           // Scenario rules use paired \\b boundaries, so translate them to Unicode letter/digit
           // lookarounds before compiling. This keeps the scenario JSON portable and unchanged.
           let boundaryIndex = 0;
-          const unicodePattern = rule.pattern.replace(/\\\\b/g, () => {
+          const unicodePattern = rule.pattern.replace(/\\b/g, () => {
             const isLeftBoundary = boundaryIndex++ % 2 === 0;
             return isLeftBoundary
               ? '(?<![\\p{L}\\p{N}_])'
