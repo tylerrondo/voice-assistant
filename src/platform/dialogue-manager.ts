@@ -305,6 +305,10 @@ export class DialogueStateManager {
       this.timerMap.delete(contextId);
     }, ttlMs);
 
+    // In Node-based test runners, expiry timers must not keep the process alive
+    // after the suite has completed. Browsers do not expose unref(), so this is
+    // a no-op there and leaves normal runtime expiry unchanged.
+    (timer as any).unref?.();
     this.timerMap.set(contextId, timer);
   }
 
