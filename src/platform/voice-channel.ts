@@ -273,14 +273,13 @@ export class VoiceChannel {
     };
     const candidates: MatchCandidate[] = [];
 
-    const addCandidate = (slotName: string, value: any, matchedText: string, priority = 0) => {
+    const addCandidate = (slotName: string, value: any, matchedText: string, priority: number) => {
       if (!matchedText) return;
       candidates.push({ slotName, value, matchedText: matchedText.toLocaleLowerCase(), priority });
     };
 
     for (const [slotName, extractor] of Object.entries(extractors)) {
       const priority = Number.isFinite(extractor.priority) ? Number(extractor.priority) : 0;
-      let found = false;
 
       if (Array.isArray(extractor.rules)) {
         for (const rule of extractor.rules) {
@@ -296,27 +295,23 @@ export class VoiceChannel {
           const match = new RegExp(unicodePattern, 'iu').exec(text);
           if (match) {
             addCandidate(slotName, rule.value, match[0], priority);
-            found = true;
-            break;
           }
         }
       } else if (extractor.type === 'enum') {
         if (Array.isArray(extractor.patterns)) {
           for (const pattern of extractor.patterns) {
             const match = new RegExp(pattern, 'iu').exec(text);
-            if (match) {
-              addCandidate(slotName, 'CONFIRMED', match[0], priority);
-              found = true;
-              break;
-            }
+            if (match) addCandidate(slotName, 'CONFIRMED', match[0], priority);
           }
         } else if (extractor.mapping) {
           for (const [enumValue, synonyms] of Object.entries(extractor.mapping)) {
-            const synonym = synonyms.find(item => text.toLocaleLowerCase().includes(item.toLocaleLowerCase()));
-            if (synonym) {
-              addCandidate(slotName, enumValue, synonym, priority);
-              found = true;
-              break;
+            const matchedSynonyms = synonyms
+              .filter(synonym => text.toLocaleLowerCase().includes(synonym.toLocaleLowerCase()))
+              .sort((a, b) => b.length - a.length);
+            // Keep the most specific synonym for each enum value. If different values
+            // share the same best phrase (e.g. "терминал"), the ambiguity is preserved.
+            if (matchedSynonyms.length > 0) {
+              addCandidate(slotName, enumValue, matchedSynonyms[0], priority);
             }
           }
         }
@@ -326,50 +321,78 @@ export class VoiceChannel {
           const value = extractor.type === 'integer' ? Number.parseInt(match[0], 10) : match[0];
           if (extractor.type !== 'integer' || Number.isFinite(value)) {
             addCandidate(slotName, value, match[0], priority);
-            found = true;
           }
         }
       }
-
-      // Keep this explicit: an extractor that did not match must not create an empty slot.
-      void found;
     }
 
     if (candidates.length === 0) {
       return { status: 'NO_MATCH' };
     }
 
-    // Extractors that matched the same text compete for that value. Highest priority
-    // wins; an equal-priority tie is reported as ambiguity instead of using object order.
-    const byMatchedText = new Map<string, MatchCandidate[]>();
+    // First resolve competition inside each slot. The most specific matching phrase
+    // wins; equally specific, equally prioritized different values are ambiguous.
+    const bySlot = new Map<string, MatchCandidate[]>();
     for (const candidate of candidates) {
-      const group = byMatchedText.get(candidate.matchedText) || [];
+      const group = bySlot.get(candidate.slotName) || [];
       group.push(candidate);
-      byMatchedText.set(candidate.matchedText, group);
+      bySlot.set(candidate.slotName, group);
     }
 
-    const slots: Record<string, any> = {};
-    for (const group of byMatchedText.values()) {
+    const slotWinners: MatchCandidate[] = [];
+    for (const group of bySlot.values()) {
       const maxPriority = Math.max(...group.map(candidate => candidate.priority));
-      const highest = group
-        .filter(candidate => candidate.priority === maxPriority)
-        .sort((a, b) => a.slotName.localeCompare(b.slotName));
+      const priorityWinners = group.filter(candidate => candidate.priority === maxPriority);
+      const maxSpecificity = Math.max(...priorityWinners.map(candidate => candidate.matchedText.length));
+      const specificWinners = priorityWinners.filter(candidate => candidate.matchedText.length === maxSpecificity);
+      const distinctValues = new Map<string, MatchCandidate>();
+      for (const candidate of specificWinners) {
+        const key = JSON.stringify(candidate.value);
+        if (!distinctValues.has(key)) distinctValues.set(key, candidate);
+      }
 
-      if (highest.length > 1) {
+      if (distinctValues.size > 1) {
         return {
           status: 'AMBIGUOUS_SLOT',
-          candidates: highest.map(candidate => ({
-            slotName: candidate.slotName,
-            value: candidate.value,
-            scenarioId
-          })),
+          candidates: [...distinctValues.values()]
+            .sort((a, b) => String(a.value).localeCompare(String(b.value)))
+            .map(candidate => ({ slotName: candidate.slotName, value: candidate.value, scenarioId })),
           clarificationPrompt: ambiguityPromptTemplate
         };
       }
-
-      slots[highest[0].slotName] = highest[0].value;
+      slotWinners.push([...distinctValues.values()][0]);
     }
 
+    // Then detect cross-slot ambiguity: the same utterance matching multiple slots
+    // at the same priority must not be resolved by object insertion order.
+    const byPhrase = new Map<string, MatchCandidate[]>();
+    for (const candidate of slotWinners) {
+      const group = byPhrase.get(candidate.matchedText) || [];
+      group.push(candidate);
+      byPhrase.set(candidate.matchedText, group);
+    }
+
+    const ambiguousGroup = [...byPhrase.values()].find(group => {
+      if (group.length < 2) return false;
+      const maxPriority = Math.max(...group.map(candidate => candidate.priority));
+      return group.filter(candidate => candidate.priority === maxPriority).length > 1;
+    });
+    if (ambiguousGroup) {
+      const maxPriority = Math.max(...ambiguousGroup.map(candidate => candidate.priority));
+      return {
+        status: 'AMBIGUOUS_SLOT',
+        candidates: ambiguousGroup
+          .filter(candidate => candidate.priority === maxPriority)
+          .sort((a, b) => a.slotName.localeCompare(b.slotName))
+          .map(candidate => ({ slotName: candidate.slotName, value: candidate.value, scenarioId })),
+        clarificationPrompt: ambiguityPromptTemplate
+      };
+    }
+
+    const slots: Record<string, any> = {};
+    for (const candidate of slotWinners) {
+      slots[candidate.slotName] = candidate.value;
+    }
     return { status: 'RESOLVED', slots };
   }
 
