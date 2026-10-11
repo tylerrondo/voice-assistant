@@ -804,13 +804,28 @@ export class VoiceChannel {
             || activeCtx.missingSlots.includes('confirmation');
 
           if (updatedCtxState && currentCtx && currentCtx.missingSlots.length === 0 && !requiresConfirmation) {
+            if (!this.dialogueManager.hasActionDispatcher()) {
+              await this.dialogueManager.handleSystemEvent(
+                currentCtx.contextId,
+                { type: 'DIALOGUE_COMPLETED', targetTransition: 'COMPLETE' },
+                identity
+              );
+              return {
+                status: 'COMPLETED',
+                contextId: currentCtx.contextId,
+                slots: currentCtx.slots,
+                context: this.dialogueManager.getContext(currentCtx.contextId, identity)
+              };
+            }
+
             const execution = this.dialogueManager.createExecution(currentCtx, identity);
             const dispatchResult = await this.dialogueManager.dispatchAction(execution.executionId, currentCtx.slots, identity);
             return {
-              status: dispatchResult.status,
+              status: dispatchResult.status === 'SUCCEEDED' ? 'COMPLETED' : dispatchResult.status,
               contextId: currentCtx.contextId,
               executionId: execution.executionId,
               attempt: dispatchResult.attempt,
+              slots: currentCtx.slots,
               context: this.dialogueManager.getContext(currentCtx.contextId, identity)
             };
           }
