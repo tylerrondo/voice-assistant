@@ -5,8 +5,9 @@ export default defineConfig({
   testMatch: ['**/*.spec.ts'],
   // Ignore accidentally nested copies of test suites (e.g. tests/e2e/scenarios/tests/...).
   testIgnore: ['**/tests/**/tests/**'],
-  fullyParallel: false,
-  workers: 1,
+  fullyParallel: true,
+  workers: process.env.CI ? 4 : 1,
+  timeout: 15000,
   retries: 0,
   reporter: [
     ['list'],
