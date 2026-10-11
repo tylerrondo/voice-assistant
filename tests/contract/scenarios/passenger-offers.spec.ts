@@ -26,7 +26,7 @@ test.describe('CONTRACT: SC-PASS-002 Multi-Offer Dialogue & Selection Suite', ()
     scenarioSet = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
   });
 
-  test.beforeEach(() => {
+  test.test.beforeEach(() => {
     dispatcherCalls = 0;
     dm = new DialogueStateManager({
       actionDispatcher: async (event, ctx, exec) => {
