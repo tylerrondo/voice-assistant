@@ -262,6 +262,9 @@ export class DialogueStateManager {
       if (outcome.targetStatus) {
         ctx.status = outcome.targetStatus;
       }
+      if (['COMPLETED', 'CANCELLED', 'EXPIRED'].includes(ctx.status) && this.activeContextId === contextId) {
+        this.activeContextId = null;
+      }
 
       return {
         success: true as const,
@@ -804,7 +807,13 @@ export class DialogueStateManager {
     });
 
     this.contextMutationQueues.set(contextId, dispatchPromise);
-    return dispatchPromise;
+    return dispatchPromise.then(result => {
+      const current = this.contexts.get(contextId);
+      if (current && ['COMPLETED', 'CANCELLED', 'EXPIRED'].includes(current.status) && this.activeContextId === contextId) {
+        this.activeContextId = null;
+      }
+      return result;
+    });
   }
 
   public async reconcileExecution(
