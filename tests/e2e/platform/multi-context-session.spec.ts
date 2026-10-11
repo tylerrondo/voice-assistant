@@ -39,7 +39,7 @@ test.describe('E2E: PLATFORM-010 Multi-Context Session Manager Runtime Suite', (
 
     const contexts = await page.evaluate(() => {
       const dm = (window as any).__DIALOGUE_MANAGER__;
-      return dm?.listContexts() || [];
+      return dm?.listContexts((window as any).__VOICE_DEMO_APP__.getIdentity()) || [];
     });
 
     expect(contexts.length).toBe(2);
@@ -58,7 +58,7 @@ test.describe('E2E: PLATFORM-010 Multi-Context Session Manager Runtime Suite', (
     await emitVoicePhrase(page, 'Прими заказ 1001');
     await emitVoicePhrase(page, 'Прими заказ 1002');
 
-    const contextsBefore = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.listContexts());
+    const contextsBefore = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.listContexts((window as any).__VOICE_DEMO_APP__.getIdentity()));
     const idA = contextsBefore.find((c: any) => c.slots.orderId === 1001).contextId;
     const idB = contextsBefore.find((c: any) => c.slots.orderId === 1002).contextId;
 
@@ -71,7 +71,7 @@ test.describe('E2E: PLATFORM-010 Multi-Context Session Manager Runtime Suite', (
     await emitVoicePhrase(page, 'Наличными');
 
     // 4. Assert execution correlation with exact contextId
-    const logs = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getExecutionLogs());
+    const logs = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity()));
     const match1001 = logs.filter((l: any) => l.contextId === idA);
     const match1002 = logs.filter((l: any) => l.contextId === idB);
 
@@ -92,17 +92,17 @@ test.describe('E2E: PLATFORM-010 Multi-Context Session Manager Runtime Suite', (
     await emitVoicePhrase(page, 'Прими заказ 1001');
     await emitVoicePhrase(page, 'Прими заказ 1002');
 
-    const contexts = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.listContexts());
+    const contexts = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.listContexts((window as any).__VOICE_DEMO_APP__.getIdentity()));
     const idA = contexts.find((c: any) => c.slots.orderId === 1001).contextId;
     const idB = contexts.find((c: any) => c.slots.orderId === 1002).contextId;
 
     await emitVoicePhrase(page, 'Заказ 1001');
-    let activeState = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getActiveState());
+    let activeState = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getActiveState((window as any).__VOICE_DEMO_APP__.getIdentity()));
     expect(activeState.contextId).toBe(idA);
     expect(activeState.slots.orderId).toBe(1001);
 
     await emitVoicePhrase(page, 'Заказ 1002');
-    activeState = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getActiveState());
+    activeState = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getActiveState((window as any).__VOICE_DEMO_APP__.getIdentity()));
     expect(activeState.contextId).toBe(idB);
     expect(activeState.slots.orderId).toBe(1002);
   });
@@ -116,7 +116,7 @@ test.describe('E2E: PLATFORM-010 Multi-Context Session Manager Runtime Suite', (
     await emitVoicePhrase(page, 'Заказ 1001');
     await emitVoicePhrase(page, 'Отмена');
 
-    const contexts = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.listContexts());
+    const contexts = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.listContexts((window as any).__VOICE_DEMO_APP__.getIdentity()));
     const ctxA = contexts.find((c: any) => c.slots.orderId === 1001);
     const ctxB = contexts.find((c: any) => c.slots.orderId === 1002);
 
@@ -132,11 +132,11 @@ test.describe('E2E: PLATFORM-010 Multi-Context Session Manager Runtime Suite', (
 
     await page.evaluate(() => {
       const dm = (window as any).__DIALOGUE_MANAGER__;
-      const ctxA = dm.listContexts().find((c: any) => c.slots.orderId === 1001);
+      const ctxA = dm.listContexts((window as any).__VOICE_DEMO_APP__.getIdentity()).find((c: any) => c.slots.orderId === 1001);
       if (ctxA) dm.expireContext(ctxA.contextId);
     });
 
-    const contexts = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.listContexts());
+    const contexts = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.listContexts((window as any).__VOICE_DEMO_APP__.getIdentity()));
     const ctxA = contexts.find((c: any) => c.slots.orderId === 1001);
     const ctxB = contexts.find((c: any) => c.slots.orderId === 1002);
 
@@ -150,7 +150,7 @@ test.describe('E2E: PLATFORM-010 Multi-Context Session Manager Runtime Suite', (
     await emitVoicePhrase(page, 'Прими заказ 1001');
     await emitVoicePhrase(page, 'Прими заказ 1002');
 
-    const contexts = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.listContexts());
+    const contexts = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.listContexts((window as any).__VOICE_DEMO_APP__.getIdentity()));
     const idA = contexts.find((c: any) => c.slots.orderId === 1001).contextId;
     const idB = contexts.find((c: any) => c.slots.orderId === 1002).contextId;
 
@@ -161,7 +161,7 @@ test.describe('E2E: PLATFORM-010 Multi-Context Session Manager Runtime Suite', (
     await emitVoicePhrase(page, 'Заказ 1002');
     await emitVoicePhrase(page, 'Картой'); // Same payment slot on 1002
 
-    const logs = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getExecutionLogs());
+    const logs = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity()));
     const matchA = logs.filter((l: any) => l.contextId === idA);
     const matchB = logs.filter((l: any) => l.contextId === idB);
 
@@ -181,7 +181,7 @@ test.describe('E2E: PLATFORM-010 Multi-Context Session Manager Runtime Suite', (
     await emitVoicePhrase(page, 'Заказ 1002');
     await emitVoicePhrase(page, 'Наличными');
 
-    const logs = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getExecutionLogs());
+    const logs = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity()));
 
     const contaminated1001Cash = logs.filter((l: any) => l.event.payload.orderId === 1001 && l.event.payload.payment === 'cash');
     const contaminated1002Card = logs.filter((l: any) => l.event.payload.orderId === 1002 && l.event.payload.payment === 'card');
