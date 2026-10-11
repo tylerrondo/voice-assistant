@@ -131,7 +131,7 @@ export class VoiceChannel {
     }
 
     const seenIds = new Set<string>();
-    const triggerOwners = new Map<string, string>();
+    const triggerOwners = new Map<string, Array<{ id: string; priority: number }>>();
 
     const normalizeTrigger = (value: string): string =>
       value.replace(/^voice\./i, '').replace(/[-_]/g, ' ').toLowerCase().trim().replace(/\s+/g, ' ');
@@ -160,11 +160,16 @@ export class VoiceChannel {
 
       for (const trigger of triggers) {
         const normalized = normalizeTrigger(trigger);
-        const owner = triggerOwners.get(normalized);
-        if (owner && owner !== sc.id) {
-          throw new Error(`CONTRACT_VIOLATION: Trigger or alias collision "${normalized}" between scenarios "${owner}" and "${sc.id}"`);
+        const owners = triggerOwners.get(normalized) || [];
+        const priority = sc.priority ?? 0;
+        const conflictingOwner = owners.find(owner => owner.id !== sc.id && owner.priority === priority);
+        if (conflictingOwner) {
+          throw new Error(`CONTRACT_VIOLATION: Trigger or alias collision "${normalized}" between scenarios "${conflictingOwner.id}" and "${sc.id}"`);
         }
-        triggerOwners.set(normalized, sc.id);
+        if (!owners.some(owner => owner.id === sc.id)) {
+          owners.push({ id: sc.id, priority });
+        }
+        triggerOwners.set(normalized, owners);
       }
     }
 
