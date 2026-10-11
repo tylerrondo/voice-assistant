@@ -118,6 +118,7 @@ export class VoiceChannel {
   private dialogueManager: DialogueStateManager;
   private scenarioRegistry: ScenarioDefinition[] = [];
   private activeScenarioSetId: string = '';
+  private activeScenarioIds: Set<string> = new Set();
 
   constructor(dialogueManager: DialogueStateManager) {
     this.dialogueManager = dialogueManager;
@@ -192,6 +193,7 @@ export class VoiceChannel {
       }
     }
     this.scenarioRegistry = nextRegistry;
+    this.activeScenarioIds = new Set(scenarioSet.scenarios.map(sc => sc.id));
     this.activeScenarioSetId = scenarioSet.id;
   }
 
@@ -219,7 +221,7 @@ export class VoiceChannel {
     const matchingScenarios: ScenarioDefinition[] = [];
     const fullyMatchedScenarioIds = new Set<string>();
 
-    for (const sc of this.scenarioRegistry) {
+    for (const sc of this.scenarioRegistry.filter(scenario => this.activeScenarioIds.has(scenario.id))) {
       const triggers: string[] = [];
       if (sc.activation?.value) triggers.push(sc.activation.value);
       if (sc.expectedPhrase) triggers.push(sc.expectedPhrase);
