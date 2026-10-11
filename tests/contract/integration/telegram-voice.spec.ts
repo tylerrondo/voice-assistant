@@ -9,7 +9,7 @@ import { MockSTTProvider } from '../../../src/platform/stt-provider';
 import { TelegramVoiceTransport } from '../../../src/platform/telegram-voice-transport';
 import { MockTelegramFileProvider } from './helpers/telegram-helpers';
 
-// ES Modules: __dirname does not exist, so we compute the folder of this file.
+// ES Modules: path.dirname(fileURLToPath(import.meta.url)) does not exist, so we compute the folder of this file.
 const testDir = path.dirname(fileURLToPath(import.meta.url));
 
 test.describe('CONTRACT: SC-INTEGRATION-002 Real Telegram Voice Input + STT Integration Suite', () => {
