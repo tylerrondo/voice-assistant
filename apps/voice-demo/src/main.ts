@@ -97,7 +97,8 @@ export class PlatformFsmExecutionBoundary {
 
     if (nextStatus) {
       this.driverStatus = nextStatus;
-      if (orderId !== null && Number.isFinite(orderId)) {
+      // Driver availability is a driver state, not an order state transition.
+      if (event.type !== 'driver.available' && orderId !== null && Number.isFinite(orderId)) {
         this.activeOrders.set(orderId, {
           status: nextStatus,
           executionId: exec.executionId,
