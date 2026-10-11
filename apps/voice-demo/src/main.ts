@@ -93,8 +93,5 @@ export const productionActionDispatcher: ActionDispatcher = async (event, ctx, e
   return platformExecutionBoundary.execute(event, exec);
 };
 
-// Start application with resolved authenticated session
-const sessionIdentity = getAuthenticatedSessionIdentity();
-const runtime = bootstrap(productionActionDispatcher);
-const root = document.querySelector<HTMLElement>("#app") || document.body;
-mountApp(root, runtime, sessionIdentity);
+// Application startup is owned by src/main.ts. Keep this module side-effect-free
+// so importing the execution boundary cannot bootstrap a second runtime.
