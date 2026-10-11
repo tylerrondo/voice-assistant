@@ -572,8 +572,10 @@ export class VoiceChannel {
               }
 
               if (candidateResolution.status === 'CANDIDATE_UNAVAILABLE') {
+                // Keep the resolver's generic status internal, but expose the
+                // passenger-offer contract status at the voice-channel boundary.
                 return {
-                  status: 'CANDIDATE_UNAVAILABLE',
+                  status: 'OFFER_UNAVAILABLE',
                   targetId: candidateResolution.targetId,
                   offerId: candidateResolution.targetId,
                   message: candidateResolution.message
