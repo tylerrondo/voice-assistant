@@ -1063,6 +1063,34 @@ export class VoiceChannel {
 
       const initialSlots = slotRes.status === 'RESOLVED' ? slotRes.slots : {};
 
+      // A repeated explicit activation with the same fully specified entity must
+      // not dispatch the already-completed action a second time in this session.
+      // Only suppress it when the earlier context has a successful execution log;
+      // failed/unknown executions remain eligible for the existing recovery path.
+      const hasAllRequiredSlots = requiredSlots.every(slot => initialSlots[slot] !== undefined);
+      if (hasAllRequiredSlots && requiredSlots.length > 0) {
+        const completedDuplicate = this.dialogueManager.listContexts(identity).find(context =>
+          context.status === 'COMPLETED' &&
+          context.scenarioId === sc.id &&
+          requiredSlots.every(slot => context.slots[slot] === initialSlots[slot])
+        );
+        if (completedDuplicate) {
+          const priorSuccess = this.dialogueManager.getExecutionLogs(identity).find(entry =>
+            entry.contextId === completedDuplicate.contextId && entry.status === 'SUCCEEDED'
+          );
+          if (priorSuccess) {
+            return {
+              status: 'COMPLETED',
+              intent: completedDuplicate.intent,
+              contextId: completedDuplicate.contextId,
+              executionId: priorSuccess.executionId,
+              context: completedDuplicate,
+              duplicate: true
+            };
+          }
+        }
+      }
+
       const ctx = this.dialogueManager.createContext(
         sc.intent,
         initialSlots,
