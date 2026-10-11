@@ -804,9 +804,17 @@ export class VoiceChannel {
             clarificationPrompt: contextMatches.find(match => match.clarificationPrompt)?.clarificationPrompt
           };
         }
+        const matchedContexts = contextMatches
+          .map(match => this.dialogueManager.getContext(match.contextId, identity))
+          .filter((ctx): ctx is DialogueContext => ctx !== undefined);
+        const labels = matchedContexts.map(ctx => {
+          const orderId = ctx.slots.orderId ?? ctx.slots.order_id;
+          return orderId !== undefined ? `заказ ${orderId}` : ctx.intent;
+        });
         return {
           status: 'AMBIGUOUS_CONTEXT',
-          candidateContextIds: contextMatches.map(match => match.contextId)
+          candidateContextIds: contextMatches.map(match => match.contextId),
+          clarificationPrompt: `Уточните, пожалуйста, к какому заказу относится ответ: ${labels.join(' или ')}`
         };
       }
 
