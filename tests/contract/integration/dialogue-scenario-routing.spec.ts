@@ -120,7 +120,7 @@ test.describe('CONTRACT: SC-INTEGRATION-005 Generic Dialogue Scenario Routing & 
     }, freshUser);
 
     expect(res.status).toBe('SCENARIO_NOT_FOUND');
-    expect(dm.getActiveState(freshUser)).toBeUndefined();
+    expect(dm.getActiveState(freshUser)).toBeNull();
   });
 
   test('SR-06: Independent Service Scenario routes correctly without nanny terminology', async () => {
@@ -151,7 +151,7 @@ test.describe('CONTRACT: SC-INTEGRATION-005 Generic Dialogue Scenario Routing & 
     expect(ctx?.scenarioId).toBe('book-service');
   });
 
-  test('SR-07: Ambiguous Scenario returns SCENARIO_AMBIGUOUS without arbitrary choice', async () => {
+  test('SR-07: Duplicate trigger registration is rejected instead of creating runtime ambiguity', async () => {
     const ambiguousSet: ScenarioSet = {
       version: 1,
       id: 'ambiguous-set',
@@ -171,13 +171,10 @@ test.describe('CONTRACT: SC-INTEGRATION-005 Generic Dialogue Scenario Routing & 
         }
       ]
     };
-    vc.registerScenarioSet(ambiguousSet);
 
-    const userAmb = { ownerId: 'u-amb', sessionId: 's-amb' };
-    const res = await engine.processInput({ modality: 'text', raw_input: 'помощь' }, userAmb);
-
-    expect(res.status).toBe('SCENARIO_AMBIGUOUS');
-    expect(dm.getActiveState(userAmb)).toBeUndefined();
+    expect(() => vc.registerScenarioSet(ambiguousSet))
+      .toThrow(/CONTRACT_VIOLATION.*Trigger or alias collision/);
+    expect(vc.getActiveScenarioSetId()).toBe(nannyScenarioSet.id);
   });
 
   test('SR-08: Priority Resolution selects scenario with highest priority via VoiceChannel.resolveIntent', async () => {
@@ -213,7 +210,7 @@ test.describe('CONTRACT: SC-INTEGRATION-005 Generic Dialogue Scenario Routing & 
     const res = await engine.processInput({ modality: 'text', raw_input: 'расскажи анекдот' }, userNo);
 
     expect(res.status).toBe('SCENARIO_NOT_FOUND');
-    expect(dm.getActiveState(userNo)).toBeUndefined();
+    expect(dm.getActiveState(userNo)).toBeNull();
   });
 
   test('SR-10: Telegram Adapter handleUpdate does not receive Scenario parameter', async () => {
