@@ -768,7 +768,23 @@ export class VoiceChannel {
             }
           }
 
-          return updatedCtxState || this.dialogueManager.getContext(activeCtx.contextId, identity);
+          const currentCtx = this.dialogueManager.getContext(activeCtx.contextId, identity);
+          const requiresConfirmation = scenario.requiredSlots?.includes('confirmation')
+            || activeCtx.missingSlots.includes('confirmation');
+
+          if (updatedCtxState && currentCtx && currentCtx.missingSlots.length === 0 && !requiresConfirmation) {
+            const execution = this.dialogueManager.createExecution(currentCtx, identity);
+            const dispatchResult = await this.dialogueManager.dispatchAction(execution.executionId, currentCtx.slots, identity);
+            return {
+              status: dispatchResult.status,
+              contextId: currentCtx.contextId,
+              executionId: execution.executionId,
+              attempt: dispatchResult.attempt,
+              context: this.dialogueManager.getContext(currentCtx.contextId, identity)
+            };
+          }
+
+          return updatedCtxState || currentCtx;
         }
       }
     } else if (activeWaiting.length > 1) {
