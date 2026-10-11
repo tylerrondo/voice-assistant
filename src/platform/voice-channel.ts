@@ -758,10 +758,13 @@ export class VoiceChannel {
       });
 
       if (explicitActivation && activeCtx.scenarioId !== newScenario.id) {
-        // A new intent must not be interpreted as a slot answer for an unrelated
-        // pending dialogue. Close the sole pending dialogue before routing the new intent.
-        await this.dialogueManager.cancelContext(activeCtx.contextId, identity);
-        this.explicitContextSelections.delete(sessionKey);
+        // A no-slot command supersedes the sole pending dialogue. A new slot-filling
+        // scenario must preserve both contexts so the next utterance can be resolved
+        // explicitly or reported as ambiguous.
+        if (!newScenario.requiredSlots || newScenario.requiredSlots.length === 0) {
+          await this.dialogueManager.cancelContext(activeCtx.contextId, identity);
+          this.explicitContextSelections.delete(sessionKey);
+        }
         activeWaiting = [];
       } else if (explicitActivation && activeCtx.scenarioId === newScenario.id && newScenario.slotExtractors) {
         const extractedStart = this.extractSlotsDeterministically(text, newScenario.slotExtractors, newScenario.id);
