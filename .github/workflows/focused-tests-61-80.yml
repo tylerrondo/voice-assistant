@@ -1,0 +1,31 @@
+name: Focused Tests 61-80 — Taxi Dialogue E2E
+
+on:
+  push:
+    branches: [sc-integration-005]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+jobs:
+  focused-e2e-61-80:
+    timeout-minutes: 15
+    runs-on: ubuntu-latest
+    env:
+      APP_URL: http://localhost:3000
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+      - name: Run focused taxi dialogue regression tests
+        run: >
+          npx playwright test
+          tests/e2e/scenarios/sc-005-taxi-driver-full-trip.spec.ts
+          tests/e2e/scenarios/sc-006-taxi-driver-multi-slot.spec.ts
+          tests/e2e/scenarios/sc-007-taxi-driver-context-isolation.spec.ts
