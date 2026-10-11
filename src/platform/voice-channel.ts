@@ -67,6 +67,7 @@ export interface ScenarioDefinition {
     value: string;
   };
   triggerPhrases?: string[];
+  expectedPhrase?: string;
   aliases?: string[];
   priority?: number;
   intent: string;
@@ -154,6 +155,7 @@ export class VoiceChannel {
 
       const triggers = [
         sc.activation?.value,
+        sc.expectedPhrase,
         ...(Array.isArray(sc.triggerPhrases) ? sc.triggerPhrases : []),
         ...(Array.isArray(sc.aliases) ? sc.aliases : [])
       ].filter((value): value is string => typeof value === 'string' && value.trim().length > 0);
@@ -220,6 +222,7 @@ export class VoiceChannel {
     for (const sc of this.scenarioRegistry) {
       const triggers: string[] = [];
       if (sc.activation?.value) triggers.push(sc.activation.value);
+      if (sc.expectedPhrase) triggers.push(sc.expectedPhrase);
       if (Array.isArray(sc.triggerPhrases)) triggers.push(...sc.triggerPhrases);
       if (Array.isArray(sc.aliases)) triggers.push(...sc.aliases);
 
@@ -667,6 +670,7 @@ export class VoiceChannel {
           value.replace(/^voice\./i, '').replace(/[-_]/g, ' ').toLowerCase().trim().replace(/\s+/g, ' ');
         const activationTriggers = [
           newScenario.activation?.value,
+          newScenario.expectedPhrase,
           ...(newScenario.triggerPhrases || []),
           ...(newScenario.aliases || [])
         ].filter((value): value is string => typeof value === 'string' && value.trim().length > 0);
