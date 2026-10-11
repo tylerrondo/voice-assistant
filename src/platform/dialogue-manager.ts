@@ -262,8 +262,14 @@ export class DialogueStateManager {
       if (outcome.targetStatus) {
         ctx.status = outcome.targetStatus;
       }
-      if (['COMPLETED', 'CANCELLED', 'EXPIRED'].includes(ctx.status) && this.activeContextId === contextId) {
-        this.activeContextId = null;
+      if (['COMPLETED', 'CANCELLED', 'EXPIRED'].includes(ctx.status)) {
+        if (this.timerMap.has(contextId)) {
+          clearTimeout(this.timerMap.get(contextId));
+          this.timerMap.delete(contextId);
+        }
+        if (this.activeContextId === contextId) {
+          this.activeContextId = null;
+        }
       }
 
       return {
@@ -748,6 +754,10 @@ export class DialogueStateManager {
           if (result.status === 'SUCCEEDED') {
             execution.status = 'SUCCEEDED';
             ctx.status = 'COMPLETED';
+            if (this.timerMap.has(contextId)) {
+              clearTimeout(this.timerMap.get(contextId));
+              this.timerMap.delete(contextId);
+            }
             ctx.version += 1;
             ctx.updatedAt = Date.now();
             return result;
