@@ -623,10 +623,20 @@ export class VoiceChannel {
 
     // 3. Declarative Active Context Processing
     const activeWaiting = this.dialogueManager.listContexts(identity).filter(c => c.status === 'WAITING_FOR_SLOT');
+    const isCandidateSelectionIntent = intentRes.status === 'RESOLVED' && !!intentRes.scenario.candidateBinding;
 
-    // A phrase that resolves to a scenario is a new activation, not a slot value
-    // for the currently active scenario. This allows parallel contexts for repeated orders.
-    if (activeWaiting.length === 1 && intentRes.status === 'NO_MATCH') {
+    if (isCandidateSelectionIntent && activeWaiting.length > 1) {
+      return {
+        status: 'AMBIGUOUS_CONTEXT',
+        candidateContextIds: activeWaiting.map(ctx => ctx.contextId)
+      };
+    }
+
+    // A resolved activation starts a new context, except when it is an explicit
+    // candidate-selection intent for the one active context that owns the offers.
+    const isSelectionForActiveContext =
+      isCandidateSelectionIntent && activeWaiting.length === 1 && !!activeWaiting[0].offers?.length;
+    if (activeWaiting.length === 1 && (intentRes.status === 'NO_MATCH' || isSelectionForActiveContext)) {
       const activeCtx = activeWaiting[0];
       const scenario = (activeCtx.scenarioId ? this.scenarioRegistry.find(s => s.id === activeCtx.scenarioId) : undefined)
         || this.getDeterministicScenarioForIntent(activeCtx.intent);
