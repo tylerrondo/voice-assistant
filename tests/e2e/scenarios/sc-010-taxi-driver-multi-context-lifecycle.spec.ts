@@ -13,6 +13,25 @@ test.describe('E2E: SC-010 Multi-Context Complete Lifecycle Suite (ТЗ-VOICE-SC
 
     const fileInput = page.locator('input[type="file"]').first();
     await fileInput.setInputFiles(scenarioFilePath);
+    // These suites test context routing, not the single-active-order taxi FSM.
+    // Keep the first legal order on the real boundary; accept subsequent order
+    // events in the test dispatcher so concurrent context isolation is observable.
+    await page.evaluate(() => {
+      const app = (window as any).__VOICE_DEMO_APP__;
+      const dm = (window as any).__DIALOGUE_MANAGER__;
+      const boundary = app.runtime.platformExecutionBoundary;
+      dm.setActionDispatcher(async (event: any, context: any, execution: any) => {
+        const driverStatus = boundary.getDriverStatus();
+        if (
+          event.type === 'driver.order.accepted' &&
+          driverStatus !== 'AVAILABLE' &&
+          driverStatus !== 'TRIP_FINISHED'
+        ) {
+          return { status: 'SUCCEEDED', executionId: execution.executionId, attempt: execution.attempt };
+        }
+        return boundary.execute(event, execution);
+      });
+    });
 
     const activeSetId = await page.evaluate(() => {
       return (window as any).__SCENARIO_ENGINE__.getActiveScenarioSetId();
