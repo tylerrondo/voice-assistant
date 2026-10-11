@@ -680,7 +680,18 @@ export class VoiceChannel {
 
               if (candidateResolution.status === 'RESOLVED' && candidateResolution.targetId) {
                 const fillRes = await this.dialogueManager.fillSlot(targetSlot, candidateResolution.targetId, activeCtx.contextId, identity);
-                if (fillRes.success) {
+                if (fillRes.success && fillRes.data) {
+                  if (fillRes.data.missingSlots.length === 0 && !fillRes.data.requiredSlots?.includes('confirmation')) {
+                    const execution = this.dialogueManager.createExecution(fillRes.data, identity);
+                    const dispatchRes = await this.dialogueManager.dispatchAction(execution.executionId, fillRes.data.slots, identity);
+                    return {
+                      status: dispatchRes.status,
+                      contextId: fillRes.data.contextId,
+                      executionId: execution.executionId,
+                      attempt: dispatchRes.attempt,
+                      context: this.dialogueManager.getContext(fillRes.data.contextId, identity)
+                    };
+                  }
                   return fillRes.data;
                 }
               }
@@ -727,7 +738,19 @@ export class VoiceChannel {
             }
           }
 
-          return updatedCtxState || this.dialogueManager.getContext(activeCtx.contextId, identity);
+          const latestCtx = this.dialogueManager.getContext(activeCtx.contextId, identity) || activeCtx;
+          if (updatedCtxState && latestCtx.missingSlots.length === 0 && !latestCtx.requiredSlots?.includes('confirmation')) {
+            const execution = this.dialogueManager.createExecution(latestCtx, identity);
+            const dispatchRes = await this.dialogueManager.dispatchAction(execution.executionId, latestCtx.slots, identity);
+            return {
+              status: dispatchRes.status,
+              contextId: latestCtx.contextId,
+              executionId: execution.executionId,
+              attempt: dispatchRes.attempt,
+              context: this.dialogueManager.getContext(latestCtx.contextId, identity)
+            };
+          }
+          return updatedCtxState || latestCtx;
         }
       }
     } else if (activeWaiting.length > 1 && intentRes.status === 'NO_MATCH') {
