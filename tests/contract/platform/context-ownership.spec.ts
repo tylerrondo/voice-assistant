@@ -20,7 +20,7 @@ test.describe('CONTRACT: PLATFORM-013 Context Ownership & Session Isolation Suit
     const dm = new DialogueStateManager();
     const ctx = dm.createContext('ACCEPT_ORDER', { orderId: 1001 }, ['orderId', 'payment'], 'driver.order.accepted', {}, sessionA);
 
-    const res = dm.fillSlot('payment', 'card', ctx.contextId, sessionA);
+    const res = await dm.fillSlot('payment', 'card', ctx.contextId, sessionA);
     expect(res).not.toBeNull();
     expect((res as any).status).toBe('COMPLETED');
   });
@@ -29,7 +29,7 @@ test.describe('CONTRACT: PLATFORM-013 Context Ownership & Session Isolation Suit
     const dm = new DialogueStateManager();
     const ctxA = dm.createContext('ACCEPT_ORDER', { orderId: 1001 }, ['orderId', 'payment'], 'driver.order.accepted', {}, sessionA);
 
-    const res = dm.fillSlot('payment', 'card', ctxA.contextId, sessionB);
+    const res = await dm.fillSlot('payment', 'card', ctxA.contextId, sessionB);
     expect(res).toEqual({ status: 'CONTEXT_ACCESS_DENIED' });
 
     const fetched = dm.getContext(ctxA.contextId, sessionA);
@@ -41,7 +41,7 @@ test.describe('CONTRACT: PLATFORM-013 Context Ownership & Session Isolation Suit
     const dm = new DialogueStateManager();
     const ctxA = dm.createContext('ACCEPT_ORDER', { orderId: 1001 }, ['orderId', 'payment'], 'driver.order.accepted', {}, sessionA);
 
-    const res = dm.fillSlot('payment', 'card', ctxA.contextId, sessionA2);
+    const res = await dm.fillSlot('payment', 'card', ctxA.contextId, sessionA2);
     expect(res).toEqual({ status: 'CONTEXT_ACCESS_DENIED' });
   });
 
@@ -73,7 +73,7 @@ test.describe('CONTRACT: PLATFORM-013 Context Ownership & Session Isolation Suit
     const dm = new DialogueStateManager();
     const ctxA = dm.createContext('ACCEPT_ORDER', { orderId: 1001 }, ['orderId', 'payment'], 'driver.order.accepted', {}, sessionA);
 
-    const cancelRes = dm.cancelContext(ctxA.contextId, sessionB);
+    const cancelRes = await dm.cancelContext(ctxA.contextId, sessionB);
     expect(cancelRes).toEqual({ status: 'CONTEXT_ACCESS_DENIED' });
 
     const fetched = dm.getContext(ctxA.contextId, sessionA);
