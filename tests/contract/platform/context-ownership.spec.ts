@@ -62,9 +62,10 @@ test.describe('CONTRACT: PLATFORM-013 Context Ownership & Session Isolation Suit
     const dm = new DialogueStateManager();
     const ctxA = dm.createContext('ACCEPT_ORDER', { orderId: 1001 }, ['orderId', 'payment'], 'driver.order.accepted', {}, sessionA);
 
-    expect(() => {
-      dm.recordExecution(ctxA, sessionB);
-    }).toThrow(/SECURITY_VIOLATION/);
+    const execution = dm.createExecution(ctxA, sessionA);
+    await expect(
+      dm.dispatchAction(execution.executionId, execution.payload, sessionB)
+    ).rejects.toThrow(/SECURITY_VIOLATION/);
 
     expect(dm.getExecutionLogs(sessionB).length).toBe(0);
   });
