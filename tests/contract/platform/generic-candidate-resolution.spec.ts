@@ -124,7 +124,7 @@ test.describe('CONTRACT: SC-PLATFORM-003 Generic Candidate Resolution Portabilit
     ]
   };
 
-  beforeEach(() => {
+  test.beforeEach(() => {
     dispatcherCalls = 0;
     dm = new DialogueStateManager({
       actionDispatcher: async (event, ctx, exec) => {
