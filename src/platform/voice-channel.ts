@@ -786,10 +786,11 @@ export class VoiceChannel {
               const fillRes = await this.dialogueManager.fillSlot('confirmation', 'CONFIRMED', currentCtx.contextId, identity);
               if (fillRes.success) {
                 const updated = fillRes.data;
-                const exec = this.dialogueManager.createExecution(updated, identity);
-                const dispatchRes = await this.dialogueManager.dispatchAction(exec.executionId, updated.slots, identity);
+                const eventPayload = scenario.steps?.find(st => st.kind === 'emit')?.event?.payload || {};
+                const exec = this.dialogueManager.createExecution(updated, identity, undefined, eventPayload);
+                const dispatchRes = await this.dialogueManager.dispatchAction(exec.executionId, exec.payload, identity);
                 return {
-                  status: dispatchRes.status,
+                  status: dispatchRes.status === 'SUCCEEDED' ? 'COMPLETED' : dispatchRes.status,
                   contextId: updated.contextId,
                   executionId: exec.executionId,
                   attempt: dispatchRes.attempt,
@@ -818,8 +819,9 @@ export class VoiceChannel {
               };
             }
 
-            const execution = this.dialogueManager.createExecution(currentCtx, identity);
-            const dispatchResult = await this.dialogueManager.dispatchAction(execution.executionId, currentCtx.slots, identity);
+            const eventPayload = scenario.steps?.find(st => st.kind === 'emit')?.event?.payload || {};
+            const execution = this.dialogueManager.createExecution(currentCtx, identity, undefined, eventPayload);
+            const dispatchResult = await this.dialogueManager.dispatchAction(execution.executionId, execution.payload, identity);
             return {
               status: dispatchResult.status === 'SUCCEEDED' ? 'COMPLETED' : dispatchResult.status,
               contextId: currentCtx.contextId,
@@ -938,10 +940,11 @@ export class VoiceChannel {
       );
 
       if (ctx.missingSlots.length === 0) {
-        const exec = this.dialogueManager.createExecution(ctx, identity);
-        const dispatchRes = await this.dialogueManager.dispatchAction(exec.executionId, ctx.slots, identity);
+        const eventPayload = sc.steps?.find(st => st.kind === 'emit')?.event?.payload || {};
+        const exec = this.dialogueManager.createExecution(ctx, identity, undefined, eventPayload);
+        const dispatchRes = await this.dialogueManager.dispatchAction(exec.executionId, exec.payload, identity);
         return {
-          status: dispatchRes.status,
+          status: dispatchRes.status === 'SUCCEEDED' ? 'COMPLETED' : dispatchRes.status,
           contextId: ctx.contextId,
           executionId: exec.executionId,
           attempt: dispatchRes.attempt,
