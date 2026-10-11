@@ -147,7 +147,6 @@ export class VoiceChannel {
     for (const sc of scenarioSet.scenarios) {
       const triggers = [
         ...(sc.activation?.value ? [sc.activation.value] : []),
-        ...(Array.isArray(sc.triggerPhrases) ? sc.triggerPhrases : []),
         ...(Array.isArray(sc.aliases) ? sc.aliases : [])
       ];
       for (const trigger of triggers) {
