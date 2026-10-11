@@ -1011,6 +1011,9 @@ export class VoiceChannel {
       );
 
       if (ctx.missingSlots.length === 0) {
+        for (const prev of activeWaiting) {
+          await this.dialogueManager.cancelContext(prev.contextId, identity);
+        }
         const exec = this.dialogueManager.createExecution(ctx, identity);
         const dispatchRes = await this.dialogueManager.dispatchAction(exec.executionId, ctx.slots, identity);
         return {

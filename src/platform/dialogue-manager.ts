@@ -50,6 +50,10 @@ export interface ActionExecution {
   createdAt: number;
   updatedAt: number;
   errorCode?: string;
+  event: {
+    type: string;
+    payload: Record<string, any>;
+  };
 }
 
 export type DispatchResult =
@@ -167,14 +171,17 @@ export class DialogueStateManager {
     let ctx = contextId ? this.contexts.get(contextId) : undefined;
 
     if (!ctx || ctx.ownerId !== identity.ownerId || ctx.sessionId !== identity.sessionId ||
-        !['WAITING_FOR_SLOT', 'DISPATCHING'].includes(ctx.status)) {
-      const replacement = Array.from(this.contexts.values())
+        !['WAITING_FOR_SLOT', 'DISPATCHING', 'COMPLETED'].includes(ctx.status)) {
+      const candidates = Array.from(this.contexts.values())
         .filter(candidate =>
           candidate.ownerId === identity.ownerId &&
           candidate.sessionId === identity.sessionId &&
-          ['WAITING_FOR_SLOT', 'DISPATCHING'].includes(candidate.status)
-        )
-        .sort((a, b) => b.updatedAt - a.updatedAt)[0];
+          ['WAITING_FOR_SLOT', 'DISPATCHING', 'COMPLETED'].includes(candidate.status)
+        );
+      const active = candidates.filter(c => ['WAITING_FOR_SLOT', 'DISPATCHING'].includes(c.status));
+      const pool = active.length > 0 ? active : candidates;
+      const replacement = pool.sort((a, b) => b.updatedAt - a.updatedAt)[0];
+
       if (!replacement) {
         this.activeContextBySession.delete(key);
         if (contextId && this.activeContextId === contextId) this.activeContextId = null;
@@ -638,6 +645,10 @@ export class DialogueStateManager {
       intent: ctx.intent,
       actionType: ctx.actionType,
       payload: { ...ctx.slots },
+      event: {
+        type: ctx.actionType,
+        payload: { ...ctx.slots }
+      },
       status: 'PENDING',
       attempt: 0,
       createdAt: now,
@@ -867,13 +878,27 @@ export class DialogueStateManager {
     if (exec.ownerId !== identity.ownerId || exec.sessionId !== identity.sessionId) {
       return undefined;
     }
-    return { ...exec, payload: { ...exec.payload } };
+    return {
+      ...exec,
+      payload: { ...exec.payload },
+      event: {
+        type: exec.actionType,
+        payload: { ...exec.payload }
+      }
+    };
   }
 
   public getExecutionLogs(identity: SessionIdentity): ActionExecution[] {
     this.validateIdentity(identity);
     return Array.from(this.executions.values())
       .filter(l => l.ownerId === identity.ownerId && l.sessionId === identity.sessionId)
-      .map(l => ({ ...l, payload: { ...l.payload } }));
+      .map(l => ({
+        ...l,
+        payload: { ...l.payload },
+        event: {
+          type: l.actionType,
+          payload: { ...l.payload }
+        }
+      }));
   }
 }
