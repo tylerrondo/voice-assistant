@@ -290,7 +290,13 @@ test.describe('CONTRACT: PLATFORM-014 Intent Resolution & Slot Ambiguity Suite',
   });
 
   test('CONTRACT-13: Foreign context never enters candidate set during resolution', async () => {
-    const dm = new DialogueStateManager();
+    const dm = new DialogueStateManager({
+      actionDispatcher: async (event, ctx, execution) => ({
+        status: 'SUCCEEDED',
+        executionId: execution.executionId,
+        attempt: execution.attempt
+      })
+    });
     const channel = new VoiceChannel(dm);
     channel.registerScenarioSet({
       version: 2,
@@ -316,8 +322,8 @@ test.describe('CONTRACT: PLATFORM-014 Intent Resolution & Slot Ambiguity Suite',
     await channel.handleIncomingVoice('order 2001', sessionB);
 
     const resA = await channel.handleIncomingVoice('картой', sessionA);
-    expect(resA.status).toBe('COMPLETED');
-    expect(resA.slots.orderId).toBe(1001);
+    expect(resA.status).toBe('SUCCEEDED');
+    expect(resA.context?.slots.orderId).toBe(1001);
   });
 
   test('CONTRACT-14: Invalid ScenarioSet registration leaves previous active ScenarioSet intact', async () => {

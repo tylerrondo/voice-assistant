@@ -1,6 +1,9 @@
+import { fileURLToPath } from 'node:url';
 import { test, expect } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 import { DialogueStateManager } from '../../../src/platform/dialogue-manager';
 import { VoiceChannel, type ScenarioSet, type ScenarioDefinition } from '../../../src/platform/voice-channel';
 import {
@@ -29,7 +32,7 @@ test.describe('CONTRACT: SC-INTEGRATION-005 Generic Dialogue Scenario Routing & 
   let engine: DialogueEngine;
   let nannyScenarioSet: ScenarioSet;
 
-  beforeEach(() => {
+  test.beforeEach(() => {
     dm = new DialogueStateManager();
     vc = new VoiceChannel(dm);
 
@@ -119,7 +122,7 @@ test.describe('CONTRACT: SC-INTEGRATION-005 Generic Dialogue Scenario Routing & 
     }, freshUser);
 
     expect(res.status).toBe('SCENARIO_NOT_FOUND');
-    expect(dm.getActiveState(freshUser)).toBeUndefined();
+    expect(dm.getActiveState(freshUser)).toBeNull();
   });
 
   test('SR-06: Independent Service Scenario routes correctly without nanny terminology', async () => {
@@ -176,7 +179,7 @@ test.describe('CONTRACT: SC-INTEGRATION-005 Generic Dialogue Scenario Routing & 
     const res = await engine.processInput({ modality: 'text', raw_input: 'помощь' }, userAmb);
 
     expect(res.status).toBe('SCENARIO_AMBIGUOUS');
-    expect(dm.getActiveState(userAmb)).toBeUndefined();
+    expect(dm.getActiveState(userAmb)).toBeNull();
   });
 
   test('SR-08: Priority Resolution selects scenario with highest priority via VoiceChannel.resolveIntent', async () => {
@@ -212,7 +215,7 @@ test.describe('CONTRACT: SC-INTEGRATION-005 Generic Dialogue Scenario Routing & 
     const res = await engine.processInput({ modality: 'text', raw_input: 'расскажи анекдот' }, userNo);
 
     expect(res.status).toBe('SCENARIO_NOT_FOUND');
-    expect(dm.getActiveState(userNo)).toBeUndefined();
+    expect(dm.getActiveState(userNo)).toBeNull();
   });
 
   test('SR-10: Telegram Adapter handleUpdate does not receive Scenario parameter', async () => {

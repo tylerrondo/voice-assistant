@@ -1,6 +1,9 @@
+import { fileURLToPath } from 'node:url';
 import { test, expect } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 import { DialogueStateManager } from '../../../src/platform/dialogue-manager';
 import { VoiceChannel, type ScenarioSet } from '../../../src/platform/voice-channel';
 import { TelegramDialogueAdapter } from '../../../src/platform/telegram-dialogue-adapter';
@@ -59,7 +62,7 @@ test.describe('CONTRACT: SC-INTEGRATION-002 Real Telegram Voice Input + STT Inte
   let nannyScenarioSet: ScenarioSet;
   let dispatcherCalls: number;
 
-  beforeEach(() => {
+  test.beforeEach(() => {
     dispatcherCalls = 0;
     dm = new DialogueStateManager({
       actionDispatcher: async (event, ctx, exec) => {
@@ -155,10 +158,10 @@ test.describe('CONTRACT: SC-INTEGRATION-002 Real Telegram Voice Input + STT Inte
 
     await adapter.handleMessage({ channel: 'text', raw_input: 'завтра' }, sessionUser, sc);
     const ctx = dm.getActiveState(sessionUser)!;
-    ctx.offers = [
+    dm.setOffersForContext(ctx.contextId, [
       { id: 'xyz-17', name: 'Ирина', index: 1, status: 'AVAILABLE' },
       { id: 'xyz-42', name: 'Ольга', index: 2, status: 'AVAILABLE' }
-    ] as any;
+    ] as any, sessionUser);
 
     await sendVoiceAudio('выбираю вторую');
 
@@ -180,7 +183,7 @@ test.describe('CONTRACT: SC-INTEGRATION-002 Real Telegram Voice Input + STT Inte
 
     const res = await sendVoiceAudio('да, подтверждаю');
 
-    expect(res.status).toBe('ORDER_CONFIRMED');
+    expect(res.status).toBe('CONFIRMED');
     expect(dispatcherCalls).toBe(1);
     expect(dm.getExecutionLogs(sessionUser).length).toBe(1);
   });
@@ -193,7 +196,7 @@ test.describe('CONTRACT: SC-INTEGRATION-002 Real Telegram Voice Input + STT Inte
     const res = await sendVoiceAudio('отменяю');
 
     expect(res.status).toBe('CANCELLED');
-    expect(dm.getActiveState(sessionUser)).toBeUndefined();
+    expect(dm.getActiveState(sessionUser)?.status).toBe('CANCELLED');
   });
 
   test('TV-07: STT failure keeps context intact and allows continuation', async () => {
@@ -335,7 +338,7 @@ test.describe('CONTRACT: SC-INTEGRATION-002 Real Telegram Voice Input + STT Inte
     const finalResult = await adapter.handleMessage(transportRes.normalizedInput!, sessionUser, sc);
 
     // 5. Verify full business outcome: Execution created and Action dispatched!
-    expect(finalResult.status).toBe('ORDER_CONFIRMED');
+    expect(finalResult.status).toBe('CONFIRMED');
     expect(dispatcherCalls).toBe(1);
     expect(dm.getExecutionLogs(sessionUser).length).toBe(1);
   });

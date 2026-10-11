@@ -1,8 +1,11 @@
+import { fileURLToPath } from 'node:url';
 import { test, expect } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
 import { DialogueStateManager, type OfferDefinition } from '../../../src/platform/dialogue-manager';
 import { VoiceChannel } from '../../../src/platform/voice-channel';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 test.describe('CONTRACT: SC-PASS-002 Multi-Offer Dialogue & Selection Suite', () => {
 
@@ -85,7 +88,7 @@ test.describe('CONTRACT: SC-PASS-002 Multi-Offer Dialogue & Selection Suite', ()
     const res = await vc.handleIncomingVoice('а второй это комфорт', sessionPassengerA);
 
     expect(res.status).toBe('OFFER_QUERY_RESOLVED');
-    expect(res.offerId).toBe('OFFER-B');
+    expect(res.targetId).toBe('OFFER-B');
     expect(res.attributes.vehicleType).toBe('comfort');
     expect((res as any).vehicleType).toBeUndefined();
     expect((res as any).isComfort).toBeUndefined();
@@ -149,8 +152,8 @@ test.describe('CONTRACT: SC-PASS-002 Multi-Offer Dialogue & Selection Suite', ()
 
     const res = await vc.handleIncomingVoice('тогда давайте второй', sessionPassengerA);
 
-    expect(res.status).toBe('OFFER_UNAVAILABLE');
-    expect(res.offerId).toBe('OFFER-B');
+    expect(res.status).toBe('CANDIDATE_UNAVAILABLE');
+    expect(res.targetId).toBe('OFFER-B');
 
     const ctx = dm.getActiveState(sessionPassengerA);
     expect(ctx?.slots.selectedOfferId).toBeUndefined();
@@ -206,7 +209,7 @@ test.describe('CONTRACT: SC-PASS-002 Multi-Offer Dialogue & Selection Suite', ()
 
     const foreignAccess = await dm.fillSlot('selectedOfferId', 'OFFER-A', ctxIdA, sessionPassengerB);
     expect(foreignAccess.success).toBe(false);
-    expect(foreignAccess.error).toBe('ACCESS_DENIED');
+    expect(foreignAccess.error).toBe('CONTEXT_ACCESS_DENIED');
   });
 
   test('CONTRACT-17: Payload содержит строго один выбранный OfferId', async () => {

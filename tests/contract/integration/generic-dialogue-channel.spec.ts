@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import { test, expect } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -11,7 +12,9 @@ import {
 import { TelegramBotAdapter, MockTelegramClient } from '../../../src/platform/telegram-bot-adapter';
 import { TelegramVoiceTransport } from '../../../src/platform/telegram-voice-transport';
 import { MockSTTProvider } from '../../../src/platform/stt-provider';
-import { MockTelegramFileProvider } from './telegram-voice.spec';
+import { MockTelegramFileProvider } from './telegram-test-helpers';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 class MockGenericChannelAdapter {
   constructor(private engine: DialogueEngine) {}
@@ -39,7 +42,7 @@ test.describe('CONTRACT: SC-INTEGRATION-004 Generic Dialogue Channel Contract Su
   let nannyScenarioSet: ScenarioSet;
   let dispatcherCalls: number;
 
-  beforeEach(() => {
+  test.beforeEach(() => {
     dispatcherCalls = 0;
     dm = new DialogueStateManager({
       actionDispatcher: async (event, ctx, exec) => {
@@ -148,10 +151,10 @@ test.describe('CONTRACT: SC-INTEGRATION-004 Generic Dialogue Channel Contract Su
 
     // Attach custom candidate items with non-standard fields
     const ctx = dm.getActiveState(userS)!;
-    ctx.offers = [
+    dm.setOffersForContext(ctx.contextId, [
       { serviceId: 'svc-17', title: 'Cleaning', position: 1, status: 'AVAILABLE' },
       { serviceId: 'svc-42', title: 'Repair', position: 2, status: 'AVAILABLE' }
-    ] as any;
+    ] as any, userS);
 
     // Send selection choice
     await adapter.send({ modality: 'voice', transcript: 'выбираю второй' }, userS, serviceScenario);
@@ -241,7 +244,7 @@ test.describe('CONTRACT: SC-INTEGRATION-004 Generic Dialogue Channel Contract Su
 
     expect(res.status).toBe('CANCELLED');
     expect(res.presentation.text).toBe(sc.confirmation?.cancelledMessage);
-    expect(dm.getActiveState(sessionUser)).toBeUndefined();
+    expect(dm.getActiveState(sessionUser)?.status).toBe('CANCELLED');
   });
 
   test('GC-08: Execution — ActionDispatcher called exactly once on confirmation', async () => {

@@ -20,17 +20,18 @@ test.describe('CONTRACT: PLATFORM-013 Context Ownership & Session Isolation Suit
     const dm = new DialogueStateManager();
     const ctx = dm.createContext('ACCEPT_ORDER', { orderId: 1001 }, ['orderId', 'payment'], 'driver.order.accepted', {}, sessionA);
 
-    const res = dm.fillSlot('payment', 'card', ctx.contextId, sessionA);
-    expect(res).not.toBeNull();
-    expect((res as any).status).toBe('COMPLETED');
+    const res = await dm.fillSlot('payment', 'card', ctx.contextId, sessionA);
+    expect(res.success).toBe(true);
+    expect(res.data?.slots.payment).toBe('card');
   });
 
   test('CONTRACT-03: Cross-owner access returns CONTEXT_ACCESS_DENIED and state remains unchanged', async () => {
     const dm = new DialogueStateManager();
     const ctxA = dm.createContext('ACCEPT_ORDER', { orderId: 1001 }, ['orderId', 'payment'], 'driver.order.accepted', {}, sessionA);
 
-    const res = dm.fillSlot('payment', 'card', ctxA.contextId, sessionB);
-    expect(res).toEqual({ status: 'CONTEXT_ACCESS_DENIED' });
+    const res = await dm.fillSlot('payment', 'card', ctxA.contextId, sessionB);
+    expect(res.success).toBe(false);
+    expect(res.error).toBe('CONTEXT_ACCESS_DENIED');
 
     const fetched = dm.getContext(ctxA.contextId, sessionA);
     expect(fetched?.status).toBe('WAITING_FOR_SLOT');
@@ -41,8 +42,9 @@ test.describe('CONTRACT: PLATFORM-013 Context Ownership & Session Isolation Suit
     const dm = new DialogueStateManager();
     const ctxA = dm.createContext('ACCEPT_ORDER', { orderId: 1001 }, ['orderId', 'payment'], 'driver.order.accepted', {}, sessionA);
 
-    const res = dm.fillSlot('payment', 'card', ctxA.contextId, sessionA2);
-    expect(res).toEqual({ status: 'CONTEXT_ACCESS_DENIED' });
+    const res = await dm.fillSlot('payment', 'card', ctxA.contextId, sessionA2);
+    expect(res.success).toBe(false);
+    expect(res.error).toBe('CONTEXT_ACCESS_DENIED');
   });
 
   test('CONTRACT-05: Candidate filtering completely excludes contexts of other sessions', async () => {
@@ -62,9 +64,10 @@ test.describe('CONTRACT: PLATFORM-013 Context Ownership & Session Isolation Suit
     const dm = new DialogueStateManager();
     const ctxA = dm.createContext('ACCEPT_ORDER', { orderId: 1001 }, ['orderId', 'payment'], 'driver.order.accepted', {}, sessionA);
 
-    expect(() => {
-      dm.recordExecution(ctxA, sessionB);
-    }).toThrow(/SECURITY_VIOLATION/);
+    const execution = dm.createExecution(ctxA, sessionA);
+    await expect(
+      dm.dispatchAction(execution.executionId, execution.payload, sessionB)
+    ).rejects.toThrow(/SECURITY_VIOLATION/);
 
     expect(dm.getExecutionLogs(sessionB).length).toBe(0);
   });
@@ -73,8 +76,9 @@ test.describe('CONTRACT: PLATFORM-013 Context Ownership & Session Isolation Suit
     const dm = new DialogueStateManager();
     const ctxA = dm.createContext('ACCEPT_ORDER', { orderId: 1001 }, ['orderId', 'payment'], 'driver.order.accepted', {}, sessionA);
 
-    const cancelRes = dm.cancelContext(ctxA.contextId, sessionB);
-    expect(cancelRes).toEqual({ status: 'CONTEXT_ACCESS_DENIED' });
+    const cancelRes = await dm.cancelContext(ctxA.contextId, sessionB);
+    expect(cancelRes.success).toBe(false);
+    expect(cancelRes.error).toBe('CONTEXT_ACCESS_DENIED');
 
     const fetched = dm.getContext(ctxA.contextId, sessionA);
     expect(fetched?.status).toBe('WAITING_FOR_SLOT');
@@ -105,9 +109,17 @@ test.describe('CONTRACT: PLATFORM-013 Context Ownership & Session Isolation Suit
   });
 
   test('CONTRACT-10: listContexts and getExecutionLogs strictly isolate records by session', async () => {
-    const dm = new DialogueStateManager();
+    const dm = new DialogueStateManager({
+      actionDispatcher: async (event, ctx, execution) => ({
+        status: 'SUCCEEDED',
+        executionId: execution.executionId,
+        attempt: execution.attempt
+      })
+    });
     const ctxA = dm.createContext('ACCEPT_ORDER', { orderId: 1001 }, ['orderId', 'payment'], 'driver.order.accepted', {}, sessionA);
-    dm.fillSlot('payment', 'card', ctxA.contextId, sessionA);
+    await dm.fillSlot('payment', 'card', ctxA.contextId, sessionA);
+    const execution = dm.createExecution(dm.getContext(ctxA.contextId, sessionA)!, sessionA);
+    await dm.dispatchAction(execution.executionId, execution.payload, sessionA);
 
     const listB = dm.listContexts(sessionB);
     expect(listB.length).toBe(0);

@@ -5,7 +5,7 @@ import {
   type DialogueInput,
   type DialogueEngine
 } from './dialogue-channel';
-import { type TelegramDialogueAdapter } from './telegram-dialogue-adapter';
+import { type TelegramDialogueAdapter, type TelegramInputMessage } from './telegram-dialogue-adapter';
 import { type TelegramVoiceTransport } from './telegram-voice-transport';
 import { type SessionIdentity } from './dialogue-manager';
 
@@ -78,6 +78,7 @@ export class MockTelegramClient implements TelegramClient {
 
 export class TelegramBotAdapter {
   private dialogueEngine: DialogueEngine;
+  private dialogueAdapter?: TelegramDialogueAdapter;
   private voiceTransport: TelegramVoiceTransport;
   private telegramClient: TelegramClient;
 
@@ -89,7 +90,8 @@ export class TelegramBotAdapter {
     if ('processInput' in dialogueHandler) {
       this.dialogueEngine = dialogueHandler;
     } else {
-      this.dialogueEngine = (dialogueHandler as TelegramDialogueAdapter).getDialogueEngine();
+      this.dialogueAdapter = dialogueHandler as TelegramDialogueAdapter;
+      this.dialogueEngine = this.dialogueAdapter.getDialogueEngine();
     }
     this.voiceTransport = voiceTransport;
     this.telegramClient = telegramClient;
@@ -151,6 +153,29 @@ export class TelegramBotAdapter {
     throw new Error('INVALID_TELEGRAM_UPDATE: Missing message or callback_query');
   }
 
+  private async processDialogue(
+    input: TelegramInputMessage,
+    identity: SessionIdentity,
+    scenario?: ScenarioDefinition
+  ) {
+    if (this.dialogueAdapter) {
+      return this.dialogueAdapter.handleMessage(input, identity, scenario);
+    }
+
+    const dialogueInput: DialogueInput = {
+      modality: input.channel,
+      channel: input.channel,
+      raw_input: input.raw_input,
+      transcript: input.transcript,
+      payload: input.button_payload ? {
+        slotName: input.button_payload.slotName,
+        slotValue: input.button_payload.slotValue,
+        action: input.button_payload.action
+      } : undefined
+    };
+    return this.dialogueEngine.processInput(dialogueInput, identity, scenario);
+  }
+
   public async handleUpdate(update: TelegramUpdate, optionalScenario?: ScenarioDefinition): Promise<void> {
     const { identity, chatId } = this.extractIdentity(update);
 
@@ -159,25 +184,14 @@ export class TelegramBotAdapter {
       await this.telegramClient.answerCallbackQuery(update.callback_query.id);
 
       const data = update.callback_query.data || '';
-      let dialogueInput: DialogueInput;
-
       const decoded = this.decodeCallbackData(data);
-      if (decoded) {
-        dialogueInput = {
-          modality: 'button',
-          payload: {
-            slotName: decoded.slotName,
-            slotValue: decoded.slotValue
-          }
-        };
-      } else {
-        dialogueInput = {
-          modality: 'button',
-          raw_input: data
-        };
-      }
-
-      const result = await this.dialogueEngine.processInput(dialogueInput, identity, optionalScenario);
+      const result = await this.processDialogue(
+        decoded
+          ? { channel: 'button', button_payload: { slotName: decoded.slotName, slotValue: decoded.slotValue } }
+          : { channel: 'button', raw_input: data },
+        identity,
+        optionalScenario
+      );
       await this.sendTelegramResponse(chatId, result?.presentation);
       return;
     }
@@ -203,11 +217,11 @@ export class TelegramBotAdapter {
       }
 
       if (voiceResult.status === 'TRANSCRIPTION_SUCCESS' && voiceResult.normalizedInput) {
-        const dialogueInput: DialogueInput = {
-          modality: 'voice',
-          transcript: voiceResult.normalizedInput.transcript
-        };
-        const result = await this.dialogueEngine.processInput(dialogueInput, identity, optionalScenario);
+        const result = await this.processDialogue(
+          { channel: 'voice', transcript: voiceResult.normalizedInput.transcript },
+          identity,
+          optionalScenario
+        );
         await this.sendTelegramResponse(chatId, result?.presentation);
       }
       return;
@@ -215,12 +229,11 @@ export class TelegramBotAdapter {
 
     // 3. Handle Text Message
     if (update.message?.text) {
-      const dialogueInput: DialogueInput = {
-        modality: 'text',
-        raw_input: update.message.text
-      };
-
-      const result = await this.dialogueEngine.processInput(dialogueInput, identity, optionalScenario);
+      const result = await this.processDialogue(
+        { channel: 'text', raw_input: update.message.text },
+        identity,
+        optionalScenario
+      );
       await this.sendTelegramResponse(chatId, result?.presentation);
       return;
     }
