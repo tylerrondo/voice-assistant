@@ -100,6 +100,8 @@ export class TelegramDialogueAdapter {
     };
 
     // The Telegram-facing order contract retains its established terminal status.
-    return res.status === 'CONFIRMED' ? { ...res, status: 'ORDER_CONFIRMED' } : res;
+    return res.status === 'CONFIRMED' && (activeCtxAfter?.intent || activeScenario?.intent || activeCtxBefore?.intent) === 'ORDER_NANNY'
+      ? { ...res, status: 'ORDER_CONFIRMED' }
+      : res;
   }
 }
