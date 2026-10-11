@@ -30,7 +30,7 @@ test.describe('CONTRACT: SC-INTEGRATION-005 Generic Dialogue Scenario Routing & 
   let engine: DialogueEngine;
   let nannyScenarioSet: ScenarioSet;
 
-  test.beforeEach(() => {
+  test.test.beforeEach(() => {
     dm = new DialogueStateManager();
     vc = new VoiceChannel(dm);
 
