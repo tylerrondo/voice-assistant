@@ -143,6 +143,23 @@ export class VoiceChannel {
       }
     }
 
+    const triggerOwners = new Map<string, string>();
+    for (const sc of scenarioSet.scenarios) {
+      const triggers = [
+        ...(sc.activation?.value ? [sc.activation.value] : []),
+        ...(Array.isArray(sc.triggerPhrases) ? sc.triggerPhrases : []),
+        ...(Array.isArray(sc.aliases) ? sc.aliases : [])
+      ];
+      for (const trigger of triggers) {
+        const normalized = trigger.replace(/^voice\./, '').replace(/[-_]/g, ' ').toLowerCase().trim();
+        const owner = triggerOwners.get(normalized);
+        if (owner && owner !== sc.id) {
+          throw new Error(`CONTRACT_VIOLATION: Trigger or alias collision "${normalized}" between "${owner}" and "${sc.id}"`);
+        }
+        triggerOwners.set(normalized, sc.id);
+      }
+    }
+
     for (const sc of scenarioSet.scenarios) {
       const idx = this.scenarioRegistry.findIndex(s => s.id === sc.id);
       if (idx >= 0) {
@@ -174,7 +191,7 @@ export class VoiceChannel {
   }
 
   public resolveIntent(phrase: string): IntentResolutionResult {
-    const text = phrase.trim().toLowerCase();
+    const text = phrase.trim().toLowerCase().replace(/[-_]/g, ' ');
     const matchingScenarios: ScenarioDefinition[] = [];
 
     for (const sc of this.scenarioRegistry) {
@@ -185,7 +202,7 @@ export class VoiceChannel {
 
       const matches = triggers.some(trig => {
         const clean = trig.replace(/^voice\./, '').replace(/[-_]/g, ' ').toLowerCase().trim();
-        return text === clean || text.startsWith(clean) || clean.split(/\s+/).every(w => text.includes(w));
+        return text === clean || text.startsWith(clean) || (text.length >= 3 && clean.startsWith(text)) || clean.split(/\s+/).every(w => text.includes(w));
       });
 
       if (matches) {
@@ -233,48 +250,101 @@ export class VoiceChannel {
       return { status: 'RESOLVED', slots: {} };
     }
 
-    const resolvedSlots: Record<string, any> = {};
+    const normalizedText = text.toLowerCase();
+    const candidates: Array<{ slotName: string; value: any; scenarioId: string; priority: number; matchedText: string }> = [];
 
-    for (const [slotKey, extractor] of Object.entries(extractors)) {
+    for (const [slotName, extractor] of Object.entries(extractors)) {
+      let value: any;
+      let matchedText: string | undefined;
+      let matched = false;
+
       if (extractor.rules && Array.isArray(extractor.rules)) {
         for (const rule of extractor.rules) {
-          if (new RegExp(rule.pattern, 'i').test(text)) {
-            resolvedSlots[slotKey] = rule.value;
+          const match = normalizedText.match(new RegExp(rule.pattern, 'i'));
+          if (match) {
+            value = rule.value;
+            matchedText = match[0].toLowerCase();
+            matched = true;
             break;
           }
         }
       } else if (extractor.type === 'enum') {
         if (extractor.patterns && Array.isArray(extractor.patterns)) {
-          for (const pat of extractor.patterns) {
-            const match = text.match(new RegExp(pat, 'i'));
+          for (const pattern of extractor.patterns) {
+            const match = normalizedText.match(new RegExp(pattern, 'i'));
             if (match) {
-              resolvedSlots[slotKey] = 'CONFIRMED';
+              value = 'CONFIRMED';
+              matchedText = match[0].toLowerCase();
+              matched = true;
               break;
             }
           }
         } else if (extractor.mapping) {
           for (const [enumValue, synonyms] of Object.entries(extractor.mapping)) {
-            if (synonyms.some(synonym => text.includes(synonym.toLowerCase()))) {
-              resolvedSlots[slotKey] = enumValue;
+            const synonym = synonyms.find(item => normalizedText.includes(item.toLowerCase()));
+            if (synonym !== undefined) {
+              value = enumValue;
+              matchedText = synonym.toLowerCase();
+              matched = true;
               break;
             }
           }
         }
       } else if (extractor.type === 'integer' && extractor.pattern) {
-        const match = text.match(new RegExp(extractor.pattern, 'i'));
+        const match = normalizedText.match(new RegExp(extractor.pattern, 'i'));
         if (match) {
-          resolvedSlots[slotKey] = parseInt(match[0], 10);
+          value = parseInt(match[0], 10);
+          matchedText = match[0].toLowerCase();
+          matched = true;
         }
       } else if (extractor.type === 'string' && extractor.pattern) {
-        const match = text.match(new RegExp(extractor.pattern, 'i'));
+        const match = normalizedText.match(new RegExp(extractor.pattern, 'i'));
         if (match) {
-          resolvedSlots[slotKey] = match[0];
+          value = match[0];
+          matchedText = match[0].toLowerCase();
+          matched = true;
         }
+      }
+
+      if (matched && matchedText !== undefined) {
+        candidates.push({
+          slotName,
+          value,
+          scenarioId,
+          priority: Number.isFinite(extractor.priority) ? extractor.priority! : 0,
+          matchedText
+        });
       }
     }
 
-    if (Object.keys(resolvedSlots).length === 0) {
+    if (candidates.length === 0) {
       return { status: 'NO_MATCH' };
+    }
+
+    const resolvedSlots: Record<string, any> = {};
+    const processed = new Set<string>();
+
+    for (const candidate of candidates) {
+      if (processed.has(candidate.slotName)) continue;
+      const sameMatch = candidates.filter(item => item.matchedText === candidate.matchedText);
+      const maxPriority = Math.max(...sameMatch.map(item => item.priority));
+      const top = sameMatch.filter(item => item.priority === maxPriority);
+
+      for (const item of sameMatch) processed.add(item.slotName);
+
+      if (top.length > 1) {
+        return {
+          status: 'AMBIGUOUS_SLOT',
+          candidates: top.map(item => ({
+            slotName: item.slotName,
+            value: item.value,
+            scenarioId: item.scenarioId
+          })),
+          clarificationPrompt: ambiguityPromptTemplate
+        };
+      }
+
+      resolvedSlots[top[0].slotName] = top[0].value;
     }
 
     return { status: 'RESOLVED', slots: resolvedSlots };
