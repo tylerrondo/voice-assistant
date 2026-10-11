@@ -41,7 +41,7 @@ export function mountApp(root: HTMLElement, runtime: any, authenticatedIdentity:
   const app = new VoiceDemoApp(runtime, authenticatedIdentity);
   if (root) {
     root.innerHTML = `
-      <main style="padding:16px;font-family:Arial,sans-serif;max-width:960px;margin:0 auto">
+      <main id="voice-app-ready" style="padding:16px;font-family:Arial,sans-serif;max-width:960px;margin:0 auto">
         <h2 data-testid="scenario-set-name">Voice Platform Production Runtime Ready</h2>
         <div id="runtime-identity">Authenticated session initialized</div>
         <section style="margin:16px 0">
