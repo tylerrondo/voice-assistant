@@ -859,7 +859,7 @@ export class VoiceChannel {
         }
 
         const latestContext = this.dialogueManager.getContext(targetContextId, identity);
-        if (updatedContext && latestContext && latestContext.missingSlots.length === 0 && !latestContext.requiredSlots?.includes('confirmation')) {
+        if (updatedContext && latestContext && latestContext.missingSlots.length === 0) {
           const execution = this.dialogueManager.createExecution(latestContext, identity);
           const dispatchResult = await this.dialogueManager.dispatchAction(execution.executionId, latestContext.slots, identity);
           return {
