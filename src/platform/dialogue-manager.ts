@@ -418,7 +418,7 @@ export class DialogueStateManager {
       for (const [slotKey, slotVal] of Object.entries(ctx.slots)) {
         if (slotVal === undefined || slotVal === null) continue;
         const valStr = String(slotVal).toLowerCase();
-        const numericSlotValue = /^-?\\d+(?:\\.\\d+)?$/.test(valStr);
+        const numericSlotValue = /^-?\d+(?:\.\d+)?$/.test(valStr);
         const valueMentioned = numericSlotValue
           ? tokens.includes(valStr)
           : tokens.includes(valStr) || text.includes(valStr);
