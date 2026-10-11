@@ -73,8 +73,8 @@ test.describe('CONTRACT: PLATFORM-010 Multi-Context Session Manager Suite', () =
     const logs = dm.getExecutionLogs(identity);
     expect(logs.length).toBe(1);
     expect(logs[0].contextId).toBe(ctxA.contextId);
-    expect(logs[0].event.type).toBe('driver.order.accepted');
-    expect(logs[0].event.payload).toEqual({ orderId: 1001, payment: 'card' });
+    expect(logs[0].actionType).toBe('driver.order.accepted');
+    expect(logs[0].payload).toEqual({ orderId: 1001, payment: 'card' });
   });
 
   test('CONTRACT-07: Idempotency is context-aware and does not conflict between orders', async () => {
