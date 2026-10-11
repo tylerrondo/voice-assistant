@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { fileURLToPath } from 'node:url';
 import * as fs from 'fs';
 import * as path from 'path';
 import { DialogueStateManager } from '../../../src/platform/dialogue-manager';
@@ -48,7 +49,7 @@ test.describe('CONTRACT: SC-INTEGRATION-004 Generic Dialogue Channel Contract Su
     });
     vc = new VoiceChannel(dm);
 
-    const scenarioRaw = fs.readFileSync(path.resolve(__dirname, '../../../scenario-nanny-order.json'), 'utf8');
+    const scenarioRaw = fs.readFileSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../scenario-nanny-order.json'), 'utf8');
     nannyScenarioSet = JSON.parse(scenarioRaw);
     vc.registerScenarioSet(nannyScenarioSet);
 
@@ -320,7 +321,7 @@ test.describe('CONTRACT: SC-INTEGRATION-004 Generic Dialogue Channel Contract Su
 
   // Architectural Static Checks (AT-01 .. AT-08)
   test('AT-01: Generic Dialogue Engine does NOT import TelegramBotAdapter, TelegramVoiceTransport, TelegramClient', () => {
-    const filePath = path.resolve(__dirname, '../../../src/platform/dialogue-channel.ts');
+    const filePath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../src/platform/dialogue-channel.ts');
     const content = fs.readFileSync(filePath, 'utf8');
 
     expect(content).not.toContain('TelegramBotAdapter');
@@ -329,14 +330,14 @@ test.describe('CONTRACT: SC-INTEGRATION-004 Generic Dialogue Channel Contract Su
   });
 
   test('AT-02: Generic Dialogue Engine does NOT contain telegram, whatsapp, web in domain logic', () => {
-    const filePath = path.resolve(__dirname, '../../../src/platform/dialogue-channel.ts');
+    const filePath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../src/platform/dialogue-channel.ts');
     const content = fs.readFileSync(filePath, 'utf8');
 
     expect(content).not.toMatch(/from\s+['"].*(telegram|whatsapp|web).*['"]/i);
   });
 
   test('AT-03: Generic Dialogue Engine does NOT contain nanny, selected_nanny, ORDER_NANNY', () => {
-    const filePath = path.resolve(__dirname, '../../../src/platform/dialogue-channel.ts');
+    const filePath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../src/platform/dialogue-channel.ts');
     const content = fs.readFileSync(filePath, 'utf8');
 
     expect(content).not.toContain('selected_nanny');
@@ -345,21 +346,21 @@ test.describe('CONTRACT: SC-INTEGRATION-004 Generic Dialogue Channel Contract Su
   });
 
   test('AT-04: Generic Dialogue Engine does NOT contain Telegram-specific response texts', () => {
-    const filePath = path.resolve(__dirname, '../../../src/platform/dialogue-channel.ts');
+    const filePath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../src/platform/dialogue-channel.ts');
     const content = fs.readFileSync(filePath, 'utf8');
 
     expect(content).not.toContain('Telegram');
   });
 
   test('AT-05: Generic Dialogue Engine does NOT contain Telegram callback protocol dialogue:', () => {
-    const filePath = path.resolve(__dirname, '../../../src/platform/dialogue-channel.ts');
+    const filePath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../src/platform/dialogue-channel.ts');
     const content = fs.readFileSync(filePath, 'utf8');
 
     expect(content).not.toContain('dialogue:');
   });
 
   test('AT-06: Telegram Bot Adapter does NOT call fillSlot, resolveCandidate, createExecution, dispatchAction', () => {
-    const filePath = path.resolve(__dirname, '../../../src/platform/telegram-bot-adapter.ts');
+    const filePath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../src/platform/telegram-bot-adapter.ts');
     const content = fs.readFileSync(filePath, 'utf8');
 
     expect(content).not.toContain('.fillSlot(');
@@ -369,7 +370,7 @@ test.describe('CONTRACT: SC-INTEGRATION-004 Generic Dialogue Channel Contract Su
   });
 
   test('AT-07: Telegram Bot Adapter does NOT import DialogueStateManager', () => {
-    const filePath = path.resolve(__dirname, '../../../src/platform/telegram-bot-adapter.ts');
+    const filePath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../src/platform/telegram-bot-adapter.ts');
     const content = fs.readFileSync(filePath, 'utf8');
 
     expect(content).not.toMatch(/import\s+.*DialogueStateManager.*from/);
@@ -377,8 +378,8 @@ test.describe('CONTRACT: SC-INTEGRATION-004 Generic Dialogue Channel Contract Su
 
   test('AT-08: Negative check — Adapters do NOT directly invoke DialogueStateManager orchestration methods', () => {
     const adapterFiles = [
-      path.resolve(__dirname, '../../../src/platform/telegram-bot-adapter.ts'),
-      path.resolve(__dirname, '../../../src/platform/telegram-dialogue-adapter.ts')
+      path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../src/platform/telegram-bot-adapter.ts'),
+      path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../src/platform/telegram-dialogue-adapter.ts')
     ];
 
     for (const file of adapterFiles) {
