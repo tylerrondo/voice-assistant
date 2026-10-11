@@ -196,7 +196,9 @@
         "value": "voice.available"
       },
       "intent": "DRIVER_AVAILABLE",
-      "requiredSlots": [],
+      "requiredSlots": [
+        "status"
+      ],
       "steps": [
         {
           "kind": "emit",
@@ -216,7 +218,24 @@
         "Свободен",
         "Жду следующий заказ",
         "Become available"
-      ]
+      ],
+      "clarificationPrompts": {
+        "status": "Какой статус водителя установить?"
+      },
+      "slotExtractors": {
+        "status": {
+          "type": "enum",
+          "mapping": {
+            "available": [
+              "готов",
+              "свободен",
+              "готов к следующему заказу",
+              "жду следующий заказ",
+              "become available"
+            ]
+          }
+        }
+      }
     }
   ]
 }
