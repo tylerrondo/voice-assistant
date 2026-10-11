@@ -208,10 +208,12 @@ test.describe('E2E: SC-008 Dialogue Lifecycle, Cancellation & Recovery Suite (Т
     expect(acceptExecutions.length).toBe(0);
 
     const arrivedExecutions = await page.evaluate(() => {
-      const logs = (window as any).__DIALOGUE_MANAGER__.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity()).filter((entry: any) => entry.status === 'SUCCEEDED');
+      const logs = (window as any).__DIALOGUE_MANAGER__.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity());
       return logs.filter((l: any) => l.event.type === 'driver.arrived');
     });
     expect(arrivedExecutions.length).toBe(1);
+    expect(arrivedExecutions[0].status).toBe('FAILED');
+    expect(arrivedExecutions[0].errorCode).toBe('INVALID_FSM_TRANSITION');
   });
 
   test('IDEMP-01: Repeated cancellation preserves CANCELLED status without errors or executions', async ({ page }) => {
