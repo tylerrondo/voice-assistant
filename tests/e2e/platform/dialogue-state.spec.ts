@@ -99,9 +99,12 @@ test.describe('E2E: Strict Platform Dialogue State & Multi-Turn Slot-Filling Sui
 
     const state = await page.evaluate(() => {
       const dm = (window as any).__DIALOGUE_MANAGER__;
-      return dm ? dm.getActiveState((window as any).__VOICE_DEMO_APP__.getIdentity()) : null;
+      const identity = (window as any).__VOICE_DEMO_APP__.getIdentity();
+      const contexts = dm ? dm.listContexts(identity) : [];
+      return contexts[contexts.length - 1] || null;
     });
 
+    expect(state).not.toBeNull();
     expect(state.status).toBe('CANCELLED');
 
     const hasExecuted = await page.evaluate(() => {
@@ -133,17 +136,18 @@ test.describe('E2E: Strict Platform Dialogue State & Multi-Turn Slot-Filling Sui
     await setupApp(page);
     await emitVoicePhrase(page, 'Обработай яблоки');
 
-    await page.evaluate(() => {
+    const expiredContext = await page.evaluate(async () => {
       const dm = (window as any).__DIALOGUE_MANAGER__;
-      if (dm) dm.triggerTimeout();
+      const identity = (window as any).__VOICE_DEMO_APP__.getIdentity();
+      const contexts = dm ? dm.listContexts(identity) : [];
+      const context = contexts[contexts.length - 1];
+      if (!dm || !context) throw new Error('Expected an active dialogue context before expiry');
+      const result = await dm.expireContext(context.contextId, identity);
+      if (!result.success) throw new Error(`Context expiry failed: ${result.error}`);
+      return dm.getContext(context.contextId, identity);
     });
 
-    const state = await page.evaluate(() => {
-      const dm = (window as any).__DIALOGUE_MANAGER__;
-      return dm ? dm.getActiveState((window as any).__VOICE_DEMO_APP__.getIdentity()) : null;
-    });
-
-    expect(state.status).toBe('EXPIRED');
+    expect(expiredContext.status).toBe('EXPIRED');
   });
 
   test('DIALOGUE-E2E-08: Idempotency - duplicate slot input guarantees strict executionCount === 1 in DialogueStateManager', async ({ page }) => {
