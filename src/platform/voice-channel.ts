@@ -170,11 +170,21 @@ export class VoiceChannel {
 
     // Validate the entire set before mutating the active registry. A bad replacement
     // must leave the previous, working set available.
-    this.scenarioRegistry = scenarioSet.scenarios.map(sc => ({
-      ...sc,
-      triggerPhrases: sc.triggerPhrases ? [...sc.triggerPhrases] : undefined,
-      aliases: sc.aliases ? [...sc.aliases] : undefined
-    }));
+    const nextRegistry = [...this.scenarioRegistry];
+    for (const sc of scenarioSet.scenarios) {
+      const registeredScenario = {
+        ...sc,
+        triggerPhrases: sc.triggerPhrases ? [...sc.triggerPhrases] : undefined,
+        aliases: sc.aliases ? [...sc.aliases] : undefined
+      };
+      const existingIndex = nextRegistry.findIndex(existing => existing.id === sc.id);
+      if (existingIndex >= 0) {
+        nextRegistry[existingIndex] = registeredScenario;
+      } else {
+        nextRegistry.push(registeredScenario);
+      }
+    }
+    this.scenarioRegistry = nextRegistry;
     this.activeScenarioSetId = scenarioSet.id;
   }
 
