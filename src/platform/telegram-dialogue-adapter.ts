@@ -79,13 +79,24 @@ export class TelegramDialogueAdapter {
 
     const activeCtxAfter = dm.getActiveState(identity);
     const newState = activeCtxAfter ? { ...activeCtxAfter.slots } : (res.slots || {});
+    const scenarioForInstrumentation = activeScenario
+      || (activeCtxAfter?.scenarioId ? this.engine.getVoiceChannel().getScenarioById(activeCtxAfter.scenarioId) : undefined);
+    const transcript = input.transcript || input.raw_input || '';
+    const extraction = input.channel === 'voice' && scenarioForInstrumentation?.slotExtractors
+      ? this.engine.getVoiceChannel().extractSlotsDeterministically(
+          transcript,
+          scenarioForInstrumentation.slotExtractors,
+          scenarioForInstrumentation.id,
+          scenarioForInstrumentation.ambiguityPrompt?.template
+        )
+      : { status: 'NO_MATCH' as const };
 
     this.lastInstrumentation = {
       channel: input.channel,
       raw_input: input.raw_input || null,
       transcript: input.transcript || null,
       intent: activeCtxAfter?.intent || activeScenario?.intent || null,
-      extracted_slots: {},
+      extracted_slots: extraction.status === 'RESOLVED' ? extraction.slots : {},
       previous_state: prevState,
       new_state: newState,
       next_question: res.nextQuestion || null,
