@@ -3,8 +3,11 @@ import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
   testDir: './tests',
   testMatch: ['**/*.spec.ts'],
-  fullyParallel: false,
-  workers: 1,
+  // Ignore accidentally nested copies of test suites (e.g. tests/e2e/scenarios/tests/...).
+  testIgnore: ['**/tests/**/tests/**'],
+  fullyParallel: true,
+  workers: process.env.CI ? 4 : 1,
+  timeout: 15000,
   retries: 0,
   reporter: [
     ['list'],
