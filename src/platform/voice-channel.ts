@@ -149,7 +149,7 @@ export class VoiceChannel {
         throw new Error(`CONTRACT_VIOLATION: Scenario "${sc.id}" missing intent`);
       }
       if (sc.priority !== undefined && !Number.isFinite(sc.priority)) {
-        throw new Error(`CONTRACT_VIOLATION: Scenario "${sc.id}" priority must be a finite number`);
+        throw new Error(`CONTRACT_VIOLATION: Scenario "${sc.id}" has invalid priority; priority must be a finite number`);
       }
 
       const triggers = [
