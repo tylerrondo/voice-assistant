@@ -1005,7 +1005,26 @@ export class VoiceChannel {
       const requiredSlots = sc.requiredSlots || [];
       const prompts = sc.clarificationPrompts || {};
 
-      const slotRes = this.extractSlotsDeterministically(text, sc.slotExtractors, sc.id, sc.ambiguityPrompt?.template);
+      const activationTriggers = [
+        sc.activation?.value,
+        sc.expectedPhrase,
+        ...(sc.triggerPhrases || []),
+        ...(sc.aliases || [])
+      ].filter((value): value is string => typeof value === 'string' && value.trim().length > 0);
+      const normalizeTrigger = (value: string) =>
+        value.replace(/^voice\./i, '').replace(/[-_]/g, ' ').toLowerCase().trim().replace(/\s+/g, ' ');
+      const activationOnly = activationTriggers.some(trigger => normalizeTrigger(text) === normalizeTrigger(trigger));
+      const extractorsForInitialCommand = activationOnly && sc.slotExtractors
+        ? Object.fromEntries(Object.entries(sc.slotExtractors).filter(([, extractor]) =>
+            !(extractor.type === 'string' && !extractor.pattern && !extractor.rules)
+          ))
+        : sc.slotExtractors;
+      const slotRes = this.extractSlotsDeterministically(
+        text,
+        extractorsForInitialCommand,
+        sc.id,
+        sc.ambiguityPrompt?.template
+      );
 
       if (slotRes.status === 'AMBIGUOUS_SLOT') {
         return slotRes;
