@@ -1,5 +1,5 @@
 import { fileURLToPath } from 'node:url';
-import { test, expect, beforeEach } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -127,7 +127,7 @@ test.describe('CONTRACT: SC-PLATFORM-003 Generic Candidate Resolution Portabilit
     ]
   };
 
-  beforeEach(() => {
+  test.beforeEach(() => {
     dispatcherCalls = 0;
     dm = new DialogueStateManager({
       actionDispatcher: async (event, ctx, exec) => {
