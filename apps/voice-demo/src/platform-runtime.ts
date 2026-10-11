@@ -82,7 +82,7 @@ export class PlatformFsmExecutionBoundary {
 
     const driverTransitions: Record<string, { from: string[]; to: string }> = {
       'driver.order.accepted': { from: ['ASSIGNED', 'AVAILABLE', 'DISPATCHED', 'ORDER_ACCEPTED'], to: 'ORDER_ACCEPTED' },
-      'driver.arrived': { from: ['ORDER_ACCEPTED', 'DISPATCHED', 'DRIVER_ARRIVED'], to: 'DRIVER_ARRIVED' },
+      'driver.arrived': { from: ['ORDER_ACCEPTED', 'DISPATCHED'], to: 'DRIVER_ARRIVED' },
       'driver.trip.started': { from: ['DRIVER_ARRIVED', 'IN_TRIP'], to: 'IN_TRIP' },
       'driver.trip.finished': { from: ['IN_TRIP', 'TRIP_FINISHED'], to: 'TRIP_FINISHED' },
       'driver.available': { from: ['TRIP_FINISHED', 'AVAILABLE'], to: 'AVAILABLE' }
