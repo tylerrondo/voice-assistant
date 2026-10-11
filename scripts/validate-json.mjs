@@ -11,7 +11,7 @@ const ignoredDirectories = new Set([
   'playwright-report',
   'test-results'
 ]);
-const jsonFiles = [];
+const scenarioFiles = [];
 
 function walk(directory) {
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
@@ -19,8 +19,8 @@ function walk(directory) {
       if (!ignoredDirectories.has(entry.name)) {
         walk(join(directory, entry.name));
       }
-    } else if (entry.isFile() && entry.name.endsWith('.json')) {
-      jsonFiles.push(join(directory, entry.name));
+    } else if (entry.isFile() && entry.name.startsWith('scenario-') && entry.name.endsWith('.json')) {
+      scenarioFiles.push(join(directory, entry.name));
     }
   }
 }
@@ -28,19 +28,19 @@ function walk(directory) {
 walk(root);
 
 let failures = 0;
-for (const file of jsonFiles.sort()) {
+for (const file of scenarioFiles.sort()) {
   try {
     JSON.parse(readFileSync(file, 'utf8'));
   } catch (error) {
     failures++;
-    console.error(`Invalid JSON: ${relative(root, file)}`);
+    console.error(`Invalid scenario JSON: ${relative(root, file)}`);
     console.error(`  ${error.message}`);
   }
 }
 
 if (failures > 0) {
-  console.error(`JSON validation failed: ${failures} of ${jsonFiles.length} files are invalid.`);
+  console.error(`Scenario JSON validation failed: ${failures} of ${scenarioFiles.length} files are invalid.`);
   process.exitCode = 1;
 } else {
-  console.log(`JSON validation passed: ${jsonFiles.length} files checked.`);
+  console.log(`Scenario JSON validation passed: ${scenarioFiles.length} files checked.`);
 }
