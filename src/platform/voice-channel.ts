@@ -283,14 +283,31 @@ export class VoiceChannel {
             }
           }
         } else if (extractor.mapping) {
+          const mappingMatches: Array<{ enumValue: string; synonym: string }> = [];
           for (const [enumValue, synonyms] of Object.entries(extractor.mapping)) {
             const synonym = synonyms.find(item => normalizedText.includes(item.toLowerCase()));
             if (synonym !== undefined) {
-              value = enumValue;
-              matchedText = synonym.toLowerCase();
-              matched = true;
-              break;
+              mappingMatches.push({ enumValue, synonym: synonym.toLowerCase() });
             }
+          }
+
+          if (mappingMatches.length > 1) {
+            for (const mappingMatch of mappingMatches) {
+              candidates.push({
+                slotName,
+                value: mappingMatch.enumValue,
+                scenarioId,
+                priority: Number.isFinite(extractor.priority) ? extractor.priority! : 0,
+                matchedText: `enum-ambiguity:${slotName}`
+              });
+            }
+            continue;
+          }
+
+          if (mappingMatches.length === 1) {
+            value = mappingMatches[0].enumValue;
+            matchedText = mappingMatches[0].synonym;
+            matched = true;
           }
         }
       } else if (extractor.type === 'integer' && extractor.pattern) {
