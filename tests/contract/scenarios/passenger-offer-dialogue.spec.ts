@@ -25,7 +25,7 @@ test.describe('CONTRACT: SC-PASS-003 Multi-Step Offer Selection & Correction Sui
     scenarioSet = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
   });
 
-  test.test.beforeEach(() => {
+  test.beforeEach(() => {
     dispatcherCalls = 0;
     dm = new DialogueStateManager({
       actionDispatcher: async (event, ctx, exec) => {
