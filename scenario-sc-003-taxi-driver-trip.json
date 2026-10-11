@@ -30,7 +30,13 @@
           "kind": "end"
         }
       ],
-      "intent": "ACCEPT_ORDER"
+      "intent": "ACCEPT_ORDER",
+      "triggerPhrases": [
+        "прими заказ",
+        "принять заказ",
+        "принимаю заказ",
+        "беру заказ"
+      ]
     },
     {
       "id": "sc003-arrived",
@@ -62,7 +68,12 @@
           "kind": "end"
         }
       ],
-      "intent": "DRIVER_ARRIVED"
+      "intent": "DRIVER_ARRIVED",
+      "triggerPhrases": [
+        "я приехал",
+        "прибыл",
+        "на месте"
+      ]
     },
     {
       "id": "sc003-start-trip",
@@ -90,7 +101,12 @@
           "kind": "end"
         }
       ],
-      "intent": "START_TRIP"
+      "intent": "START_TRIP",
+      "triggerPhrases": [
+        "начать поездку",
+        "начинаем поездку",
+        "поехали"
+      ]
     },
     {
       "id": "sc003-finish-trip",
@@ -123,7 +139,12 @@
           "kind": "end"
         }
       ],
-      "intent": "FINISH_TRIP"
+      "intent": "FINISH_TRIP",
+      "triggerPhrases": [
+        "завершить поездку",
+        "закончить поездку",
+        "поездка завершена"
+      ]
     },
     {
       "id": "sc003-become-available",
@@ -151,7 +172,12 @@
           "kind": "end"
         }
       ],
-      "intent": "DRIVER_AVAILABLE"
+      "intent": "DRIVER_AVAILABLE",
+      "triggerPhrases": [
+        "готов к следующему заказу",
+        "свободен",
+        "жду следующий заказ"
+      ]
     }
   ]
 }
