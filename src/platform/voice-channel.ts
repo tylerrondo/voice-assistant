@@ -113,6 +113,17 @@ export type SlotExtractionResult =
   | { status: 'AMBIGUOUS_SLOT'; candidates: Array<{ slotName: string; value: any; scenarioId: string }>; clarificationPrompt?: string }
   | { status: 'NO_MATCH' };
 
+function compileSlotPattern(pattern: string): RegExp {
+  const unicodePattern = pattern.replace(/\\b/g, (boundary, offset, source) => {
+    const next = source.slice(offset + boundary.length).trimStart()[0];
+    const isRightBoundary = next === undefined || next === '|' || next === ')' || next === '*' || next === '+' || next === '?';
+    return isRightBoundary
+      ? '(?![\\p{L}\\p{N}_])'
+      : '(?<![\\p{L}\\p{N}_])';
+  });
+  return new RegExp(unicodePattern, 'iu');
+}
+
 export class VoiceChannel {
   private dialogueManager: DialogueStateManager;
   private scenarioRegistry: ScenarioDefinition[] = [];
@@ -263,7 +274,7 @@ export class VoiceChannel {
 
       if (extractor.rules && Array.isArray(extractor.rules)) {
         for (const rule of extractor.rules) {
-          const match = normalizedText.match(new RegExp(rule.pattern, 'i'));
+          const match = normalizedText.match(compileSlotPattern(rule.pattern));
           if (match) {
             value = rule.value;
             matchedText = match[0].toLowerCase();
@@ -274,7 +285,7 @@ export class VoiceChannel {
       } else if (extractor.type === 'enum') {
         if (extractor.patterns && Array.isArray(extractor.patterns)) {
           for (const pattern of extractor.patterns) {
-            const match = normalizedText.match(new RegExp(pattern, 'i'));
+            const match = normalizedText.match(compileSlotPattern(pattern));
             if (match) {
               value = 'CONFIRMED';
               matchedText = match[0].toLowerCase();
@@ -311,14 +322,14 @@ export class VoiceChannel {
           }
         }
       } else if (extractor.type === 'integer' && extractor.pattern) {
-        const match = normalizedText.match(new RegExp(extractor.pattern, 'i'));
+        const match = normalizedText.match(compileSlotPattern(extractor.pattern));
         if (match) {
           value = parseInt(match[0], 10);
           matchedText = match[0].toLowerCase();
           matched = true;
         }
       } else if (extractor.type === 'string' && extractor.pattern) {
-        const match = normalizedText.match(new RegExp(extractor.pattern, 'i'));
+        const match = normalizedText.match(compileSlotPattern(extractor.pattern));
         if (match) {
           value = match[0];
           matchedText = match[0].toLowerCase();
