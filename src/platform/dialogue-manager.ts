@@ -593,7 +593,7 @@ export class DialogueStateManager {
       const existing = this.executions.get(executionId)!;
       const sameOwner = existing.ownerId === identity.ownerId && existing.sessionId === identity.sessionId;
       const sameCtx = existing.contextId === ctx.contextId;
-      const sameAction = existing.actionType === ctx.actionType;
+      const sameAction = existing.actionType === authoritativeCtx.actionType;
       const samePayload = JSON.stringify(existing.payload) === JSON.stringify(authoritativeCtx.slots);
 
       if (sameOwner && sameCtx && sameAction && samePayload) {
