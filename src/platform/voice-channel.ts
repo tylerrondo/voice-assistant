@@ -167,14 +167,11 @@ export class VoiceChannel {
       }
     }
 
-    for (const sc of scenarioSet.scenarios) {
-      const idx = this.scenarioRegistry.findIndex(s => s.id === sc.id);
-      if (idx >= 0) {
-        this.scenarioRegistry[idx] = sc;
-      } else {
-        this.scenarioRegistry.push(sc);
-      }
-    }
+    // The uploaded ScenarioSet is the active contract for this runtime.
+    // Do not retain scenarios from a previously loaded set: overlapping aliases
+    // can otherwise route a voice command into the wrong intent or leave a
+    // multi-slot context unresolved.
+    this.scenarioRegistry = scenarioSet.scenarios.map(sc => ({ ...sc }));
     this.activeScenarioSetId = scenarioSet.id;
   }
 
