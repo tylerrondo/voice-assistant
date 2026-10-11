@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import { test, expect } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -12,6 +13,8 @@ import { TelegramBotAdapter, MockTelegramClient } from '../../../src/platform/te
 import { TelegramVoiceTransport } from '../../../src/platform/telegram-voice-transport';
 import { MockSTTProvider } from '../../../src/platform/stt-provider';
 import { MockTelegramFileProvider } from './telegram-test-helpers';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 class MockGenericChannelAdapter {
   constructor(private engine: DialogueEngine) {}
