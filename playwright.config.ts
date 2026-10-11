@@ -4,7 +4,7 @@ export default defineConfig({
   testDir: './tests',
   testMatch: ['**/*.spec.ts'],
   // Exclude accidental recursively duplicated copies of specs; canonical tests live directly under their suites and are run once.
-  testIgnore: ['**/tests/**'],
+  testIgnore: ['**/tests/**/tests/**'],
   fullyParallel: false,
   workers: 1,
   retries: 0,
