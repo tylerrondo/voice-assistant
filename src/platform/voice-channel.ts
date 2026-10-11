@@ -660,6 +660,10 @@ export class VoiceChannel {
           return slotRes;
         }
 
+        if (slotRes.status === 'NO_MATCH') {
+          return { status: 'NO_MATCH', contextId: activeCtx.contextId };
+        }
+
         if (slotRes.status === 'RESOLVED' && Object.keys(slotRes.slots).length > 0) {
           const extracted = slotRes.slots;
 
@@ -690,7 +694,6 @@ export class VoiceChannel {
                 return {
                   status: 'CANDIDATE_UNAVAILABLE',
                   targetId: candidateResolution.targetId,
-                  offerId: candidateResolution.targetId,
                   message: candidateResolution.message
                 };
               }
