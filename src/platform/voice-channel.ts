@@ -592,6 +592,7 @@ export class VoiceChannel {
 
     const text = phrase.trim().toLowerCase();
     const tokens = text.split(/\s+/);
+    const sessionKey = `${identity.ownerId}\u0000${identity.sessionId}`;
 
     // 1. Cancellation Flow
     const isCancelToken = tokens.includes('отмена') || tokens.includes('отменить') || tokens.includes('cancel');
@@ -600,6 +601,14 @@ export class VoiceChannel {
       const activeWaiting = this.dialogueManager.listContexts(identity).filter(c => c.status === 'WAITING_FOR_SLOT');
 
       if (isPureCancel) {
+        const selectedContextId = this.explicitContextSelections.get(sessionKey);
+        const selectedContext = selectedContextId
+          ? this.dialogueManager.getContext(selectedContextId, identity)
+          : undefined;
+        if (selectedContext?.status === 'WAITING_FOR_SLOT') {
+          this.explicitContextSelections.delete(sessionKey);
+          return this.dialogueManager.cancelContext(selectedContext.contextId, identity);
+        }
         if (activeWaiting.length === 1) {
           return this.dialogueManager.cancelContext(activeWaiting[0].contextId, identity);
         }
@@ -622,8 +631,6 @@ export class VoiceChannel {
       }
       return { status: 'NO_MATCH' };
     }
-
-    const sessionKey = `${identity.ownerId}\u0000${identity.sessionId}`;
 
     // Explicit references to another session's entity must be denied, not
     // downgraded to NO_MATCH merely because that context is filtered from reads.
