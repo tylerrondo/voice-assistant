@@ -1,4 +1,4 @@
-import { test, expect, beforeEach } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import { DialogueStateManager } from '../../../src/platform/dialogue-manager';
 import { VoiceChannel, type ScenarioSet } from '../../../src/platform/voice-channel';
 
@@ -87,7 +87,7 @@ test.describe('CONTRACT: SC-PLATFORM-001 Declarative Scenario Portability Suite'
     ]
   };
 
-  beforeEach(() => {
+  test.beforeEach(() => {
     dispatcherCalls = 0;
     dm = new DialogueStateManager({
       actionDispatcher: async (event, ctx, exec) => {
