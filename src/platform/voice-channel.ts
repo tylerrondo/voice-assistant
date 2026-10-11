@@ -116,6 +116,7 @@ export type SlotExtractionResult =
 export class VoiceChannel {
   private dialogueManager: DialogueStateManager;
   private scenarioRegistry: ScenarioDefinition[] = [];
+  private activeScenarioIds: Set<string> = new Set();
   private activeScenarioSetId: string = '';
   private preferredContextBySession: Map<string, string> = new Map();
 
@@ -167,9 +168,9 @@ export class VoiceChannel {
       }
     }
 
-    // Keep scenarios referenced by active dialogue contexts available after a
-    // new set is registered. Replace matching IDs in place and append new IDs;
-    // active contexts must continue using their original scenario's extraction rules.
+    // Retain scenario definitions so existing contexts can continue using their
+    // own extraction rules, but resolve new commands only against the newly
+    // activated ScenarioSet. This prevents stale aliases from hijacking routing.
     for (const sc of scenarioSet.scenarios) {
       const idx = this.scenarioRegistry.findIndex(existing => existing.id === sc.id);
       if (idx >= 0) {
@@ -178,6 +179,7 @@ export class VoiceChannel {
         this.scenarioRegistry.push({ ...sc });
       }
     }
+    this.activeScenarioIds = new Set(scenarioSet.scenarios.map(sc => sc.id));
     this.activeScenarioSetId = scenarioSet.id;
   }
 
@@ -190,7 +192,7 @@ export class VoiceChannel {
   }
 
   public getDeterministicScenarioForIntent(intent: string): ScenarioDefinition | undefined {
-    const matching = this.scenarioRegistry.filter(sc => sc.intent === intent);
+    const matching = this.scenarioRegistry.filter(sc => this.activeScenarioIds.has(sc.id) && sc.intent === intent);
     if (matching.length === 0) return undefined;
     if (matching.length === 1) return matching[0];
 
@@ -205,6 +207,7 @@ export class VoiceChannel {
     const matchingScenarios: ScenarioDefinition[] = [];
 
     for (const sc of this.scenarioRegistry) {
+      if (!this.activeScenarioIds.has(sc.id)) continue;
       const triggers: string[] = [];
       if (sc.activation?.value) triggers.push(sc.activation.value);
       if (Array.isArray(sc.triggerPhrases)) triggers.push(...sc.triggerPhrases);
