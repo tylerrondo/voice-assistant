@@ -759,7 +759,9 @@ export class VoiceChannel {
 
       if (explicitActivation && activeCtx.scenarioId !== newScenario.id) {
         // A new intent must not be interpreted as a slot answer for an unrelated
-        // pending dialogue. Let the new scenario create its own context.
+        // pending dialogue. Close the sole pending dialogue before routing the new intent.
+        await this.dialogueManager.cancelContext(activeCtx.contextId, identity);
+        this.explicitContextSelections.delete(sessionKey);
         activeWaiting = [];
       } else if (explicitActivation && activeCtx.scenarioId === newScenario.id && newScenario.slotExtractors) {
         const extractedStart = this.extractSlotsDeterministically(text, newScenario.slotExtractors, newScenario.id);
