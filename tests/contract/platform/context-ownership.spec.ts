@@ -20,9 +20,11 @@ test.describe('CONTRACT: PLATFORM-013 Context Ownership & Session Isolation Suit
     const dm = new DialogueStateManager();
     const ctx = dm.createContext('ACCEPT_ORDER', { orderId: 1001 }, ['orderId', 'payment'], 'driver.order.accepted', {}, sessionA);
 
-    const res = dm.fillSlot('payment', 'card', ctx.contextId, sessionA);
+    const res = await dm.fillSlot('payment', 'card', ctx.contextId, sessionA);
     expect(res).not.toBeNull();
-    expect((res as any).status).toBe('COMPLETED');
+    expect((res as any).success).toBe(true);
+    expect((res as any).data.missingSlots).toEqual([]);
+    expect((res as any).data.slots.payment).toBe('card');
   });
 
   test('CONTRACT-03: Cross-owner access returns CONTEXT_ACCESS_DENIED and state remains unchanged', async () => {
@@ -30,7 +32,7 @@ test.describe('CONTRACT: PLATFORM-013 Context Ownership & Session Isolation Suit
     const ctxA = dm.createContext('ACCEPT_ORDER', { orderId: 1001 }, ['orderId', 'payment'], 'driver.order.accepted', {}, sessionA);
 
     const res = dm.fillSlot('payment', 'card', ctxA.contextId, sessionB);
-    expect(res).toEqual({ status: 'CONTEXT_ACCESS_DENIED' });
+    expect(res).toMatchObject({ success: false, error: 'CONTEXT_ACCESS_DENIED' });
 
     const fetched = dm.getContext(ctxA.contextId, sessionA);
     expect(fetched?.status).toBe('WAITING_FOR_SLOT');
@@ -63,7 +65,7 @@ test.describe('CONTRACT: PLATFORM-013 Context Ownership & Session Isolation Suit
     const ctxA = dm.createContext('ACCEPT_ORDER', { orderId: 1001 }, ['orderId', 'payment'], 'driver.order.accepted', {}, sessionA);
 
     expect(() => {
-      dm.recordExecution(ctxA, sessionB);
+      dm.createExecution(ctxA, sessionB);
     }).toThrow(/SECURITY_VIOLATION/);
 
     expect(dm.getExecutionLogs(sessionB).length).toBe(0);
@@ -73,7 +75,7 @@ test.describe('CONTRACT: PLATFORM-013 Context Ownership & Session Isolation Suit
     const dm = new DialogueStateManager();
     const ctxA = dm.createContext('ACCEPT_ORDER', { orderId: 1001 }, ['orderId', 'payment'], 'driver.order.accepted', {}, sessionA);
 
-    const cancelRes = dm.cancelContext(ctxA.contextId, sessionB);
+    const cancelRes = await dm.cancelContext(ctxA.contextId, sessionB);
     expect(cancelRes).toEqual({ status: 'CONTEXT_ACCESS_DENIED' });
 
     const fetched = dm.getContext(ctxA.contextId, sessionA);
@@ -115,6 +117,7 @@ test.describe('CONTRACT: PLATFORM-013 Context Ownership & Session Isolation Suit
     const logsB = dm.getExecutionLogs(sessionB);
     expect(logsB.length).toBe(0);
 
+    dm.createExecution(ctxA, sessionA);
     const logsA = dm.getExecutionLogs(sessionA);
     expect(logsA.length).toBe(1);
     expect(logsA[0].ownerId).toBe('driver-001');
