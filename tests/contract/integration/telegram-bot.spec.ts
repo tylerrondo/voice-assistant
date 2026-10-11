@@ -6,7 +6,7 @@ import { VoiceChannel, type ScenarioSet } from '../../../src/platform/voice-chan
 import { TelegramDialogueAdapter } from '../../../src/platform/telegram-dialogue-adapter';
 import { MockSTTProvider } from '../../../src/platform/stt-provider';
 import { TelegramVoiceTransport } from '../../../src/platform/telegram-voice-transport';
-import { MockTelegramFileProvider } from './telegram-voice.spec';
+import { MockTelegramFileProvider } from './helpers/telegram-helpers';
 import {
   TelegramBotAdapter,
   MockTelegramClient,
