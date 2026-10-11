@@ -14,8 +14,8 @@ import { runAll, readJsonReport, dismissNextDialog, countActionLogEntries } from
  * disturbing the currently active (working) scenario set.
  */
 
-const path.dirname(fileURLToPath(import.meta.url)) = path.dirname(fileURLToPath(import.meta.url))
-const FIXTURES = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtures")
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const FIXTURES = path.join(__dirname, "fixtures")
 
 test.describe("PR-11: External JSON Scenarios", () => {
 
