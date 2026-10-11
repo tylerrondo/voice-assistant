@@ -232,7 +232,7 @@ export class DialogueStateManager {
       }
 
       if (ctx.ownerId !== identity.ownerId || ctx.sessionId !== identity.sessionId) {
-        return { success: false as const, error: 'ACCESS_DENIED' as const, message: 'Cross-session context mutation is prohibited' };
+        return { success: false as const, error: 'CONTEXT_ACCESS_DENIED' as const, message: 'Cross-session context mutation is prohibited' };
       }
 
       // Optimistic CAS version check
