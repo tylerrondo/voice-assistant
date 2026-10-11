@@ -1,0 +1,31 @@
+name: Focused Tests 21-40
+
+on:
+  push:
+    branches: [sc-integration-005]
+
+jobs:
+  focused-e2e-21-40:
+    timeout-minutes: 20
+    runs-on: ubuntu-latest
+    env:
+      APP_URL: http://localhost:3000
+      CI: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+      - name: Run only tests 21-40 from the d476afc test sequence
+        run: >-
+          npx playwright test
+          tests/e2e/platform/dialogue-state.spec.ts
+          tests/e2e/platform/intent-resolution.spec.ts
+          tests/e2e/platform/multi-context-session.spec.ts
+          tests/e2e/platform/production-pipeline.spec.ts
+          --grep "DIALOGUE-E2E-04|DIALOGUE-E2E-05|DIALOGUE-E2E-06|DIALOGUE-E2E-07|DIALOGUE-E2E-08|E2E-INTENT-01|E2E-INTENT-02|E2E-INTENT-03|E2E-SLOT-01|E2E-SLOT-02|E2E-REGISTRY-02|MULTICONTEXT-E2E-01|MULTICONTEXT-E2E-03|MULTICONTEXT-E2E-05|MULTICONTEXT-E2E-06|MULTICONTEXT-E2E-07|MULTICONTEXT-E2E-08|MULTICONTEXT-E2E-09|PIPELINE-E2E-01|PIPELINE-E2E-02"

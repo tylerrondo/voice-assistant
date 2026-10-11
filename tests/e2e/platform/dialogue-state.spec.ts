@@ -1,5 +1,9 @@
 import { test, expect } from '@playwright/test';
 import * as path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const scenarioFilePath = path.resolve(__dirname, '../../../scenario-platform-dialogue-slot-filling.json');
 
@@ -21,8 +25,21 @@ test.describe('E2E: Strict Platform Dialogue State & Multi-Turn Slot-Filling Sui
       if (!channel) {
         throw new Error('VoiceChannel production instance is not initialized on window.__VOICE_CHANNEL__');
       }
-      return channel.handleIncomingVoice(text);
+      const app = (window as any).__VOICE_DEMO_APP__;
+      if (!app || typeof app.getIdentity !== 'function') {
+        throw new Error('Voice demo app identity is not initialized');
+      }
+      return channel.handleIncomingVoice(text, app.getIdentity());
     }, phrase);
+  }
+
+  async function latestContext(page: any) {
+    return page.evaluate(() => {
+      const app = (window as any).__VOICE_DEMO_APP__;
+      const dm = (window as any).__DIALOGUE_MANAGER__;
+      if (!app || !dm) return null;
+      return dm.listContexts(app.getIdentity()).sort((a: any, b: any) => b.createdAt - a.createdAt)[0] || null;
+    });
   }
 
   test('DIALOGUE-E2E-01 & 02: Incomplete Voice Command -> WAITING_FOR_SLOT, missing quantity & Clarification Prompt', async ({ page }) => {
@@ -31,7 +48,7 @@ test.describe('E2E: Strict Platform Dialogue State & Multi-Turn Slot-Filling Sui
 
     const state = await page.evaluate(() => {
       const dm = (window as any).__DIALOGUE_MANAGER__;
-      return dm ? dm.getActiveState() : null;
+      return dm ? dm.getActiveState((window as any).__VOICE_DEMO_APP__.getIdentity()) : null;
     });
 
     expect(state).not.toBeNull();
@@ -49,7 +66,7 @@ test.describe('E2E: Strict Platform Dialogue State & Multi-Turn Slot-Filling Sui
 
     const state = await page.evaluate(() => {
       const dm = (window as any).__DIALOGUE_MANAGER__;
-      return dm ? dm.getActiveState() : null;
+      return dm ? dm.listContexts((window as any).__VOICE_DEMO_APP__.getIdentity()).sort((a: any, b: any) => b.createdAt - a.createdAt)[0] || null : null;
     });
 
     expect(state.status).toBe('COMPLETED');
@@ -57,7 +74,7 @@ test.describe('E2E: Strict Platform Dialogue State & Multi-Turn Slot-Filling Sui
 
     const executedPayload = await page.evaluate(() => {
       const dm = (window as any).__DIALOGUE_MANAGER__;
-      const logs = dm ? dm.getExecutionLogs() : [];
+      const logs = dm ? dm.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity()) : [];
       const targetAction = logs.find((l: any) => l.intent === 'PROCESS_TEST_ACTION');
       return targetAction ? targetAction.payload : null;
     });
@@ -75,7 +92,7 @@ test.describe('E2E: Strict Platform Dialogue State & Multi-Turn Slot-Filling Sui
 
     const state = await page.evaluate(() => {
       const dm = (window as any).__DIALOGUE_MANAGER__;
-      return dm ? dm.getActiveState() : null;
+      return dm ? dm.listContexts((window as any).__VOICE_DEMO_APP__.getIdentity()).sort((a: any, b: any) => b.createdAt - a.createdAt)[0] || null : null;
     });
 
     expect(state.status).toBe('WAITING_FOR_SLOT');
@@ -86,7 +103,7 @@ test.describe('E2E: Strict Platform Dialogue State & Multi-Turn Slot-Filling Sui
     
     const completedState = await page.evaluate(() => {
       const dm = (window as any).__DIALOGUE_MANAGER__;
-      return dm ? dm.getActiveState() : null;
+      return dm ? dm.listContexts((window as any).__VOICE_DEMO_APP__.getIdentity()).sort((a: any, b: any) => b.createdAt - a.createdAt)[0] || null : null;
     });
     expect(completedState.status).toBe('COMPLETED');
   });
@@ -98,14 +115,14 @@ test.describe('E2E: Strict Platform Dialogue State & Multi-Turn Slot-Filling Sui
 
     const state = await page.evaluate(() => {
       const dm = (window as any).__DIALOGUE_MANAGER__;
-      return dm ? dm.getActiveState() : null;
+      return dm ? dm.listContexts((window as any).__VOICE_DEMO_APP__.getIdentity()).sort((a: any, b: any) => b.createdAt - a.createdAt)[0] || null : null;
     });
 
     expect(state.status).toBe('CANCELLED');
 
     const hasExecuted = await page.evaluate(() => {
       const dm = (window as any).__DIALOGUE_MANAGER__;
-      const logs = dm ? dm.getExecutionLogs() : [];
+      const logs = dm ? dm.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity()) : [];
       return logs.some((l: any) => l.intent === 'PROCESS_TEST_ACTION');
     });
     expect(hasExecuted).toBe(false);
@@ -120,7 +137,7 @@ test.describe('E2E: Strict Platform Dialogue State & Multi-Turn Slot-Filling Sui
 
     const state = await page.evaluate(() => {
       const dm = (window as any).__DIALOGUE_MANAGER__;
-      return dm ? dm.getActiveState() : null;
+      return dm ? dm.listContexts((window as any).__VOICE_DEMO_APP__.getIdentity()).sort((a: any, b: any) => b.createdAt - a.createdAt)[0] || null : null;
     });
 
     expect(state.intent).toBe('PROCESS_SALE');
@@ -132,14 +149,16 @@ test.describe('E2E: Strict Platform Dialogue State & Multi-Turn Slot-Filling Sui
     await setupApp(page);
     await emitVoicePhrase(page, 'Обработай яблоки');
 
-    await page.evaluate(() => {
+    await page.evaluate(async () => {
       const dm = (window as any).__DIALOGUE_MANAGER__;
-      if (dm) dm.triggerTimeout();
+      const app = (window as any).__VOICE_DEMO_APP__;
+      const state = app && dm ? dm.getActiveState(app.getIdentity()) : null;
+      if (state && app && dm) await dm.expireContext(state.contextId, app.getIdentity());
     });
 
     const state = await page.evaluate(() => {
       const dm = (window as any).__DIALOGUE_MANAGER__;
-      return dm ? dm.getActiveState() : null;
+      return dm ? dm.listContexts((window as any).__VOICE_DEMO_APP__.getIdentity()).sort((a: any, b: any) => b.createdAt - a.createdAt)[0] || null : null;
     });
 
     expect(state.status).toBe('EXPIRED');
@@ -155,7 +174,7 @@ test.describe('E2E: Strict Platform Dialogue State & Multi-Turn Slot-Filling Sui
 
     const executionCount = await page.evaluate(() => {
       const dm = (window as any).__DIALOGUE_MANAGER__;
-      const logs = dm ? dm.getExecutionLogs() : [];
+      const logs = dm ? dm.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity()) : [];
       return logs.filter((l: any) => l.intent === 'PROCESS_TEST_ACTION').length;
     });
 

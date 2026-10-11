@@ -1,0 +1,29 @@
+name: First 10 Playwright Tests
+
+on:
+  push:
+    branches: [sc-integration-005]
+
+jobs:
+  first-10:
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    env:
+      APP_URL: http://localhost:3000
+      CI: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+      - name: Run focused first 10 tests
+        run: >-
+          npx playwright test
+          tests/e2e/platform/dialogue-state.spec.ts
+          tests/e2e/platform/context-ownership.spec.ts
+          --grep 'DIALOGUE-E2E-0[1-8]|E2E-OWNERSHIP-0[1-2]'

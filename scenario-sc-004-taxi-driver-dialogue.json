@@ -2,7 +2,7 @@
   "version": 2,
   "id": "scenario-set-sc-004-taxi-driver-dialogue",
   "name": "Taxi Driver Multi-Turn Dialogue & Slot-Filling Workflow",
-  "description": "Многошаговый голосовой сценарий водителя такси с дозапросом номера заказа (orderId) через Dialogue State и переводом рабочего FSM в ORDER_ACCEPTED.",
+  "description": "Многошаговый голосовой сценарий водителя такси с дозапросом номера заказа (orderId) через Dialogue State; событие принятия заказа отправляется после заполнения обязательного слота.",
   "scenarios": [
     {
       "id": "sc004-accept-order-dialogue",
@@ -12,7 +12,9 @@
         "value": "voice.accept-order"
       },
       "intent": "ACCEPT_ORDER",
-      "requiredSlots": ["orderId"],
+      "requiredSlots": [
+        "orderId"
+      ],
       "clarificationPrompts": {
         "orderId": "Какой заказ?"
       },
@@ -29,7 +31,59 @@
         {
           "kind": "end"
         }
-      ]
+      ],
+      "aliases": [
+        "Принять заказ",
+        "Прими заказ",
+        "Беру заказ",
+        "Accept order"
+      ],
+      "slotExtractors": {
+        "orderId": {
+          "type": "integer",
+          "pattern": "\\b\\d+\\b"
+        }
+      }
+    },
+    {
+      "id": "sc004-driver-arrived-dialogue",
+      "name": "Подтверждение прибытия к заказу",
+      "activation": {
+        "type": "voice",
+        "value": "voice.driver-arrived"
+      },
+      "intent": "DRIVER_ARRIVED",
+      "requiredSlots": [
+        "orderId"
+      ],
+      "clarificationPrompts": {
+        "orderId": "К какому заказу вы приехали?"
+      },
+      "steps": [
+        {
+          "kind": "emit",
+          "event": {
+            "type": "driver.arrived",
+            "payload": {
+              "orderId": "{{slots.orderId}}"
+            }
+          }
+        },
+        {
+          "kind": "end"
+        }
+      ],
+      "aliases": [
+        "Я приехал",
+        "Прибыл",
+        "На месте"
+      ],
+      "slotExtractors": {
+        "orderId": {
+          "type": "integer",
+          "pattern": "\\b\\d+\\b"
+        }
+      }
     }
   ]
 }

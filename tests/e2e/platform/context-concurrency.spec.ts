@@ -1,5 +1,9 @@
 import { test, expect } from '@playwright/test';
 import * as path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const scenarioFilePath = path.resolve(__dirname, '../../../scenario-platform-016-context-concurrency.json');
 
@@ -12,7 +16,10 @@ test.describe('E2E: PLATFORM-016 Concurrency Control Suite', () => {
     });
 
     await page.goto('http://localhost:3000');
-    await page.waitForSelector('#voice-app-ready', { timeout: 10000 });
+    await page.waitForFunction(() => {
+      const w = window as any;
+      return !!w.__VOICE_CHANNEL__ && !!w.__DIALOGUE_MANAGER__ && !!w.__VOICE_DEMO_APP__;
+    }, { timeout: 10000 });
 
     const fileInput = page.locator('input[type="file"]').first();
     await fileInput.setInputFiles(scenarioFilePath);
@@ -98,11 +105,11 @@ test.describe('E2E: PLATFORM-016 Concurrency Control Suite', () => {
       const app = (window as any).__VOICE_DEMO_APP__;
       const identity = app.getIdentity();
 
-      const ctx = dm.createContext('ORDER_PAYMENT', { paymentMethod: 'CARD' }, ['paymentMethod'], 'order.payment.completed', {}, identity);
+      const ctx = dm.createContext('ORDER_PAYMENT', { orderId: 1001 }, ['orderId'], 'driver.order.accepted', {}, identity);
       const ex = dm.createExecution(ctx, identity);
 
       const [dispRes, sysRes] = await Promise.all([
-        dm.dispatchAction(ex.executionId, { paymentMethod: 'CARD' }, identity),
+        dm.dispatchAction(ex.executionId, { orderId: 1001 }, identity),
         dm.handleSystemEvent(ctx.contextId, { type: 'EXTERNAL_FINISH', targetTransition: 'COMPLETE' }, identity)
       ]);
 

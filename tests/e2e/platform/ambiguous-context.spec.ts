@@ -1,11 +1,19 @@
 import { test, expect } from '@playwright/test';
 import * as path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const scenarioFilePath = path.resolve(__dirname, '../../../scenario-platform-011-ambiguous-context.json');
 
 test.describe('E2E: PLATFORM-011 Ambiguous Input & Context Selection Suite', () => {
 
   async function setupApp(page: any) {
+    await page.addInitScript(() => {
+      (window as any).__AUTH_OWNER_ID__ = 'driver-ambiguous-001';
+      (window as any).__AUTH_SESSION_ID__ = 'session-ambiguous-001';
+    });
     const appUrl = process.env.APP_URL || 'https://voice-assistant-two-olive.vercel.app';
     await page.goto(appUrl);
     await expect(page.locator('body')).toBeVisible();
@@ -25,7 +33,9 @@ test.describe('E2E: PLATFORM-011 Ambiguous Input & Context Selection Suite', () 
       if (!channel) {
         throw new Error('VoiceChannel production instance is not initialized on window.__VOICE_CHANNEL__');
       }
-      return channel.handleIncomingVoice(text);
+      const app = (window as any).__VOICE_DEMO_APP__;
+      if (!app) throw new Error('VoiceDemoApp is not initialized');
+      return channel.handleIncomingVoice(text, app.getIdentity());
     }, phrase);
   }
 
@@ -36,7 +46,7 @@ test.describe('E2E: PLATFORM-011 Ambiguous Input & Context Selection Suite', () 
     await emitVoicePhrase(page, 'Прими заказ 1001');
     await emitVoicePhrase(page, 'Прими заказ 1002');
 
-    const contexts = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.listContexts());
+    const contexts = await page.evaluate(() => { const w = window as any; return w.__DIALOGUE_MANAGER__.listContexts(w.__VOICE_DEMO_APP__.getIdentity()); });
     expect(contexts.length).toBe(2);
     const idA = contexts.find((c: any) => c.slots.orderId === 1001).contextId;
     const idB = contexts.find((c: any) => c.slots.orderId === 1002).contextId;
@@ -50,7 +60,7 @@ test.describe('E2E: PLATFORM-011 Ambiguous Input & Context Selection Suite', () 
     expect(ambResult.clarificationPrompt).toContain('1002');
 
     // 3. Verify zero execution
-    let logs = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getExecutionLogs());
+    let logs = await page.evaluate(() => { const w = window as any; return w.__DIALOGUE_MANAGER__.getExecutionLogs(w.__VOICE_DEMO_APP__.getIdentity()); });
     expect(logs.length).toBe(0);
 
     // 4. Clarification via explicit entity
@@ -62,15 +72,15 @@ test.describe('E2E: PLATFORM-011 Ambiguous Input & Context Selection Suite', () 
     await emitVoicePhrase(page, 'Картой');
 
     // 6. Verify single execution strictly correlated to 1002
-    logs = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getExecutionLogs());
+    logs = await page.evaluate(() => { const w = window as any; return w.__DIALOGUE_MANAGER__.getExecutionLogs(w.__VOICE_DEMO_APP__.getIdentity()); });
     expect(logs.length).toBe(1);
     expect(logs[0].contextId).toBe(idB);
-    expect(logs[0].event.type).toBe('driver.order.accepted');
-    expect(logs[0].event.payload.orderId).toBe(1002);
-    expect(logs[0].event.payload.payment).toBe('card');
+    expect(logs[0].actionType).toBe('driver.order.accepted');
+    expect(logs[0].payload.orderId).toBe(1002);
+    expect(logs[0].payload.payment).toBe('card');
 
     // Verify 1001 remains in WAITING_FOR_SLOT with 0 executions
-    const ctxA = await page.evaluate((id: string) => (window as any).__DIALOGUE_MANAGER__.getContext(id), idA);
+    const ctxA = await page.evaluate((id: string) => { const w = window as any; return w.__DIALOGUE_MANAGER__.getContext(id, w.__VOICE_DEMO_APP__.getIdentity()); }, idA);
     expect(ctxA.status).toBe('WAITING_FOR_SLOT');
   });
 
@@ -80,11 +90,11 @@ test.describe('E2E: PLATFORM-011 Ambiguous Input & Context Selection Suite', () 
     await emitVoicePhrase(page, 'Прими заказ 1001');
     await emitVoicePhrase(page, 'Прими заказ 1002');
 
-    const contexts = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.listContexts());
+    const contexts = await page.evaluate(() => { const w = window as any; return w.__DIALOGUE_MANAGER__.listContexts(w.__VOICE_DEMO_APP__.getIdentity()); });
     const idA = contexts.find((c: any) => c.slots.orderId === 1001).contextId;
 
     // Set activeContext to 1001
-    await page.evaluate((id: string) => (window as any).__DIALOGUE_MANAGER__.activateContext(id), idA);
+    await page.evaluate((id: string) => { const w = window as any; return w.__DIALOGUE_MANAGER__.activateContext(id, w.__VOICE_DEMO_APP__.getIdentity()); }, idA);
     const currentActive = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getActiveContextId());
     expect(currentActive).toBe(idA);
 
@@ -92,7 +102,7 @@ test.describe('E2E: PLATFORM-011 Ambiguous Input & Context Selection Suite', () 
     const ambResult = await emitVoicePhrase(page, 'Картой');
     expect(ambResult.status).toBe('AMBIGUOUS_CONTEXT');
 
-    const logs = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getExecutionLogs());
+    const logs = await page.evaluate(() => { const w = window as any; return w.__DIALOGUE_MANAGER__.getExecutionLogs(w.__VOICE_DEMO_APP__.getIdentity()); });
     expect(logs.length).toBe(0);
   });
 
@@ -102,7 +112,7 @@ test.describe('E2E: PLATFORM-011 Ambiguous Input & Context Selection Suite', () 
     await emitVoicePhrase(page, 'Прими заказ 1001');
     await emitVoicePhrase(page, 'Прими заказ 1002');
 
-    const contexts = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.listContexts());
+    const contexts = await page.evaluate(() => { const w = window as any; return w.__DIALOGUE_MANAGER__.listContexts(w.__VOICE_DEMO_APP__.getIdentity()); });
     const idA = contexts.find((c: any) => c.slots.orderId === 1001).contextId;
     const idB = contexts.find((c: any) => c.slots.orderId === 1002).contextId;
 
@@ -113,11 +123,11 @@ test.describe('E2E: PLATFORM-011 Ambiguous Input & Context Selection Suite', () 
     // Unaddressed utterance now has only 1 candidate (1002)
     await emitVoicePhrase(page, 'Наличными');
 
-    const logs = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getExecutionLogs());
+    const logs = await page.evaluate(() => { const w = window as any; return w.__DIALOGUE_MANAGER__.getExecutionLogs(w.__VOICE_DEMO_APP__.getIdentity()); });
     expect(logs.length).toBe(2);
 
-    const matchA = logs.filter((l: any) => l.contextId === idA && l.event.payload.orderId === 1001 && l.event.payload.payment === 'card');
-    const matchB = logs.filter((l: any) => l.contextId === idB && l.event.payload.orderId === 1002 && l.event.payload.payment === 'cash');
+    const matchA = logs.filter((l: any) => l.contextId === idA && l.actionType === 'driver.order.accepted' && l.payload.orderId === 1001 && l.payload.payment === 'card');
+    const matchB = logs.filter((l: any) => l.contextId === idB && l.actionType === 'driver.order.accepted' && l.payload.orderId === 1002 && l.payload.payment === 'cash');
 
     expect(matchA.length).toBe(1);
     expect(matchB.length).toBe(1);
@@ -130,7 +140,7 @@ test.describe('E2E: PLATFORM-011 Ambiguous Input & Context Selection Suite', () 
     const res = await emitVoicePhrase(page, 'Неизвестная фраза без совпадения');
     expect(res.status).toBe('NO_MATCH');
 
-    const logs = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getExecutionLogs());
+    const logs = await page.evaluate(() => { const w = window as any; return w.__DIALOGUE_MANAGER__.getExecutionLogs(w.__VOICE_DEMO_APP__.getIdentity()); });
     expect(logs.length).toBe(0);
   });
 
@@ -141,7 +151,7 @@ test.describe('E2E: PLATFORM-011 Ambiguous Input & Context Selection Suite', () 
     await emitVoicePhrase(page, 'Прими заказ 1001');
     await emitVoicePhrase(page, 'Прими заказ 1002');
 
-    const contexts = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.listContexts());
+    const contexts = await page.evaluate(() => { const w = window as any; return w.__DIALOGUE_MANAGER__.listContexts(w.__VOICE_DEMO_APP__.getIdentity()); });
     const idA = contexts.find((c: any) => c.slots.orderId === 1001).contextId;
     const idB = contexts.find((c: any) => c.slots.orderId === 1002).contextId;
 
@@ -152,14 +162,14 @@ test.describe('E2E: PLATFORM-011 Ambiguous Input & Context Selection Suite', () 
     expect(cancelAmbRes.candidateContextIds).toContain(idB);
 
     // Verify 0 contexts cancelled
-    let activeWaiting = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.listContexts().filter((c: any) => c.status === 'WAITING_FOR_SLOT'));
+    let activeWaiting = await page.evaluate(() => { const w = window as any; return w.__DIALOGUE_MANAGER__.listContexts(w.__VOICE_DEMO_APP__.getIdentity()).filter((c: any) => c.status === 'WAITING_FOR_SLOT'); });
     expect(activeWaiting.length).toBe(2);
 
     // 3. Explicit cancellation of 1002
     await emitVoicePhrase(page, 'Заказ 1002 отмена');
 
-    const ctxB = await page.evaluate((id: string) => (window as any).__DIALOGUE_MANAGER__.getContext(id), idB);
-    const ctxA = await page.evaluate((id: string) => (window as any).__DIALOGUE_MANAGER__.getContext(id), idA);
+    const ctxB = await page.evaluate((id: string) => { const w = window as any; return w.__DIALOGUE_MANAGER__.getContext(id, w.__VOICE_DEMO_APP__.getIdentity()); }, idB);
+    const ctxA = await page.evaluate((id: string) => { const w = window as any; return w.__DIALOGUE_MANAGER__.getContext(id, w.__VOICE_DEMO_APP__.getIdentity()); }, idA);
 
     expect(ctxB.status).toBe('CANCELLED');
     expect(ctxA.status).toBe('WAITING_FOR_SLOT');
@@ -167,11 +177,11 @@ test.describe('E2E: PLATFORM-011 Ambiguous Input & Context Selection Suite', () 
     // 4. Complete remaining 1001
     await emitVoicePhrase(page, 'Картой'); // Now single candidate (1001), resolves automatically
 
-    const logs = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getExecutionLogs());
+    const logs = await page.evaluate(() => { const w = window as any; return w.__DIALOGUE_MANAGER__.getExecutionLogs(w.__VOICE_DEMO_APP__.getIdentity()); });
     expect(logs.length).toBe(1);
     expect(logs[0].contextId).toBe(idA);
-    expect(logs[0].event.payload.orderId).toBe(1001);
-    expect(logs[0].event.payload.payment).toBe('card');
+    expect(logs[0].payload.orderId).toBe(1001);
+    expect(logs[0].payload.payment).toBe('card');
   });
 
 });

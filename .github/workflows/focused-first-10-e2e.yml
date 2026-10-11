@@ -1,0 +1,32 @@
+name: Focused First 10 E2E Tests
+
+on:
+  push:
+    branches: [sc-integration-005]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+jobs:
+  focused-e2e:
+    timeout-minutes: 15
+    runs-on: ubuntu-latest
+    env:
+      APP_URL: http://localhost:3000
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+      - name: Run only the first 10 failing E2E tests
+        run: >
+          npx playwright test
+          tests/e2e/platform/action-dispatch-reliability.spec.ts
+          tests/e2e/platform/ambiguous-context.spec.ts
+          tests/e2e/platform/context-concurrency.spec.ts
+          --grep "E2E-RELIABILITY-01|E2E-AMBIGUITY-0[1-5]|E2E-RACE-0[1-4]"

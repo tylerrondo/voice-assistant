@@ -1,5 +1,9 @@
 import { test, expect } from '@playwright/test';
 import * as path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const scenarioFilePath = path.resolve(__dirname, '../../../scenario-platform-014-intent-slot-resolution.json');
 
@@ -36,13 +40,13 @@ test.describe('E2E: PLATFORM-014 Intent Resolution & Slot Ambiguity Suite', () =
     await setupApp(page);
 
     const res = await emitVoice(page, 'экспресс заказ 1001', sessionA);
-    expect(res.status).toBe('COMPLETED');
+    expect(res.status).toBe('SUCCEEDED');
     expect(res.intent).toBe('ORDER_EXPRESS');
 
     const logs = await page.evaluate((id) => (window as any).__DIALOGUE_MANAGER__.getExecutionLogs(id), sessionA);
     expect(logs.length).toBe(1);
-    expect(logs[0].event.type).toBe('order.express.created');
-    expect(logs[0].event.payload).toEqual({ orderId: 1001 });
+    expect(logs[0].actionType).toBe('order.express.created');
+    expect(logs[0].payload).toEqual({ orderId: 1001 });
   });
 
   test('E2E-INTENT-02: Ambiguous intent phrase returns AMBIGUOUS_INTENT with zero executions', async ({ page }) => {
@@ -55,8 +59,8 @@ test.describe('E2E: PLATFORM-014 Intent Resolution & Slot Ambiguity Suite', () =
         id: 'temp-amb-set',
         name: 'Temp Amb Set',
         scenarios: [
-          { id: 'sc-1', name: 'S1', activation: { type: 'voice', value: 'voice.order-taxi' }, priority: 10, intent: 'T1', steps: [{ kind: 'emit', event: { type: 't1', payload: {} } }] },
-          { id: 'sc-2', name: 'S2', activation: { type: 'voice', value: 'voice.order-food' }, priority: 10, intent: 'T2', steps: [{ kind: 'emit', event: { type: 't2', payload: {} } }] }
+          { id: 'sc-1', name: 'S1', activation: { type: 'voice', value: 'voice.order-taxi' }, priority: 200, intent: 'T1', steps: [{ kind: 'emit', event: { type: 't1', payload: {} } }] },
+          { id: 'sc-2', name: 'S2', activation: { type: 'voice', value: 'voice.order-food' }, priority: 200, intent: 'T2', steps: [{ kind: 'emit', event: { type: 't2', payload: {} } }] }
         ]
       });
     });
@@ -85,12 +89,12 @@ test.describe('E2E: PLATFORM-014 Intent Resolution & Slot Ambiguity Suite', () =
     });
 
     const res = await emitVoice(page, 'ride', sessionA);
-    expect(res.status).toBe('COMPLETED');
+    expect(res.status).toBe('SUCCEEDED');
     expect(res.intent).toBe('RIDE_VIP');
 
     const logs = await page.evaluate((id) => (window as any).__DIALOGUE_MANAGER__.getExecutionLogs(id), sessionA);
     expect(logs.length).toBe(1);
-    expect(logs[0].event.type).toBe('ride.vip');
+    expect(logs[0].actionType).toBe('ride.vip');
   });
 
   test('E2E-SLOT-01: Competing slot extractors with equal priority return AMBIGUOUS_SLOT and 0 executions', async ({ page }) => {
@@ -109,8 +113,8 @@ test.describe('E2E: PLATFORM-014 Intent Resolution & Slot Ambiguity Suite', () =
             intent: 'FILL_INTENT',
             requiredSlots: ['city'],
             slotExtractors: {
-              city: { type: 'string', priority: 50 },
-              street: { type: 'string', priority: 50 }
+              city: { type: 'string', pattern: 'москва', priority: 50 },
+              street: { type: 'string', pattern: 'москва', priority: 50 }
             },
             steps: [{ kind: 'emit', event: { type: 'fill.done', payload: {} } }]
           }
@@ -144,8 +148,8 @@ test.describe('E2E: PLATFORM-014 Intent Resolution & Slot Ambiguity Suite', () =
             intent: 'DELIVER_INTENT',
             requiredSlots: ['city'],
             slotExtractors: {
-              city: { type: 'string', priority: 100 },
-              street: { type: 'string', priority: 50 }
+              city: { type: 'string', pattern: 'ташкент', priority: 100 },
+              street: { type: 'string', pattern: 'ташкент', priority: 50 }
             },
             steps: [{ kind: 'emit', event: { type: 'deliver.done', payload: { city: '{{slots.city}}' } } }]
           }
@@ -156,12 +160,12 @@ test.describe('E2E: PLATFORM-014 Intent Resolution & Slot Ambiguity Suite', () =
     await emitVoice(page, 'deliver', sessionA);
     const fillRes = await emitVoice(page, 'ташкент', sessionA);
 
-    expect(fillRes.status).toBe('COMPLETED');
+    expect(fillRes.status).toBe('SUCCEEDED');
     expect(fillRes.slots.city).toBe('ташкент');
 
     const logs = await page.evaluate((id) => (window as any).__DIALOGUE_MANAGER__.getExecutionLogs(id), sessionA);
     expect(logs.length).toBe(1);
-    expect(logs[0].event.payload.city).toBe('ташкент');
+    expect(logs[0].payload.city).toBe('ташкент');
   });
 
   test('E2E-REGISTRY-01: Failed registry update leaves previously loaded ScenarioSet operational', async ({ page }) => {
@@ -201,10 +205,10 @@ test.describe('E2E: PLATFORM-014 Intent Resolution & Slot Ambiguity Suite', () =
     const logsB = await page.evaluate((id) => (window as any).__DIALOGUE_MANAGER__.getExecutionLogs(id), sessionB);
 
     expect(logsA.length).toBe(1);
-    expect(logsA[0].event.payload.orderId).toBe(1001);
+    expect(logsA[0].payload.orderId).toBe(1001);
 
     expect(logsB.length).toBe(1);
-    expect(logsB[0].event.payload.orderId).toBe(2001);
+    expect(logsB[0].payload.orderId).toBe(2001);
   });
 
 });

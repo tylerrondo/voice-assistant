@@ -1,5 +1,5 @@
 import { DialogueStateManager, type SessionIdentity } from './dialogue-manager';
-import { VoiceChannel, type ScenarioDefinition } from './voice-channel';
+import { VoiceChannel } from './voice-channel';
 import {
   DialogueEngine,
   type DialogueInput,
@@ -56,8 +56,7 @@ export class TelegramDialogueAdapter {
 
   public async handleMessage(
     input: TelegramInputMessage,
-    identity: SessionIdentity,
-    activeScenario?: ScenarioDefinition
+    identity: SessionIdentity
   ): Promise<DialogueAdapterResult> {
     const dm = this.engine.getDialogueManager();
     const activeCtxBefore = dm.getActiveState(identity);
@@ -75,17 +74,22 @@ export class TelegramDialogueAdapter {
       } : undefined
     };
 
-    const res = await this.engine.processInput(dialogueInput, identity, activeScenario);
+    const res = await this.engine.processInput(dialogueInput, identity);
 
     const activeCtxAfter = dm.getActiveState(identity);
     const newState = activeCtxAfter ? { ...activeCtxAfter.slots } : (res.slots || {});
+    const extractedSlots = Object.fromEntries(
+      Object.entries(newState).filter(([key, value]) =>
+        JSON.stringify(prevState[key]) !== JSON.stringify(value)
+      )
+    );
 
     this.lastInstrumentation = {
       channel: input.channel,
       raw_input: input.raw_input || null,
       transcript: input.transcript || null,
-      intent: activeCtxAfter?.intent || activeScenario?.intent || null,
-      extracted_slots: {},
+      intent: activeCtxAfter?.intent || activeCtxBefore?.intent || null,
+      extracted_slots: extractedSlots,
       previous_state: prevState,
       new_state: newState,
       next_question: res.nextQuestion || null,

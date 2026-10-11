@@ -7,6 +7,14 @@
   </head>
   <body>
     <div id="app"></div>
+    <script type="module">
+      // A local-only identity keeps the development demo bootable without weakening
+      // the production requirement for an authenticated session provider.
+      if (import.meta.env.DEV) {
+        window.__AUTH_OWNER_ID__ ??= 'local-development';
+        window.__AUTH_SESSION_ID__ ??= 'local-development-session';
+      }
+    </script>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

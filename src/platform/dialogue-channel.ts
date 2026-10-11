@@ -43,6 +43,7 @@ export interface DialogueEngineResult {
   missingSlots?: string[];
   nextQuestion?: string | null;
   offers?: unknown[];
+  candidates?: Array<{ slotName: string; value: any; scenarioId: string }>;
   dispatchStatus?: string;
   presentation: DialoguePresentation;
 }
@@ -66,8 +67,7 @@ export class DialogueEngine {
 
   public async processInput(
     input: DialogueInput,
-    identity: SessionIdentity,
-    explicitScenario?: ScenarioDefinition
+    identity: SessionIdentity
   ): Promise<DialogueEngineResult> {
     const inputModality: DialogueModality = input.modality || (input.channel as DialogueModality) || 'text';
     let rawText = '';
@@ -81,57 +81,65 @@ export class DialogueEngine {
     }
 
     // 1. Scenario Resolution & Binding Layer
-    let activeScenario = explicitScenario;
+    let activeScenario: ScenarioDefinition | undefined;
     let ctx = this.dm.getActiveState(identity);
 
-    if (!activeScenario) {
-      if (ctx && ctx.scenarioId) {
-        // Rule A: Existing context drives the scenario
-        activeScenario = this.vc.getScenarioById(ctx.scenarioId)
-          || this.vc.getDeterministicScenarioForIntent(ctx.intent);
-      } else {
-        // Rule B: Button without existing context cannot resolve intent
-        if (inputModality === 'button') {
-          return {
-            status: 'SCENARIO_NOT_FOUND',
-            presentation: {
-              text: 'No active dialogue found for button action.'
-            }
-          };
-        }
+    if (ctx) {
+      // Rule A: Existing context drives the scenario strictly via scenarioId
+      activeScenario = ctx.scenarioId
+        ? this.vc.getScenarioById(ctx.scenarioId)
+        : undefined;
 
-        // Rule C: New dialog resolution via VoiceChannel.resolveIntent
-        if (!rawText.trim()) {
-          return {
-            status: 'SCENARIO_NOT_FOUND',
-            presentation: {
-              text: 'Empty input.'
-            }
-          };
-        }
-
-        const intentRes = this.vc.resolveIntent(rawText);
-
-        if (intentRes.status === 'AMBIGUOUS_INTENT') {
-          return {
-            status: 'SCENARIO_AMBIGUOUS',
-            presentation: {
-              text: intentRes.clarificationPrompt || 'Ambiguous scenario.'
-            }
-          };
-        }
-
-        if (intentRes.status === 'NO_MATCH') {
-          return {
-            status: 'SCENARIO_NOT_FOUND',
-            presentation: {
-              text: 'Scenario not found.'
-            }
-          };
-        }
-
-        activeScenario = intentRes.scenario;
+      if (!activeScenario) {
+        return {
+          status: 'SCENARIO_NOT_FOUND',
+          presentation: {
+            text: 'Active context scenario not found.'
+          }
+        };
       }
+    } else {
+      // Rule B: Button without existing context cannot resolve intent
+      if (inputModality === 'button') {
+        return {
+          status: 'SCENARIO_NOT_FOUND',
+          presentation: {
+            text: 'No active dialogue found for button action.'
+          }
+        };
+      }
+
+      // Rule C: New dialog resolution via VoiceChannel.resolveIntent
+      if (!rawText.trim()) {
+        return {
+          status: 'SCENARIO_NOT_FOUND',
+          presentation: {
+            text: 'Empty input.'
+          }
+        };
+      }
+
+      const intentRes = this.vc.resolveIntent(rawText);
+
+      if (intentRes.status === 'AMBIGUOUS_INTENT') {
+        return {
+          status: 'SCENARIO_AMBIGUOUS',
+          presentation: {
+            text: intentRes.clarificationPrompt || 'Ambiguous scenario.'
+          }
+        };
+      }
+
+      if (intentRes.status === 'NO_MATCH') {
+        return {
+          status: 'SCENARIO_NOT_FOUND',
+          presentation: {
+            text: 'Scenario not found.'
+          }
+        };
+      }
+
+      activeScenario = intentRes.scenario;
     }
 
     if (!activeScenario) {
@@ -145,6 +153,7 @@ export class DialogueEngine {
 
     // 2. Extract slots using resolved scenario extractors
     let extractedSlots: Record<string, any> = {};
+    let slotAmbiguity: { candidates: Array<{ slotName: string; value: any; scenarioId: string }>; clarificationPrompt?: string } | undefined;
 
     if (inputModality === 'button') {
       if (input.payload?.slotName && input.payload?.slotValue !== undefined) {
@@ -153,6 +162,8 @@ export class DialogueEngine {
         const extracted = this.vc.extractSlotsDeterministically(rawText, activeScenario.slotExtractors, activeScenario.id);
         if (extracted.status === 'RESOLVED') {
           extractedSlots = extracted.slots;
+        } else if (extracted.status === 'AMBIGUOUS_SLOT') {
+          slotAmbiguity = extracted;
         }
       }
     } else {
@@ -160,6 +171,8 @@ export class DialogueEngine {
         const extracted = this.vc.extractSlotsDeterministically(rawText, activeScenario.slotExtractors, activeScenario.id);
         if (extracted.status === 'RESOLVED') {
           extractedSlots = extracted.slots;
+        } else if (extracted.status === 'AMBIGUOUS_SLOT') {
+          slotAmbiguity = extracted;
         }
       }
     }
@@ -177,6 +190,19 @@ export class DialogueEngine {
       );
     }
 
+    if (slotAmbiguity) {
+      return {
+        status: 'AMBIGUOUS_SLOT',
+        contextId: ctx.contextId,
+        slots: ctx.slots,
+        missingSlots: ctx.missingSlots,
+        candidates: slotAmbiguity.candidates,
+        presentation: {
+          text: slotAmbiguity.clarificationPrompt || 'Уточните, пожалуйста, какое значение вы имели в виду.'
+        }
+      };
+    }
+
     // 4. Declarative Cancellation check (strictly driven by Scenario definition)
     const confirmationConfig = activeScenario.confirmation;
     if (confirmationConfig) {
@@ -185,7 +211,7 @@ export class DialogueEngine {
       const nonConfirmSlots = Object.keys(extractedSlots).filter(k => k !== confirmSlot);
 
       if (extractedSlots[confirmSlot] === rejectedVal && nonConfirmSlots.length === 0) {
-        this.dm.cancelContext(ctx.contextId, identity);
+        await this.dm.cancelContext(ctx.contextId, identity);
         return {
           status: 'CANCELLED',
           presentation: {
@@ -197,18 +223,52 @@ export class DialogueEngine {
 
     // 5. Declarative Target Slot for Candidate Resolution
     const targetSlot = activeScenario.candidateBinding?.targetSlot;
+    const candidateSelectionKeys = new Set(['candidate_index', 'candidate_name', 'candidate_criteria', 'choice', targetSlot || '']);
+    const normalizedInput = rawText.toLowerCase();
+          const selectionTriggerMatched = /выбира|выбрать|вариант|choose|select|option|тогда.{0,20}(перв|втор|трет|четверт)|хочу.{0,12}(перв|втор|трет|четверт)/i.test(normalizedInput) || /^(?:перв\w*|втор\w*|трет\w*|четверт\w*|first|second|third|fourth|\d+)$/i.test(normalizedInput.trim());
 
-    // 6. Generic Candidate Resolution using existing SC-PLATFORM-003
-    if (targetSlot && ctx.offers && ctx.offers.length > 0 && extractedSlots[targetSlot] === undefined) {
+    // 6. Resolve only explicit candidate-selection input. Unrelated numeric slots
+    // (for example children_count=2) must never select candidate #2 by accident.
+    if (
+      targetSlot &&
+      ctx.offers &&
+      ctx.offers.length > 0 &&
+      extractedSlots[targetSlot] === undefined &&
+      (Object.keys(extractedSlots).some(key => candidateSelectionKeys.has(key)) || selectionTriggerMatched)
+    ) {
       const resolution = this.vc.resolveCandidate(
         extractedSlots,
         ctx.offers as any,
         activeScenario.candidateBinding,
         activeScenario.id,
-        targetSlot
+        targetSlot,
+        activeScenario.ambiguityPrompt?.template
       );
       if (resolution.status === 'RESOLVED') {
         extractedSlots[targetSlot] = resolution.targetId;
+      } else if (resolution.status === 'AMBIGUOUS_SLOT') {
+        return {
+          status: 'AMBIGUOUS_SLOT',
+          contextId: ctx.contextId,
+          slots: ctx.slots,
+          missingSlots: ctx.missingSlots,
+          candidates: resolution.candidates,
+          presentation: { text: resolution.clarificationPrompt || 'Выберите конкретный вариант.' }
+        };
+      } else if (resolution.status === 'CANDIDATE_UNAVAILABLE') {
+        return {
+          status: 'CANDIDATE_UNAVAILABLE',
+          contextId: ctx.contextId,
+          presentation: { text: resolution.message }
+        };
+      } else {
+        return {
+          status: 'NO_MATCH',
+          contextId: ctx.contextId,
+          slots: ctx.slots,
+          missingSlots: ctx.missingSlots,
+          presentation: { text: 'Не удалось найти выбранный вариант.' }
+        };
       }
     }
 

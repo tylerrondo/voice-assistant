@@ -1,5 +1,9 @@
 import { test, expect } from '@playwright/test';
 import * as path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const scenarioFilePath = path.resolve(__dirname, '../../../scenario-sc-009-taxi-driver-dialogue-concurrency.json');
 
@@ -21,11 +25,11 @@ test.describe('E2E: SC-009 Concurrent Multi-Context Regression Suite (ТЗ-VOICE
 
   async function emitVoicePhrase(page: any, phrase: string) {
     await page.evaluate(async (text: string) => {
-      const channel = (window as any).__VOICE_CHANNEL__;
-      if (!channel) {
-        throw new Error('VoiceChannel production instance is not initialized on window.__VOICE_CHANNEL__');
+      const dispatch = (window as any).__DISPATCH_VOICE_COMMAND__;
+      if (typeof dispatch !== 'function') {
+        throw new Error('Production voice-command dispatcher is not initialized');
       }
-      return channel.handleIncomingVoice(text);
+      return dispatch(text);
     }, phrase);
   }
 
@@ -35,7 +39,7 @@ test.describe('E2E: SC-009 Concurrent Multi-Context Regression Suite (ТЗ-VOICE
     await emitVoicePhrase(page, 'Прими заказ 1001');
     await emitVoicePhrase(page, 'Прими заказ 1002');
 
-    const contexts = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.listContexts());
+    const contexts = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.listContexts((window as any).__VOICE_DEMO_APP__.getIdentity()));
     expect(contexts.length).toBe(2);
 
     const ctxA = contexts.find((c: any) => c.slots.orderId === 1001);
@@ -53,7 +57,7 @@ test.describe('E2E: SC-009 Concurrent Multi-Context Regression Suite (ТЗ-VOICE
     await emitVoicePhrase(page, 'Прими заказ 1001');
     await emitVoicePhrase(page, 'Прими заказ 1002');
 
-    const contexts = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.listContexts());
+    const contexts = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.listContexts((window as any).__VOICE_DEMO_APP__.getIdentity()));
     const idA = contexts.find((c: any) => c.slots.orderId === 1001).contextId;
     const idB = contexts.find((c: any) => c.slots.orderId === 1002).contextId;
 
@@ -66,7 +70,7 @@ test.describe('E2E: SC-009 Concurrent Multi-Context Regression Suite (ТЗ-VOICE
     await emitVoicePhrase(page, 'Наличными');
 
     // 4. Verify exact isolated executions
-    const logs = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getExecutionLogs());
+    const logs = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity()));
     const matchA = logs.filter((l: any) => l.contextId === idA && l.event.payload.orderId === 1001 && l.event.payload.payment === 'card');
     const matchB = logs.filter((l: any) => l.contextId === idB && l.event.payload.orderId === 1002 && l.event.payload.payment === 'cash');
 
@@ -86,7 +90,7 @@ test.describe('E2E: SC-009 Concurrent Multi-Context Regression Suite (ТЗ-VOICE
     await emitVoicePhrase(page, 'Заказ 1002');
     await emitVoicePhrase(page, 'Наличными');
 
-    const logs = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getExecutionLogs());
+    const logs = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity()));
     const contaminated1001Cash = logs.filter((l: any) => l.event.payload.orderId === 1001 && l.event.payload.payment === 'cash');
     const contaminated1002Card = logs.filter((l: any) => l.event.payload.orderId === 1002 && l.event.payload.payment === 'card');
 
@@ -108,7 +112,7 @@ test.describe('E2E: SC-009 Concurrent Multi-Context Regression Suite (ТЗ-VOICE
     await emitVoicePhrase(page, 'Заказ 1002');
     await emitVoicePhrase(page, 'Наличными');
 
-    const logs = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getExecutionLogs());
+    const logs = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity()));
     const match1001 = logs.filter((l: any) => l.event.payload.orderId === 1001);
     const match1002 = logs.filter((l: any) => l.event.payload.orderId === 1002 && l.event.payload.payment === 'cash');
 
@@ -129,7 +133,7 @@ test.describe('E2E: SC-009 Concurrent Multi-Context Regression Suite (ТЗ-VOICE
     await emitVoicePhrase(page, 'Заказ 1002');
     await emitVoicePhrase(page, 'Картой'); // Same payment on 1002
 
-    const logs = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getExecutionLogs());
+    const logs = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity()));
     const match1001 = logs.filter((l: any) => l.event.payload.orderId === 1001 && l.event.payload.payment === 'card');
     const match1002 = logs.filter((l: any) => l.event.payload.orderId === 1002 && l.event.payload.payment === 'card');
 

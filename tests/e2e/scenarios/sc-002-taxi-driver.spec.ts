@@ -1,5 +1,9 @@
 import { test, expect } from '@playwright/test';
 import * as path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const scenarioFilePath = path.resolve(__dirname, '../../../scenario-sc-002-taxi-driver.json');
 
@@ -12,8 +16,9 @@ test.describe('SC-002: Taxi Driver Standard Trip - Runtime E2E Suite', () => {
 
     // 1. Switch to External JSON source
     const fileSourceRadio = page.locator('[data-testid="scenario-source-file"]').or(page.getByLabel(/загрузить json|файл json|upload json/i)).or(page.locator('input[type="file"]').locator('..'));
-    if (await fileSourceRadio.isVisible()) {
-      await fileSourceRadio.click();
+    const sourceControl = fileSourceRadio.first();
+    if (await sourceControl.isVisible()) {
+      await sourceControl.click();
     }
 
     // 2. Upload SC-002 JSON

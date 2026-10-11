@@ -50,6 +50,10 @@ export interface ActionExecution {
   createdAt: number;
   updatedAt: number;
   errorCode?: string;
+  event: {
+    type: string;
+    payload: Record<string, any>;
+  };
 }
 
 export type DispatchResult =
@@ -95,6 +99,7 @@ export interface SystemEventDescriptor {
 export class DialogueStateManager {
   private contexts: Map<string, DialogueContext> = new Map();
   private activeContextId: string | null = null;
+  private activeContextBySession: Map<string, string> = new Map();
   private executions: Map<string, ActionExecution> = new Map();
   private maxActiveContexts: number;
   private defaultTtlMs: number;
@@ -105,6 +110,7 @@ export class DialogueStateManager {
 
   // Per-Context Serialization Queues
   private contextMutationQueues: Map<string, Promise<any>> = new Map();
+  private executionDispatchPromises: Map<string, Promise<DispatchResult>> = new Map();
 
   constructor(configOrTimeout: DialogueManagerConfig | number = {}) {
     if (typeof configOrTimeout === 'number') {
@@ -133,8 +139,10 @@ export class DialogueStateManager {
     this.timerMap.clear();
     this.contexts.clear();
     this.activeContextId = null;
+    this.activeContextBySession.clear();
     this.executions.clear();
     this.contextMutationQueues.clear();
+    this.executionDispatchPromises.clear();
   }
 
   private validateIdentity(identity: SessionIdentity): void {
@@ -147,13 +155,44 @@ export class DialogueStateManager {
     return this.activeContextId;
   }
 
+  private sessionKey(identity: SessionIdentity): string {
+    return `${identity.ownerId}\\u0000${identity.sessionId}`;
+  }
+
+  private setActiveContext(contextId: string, identity: SessionIdentity): void {
+    this.activeContextId = contextId;
+    this.activeContextBySession.set(this.sessionKey(identity), contextId);
+  }
+
   public getActiveState(identity: SessionIdentity): DialogueContext | null {
     this.validateIdentity(identity);
-    if (!this.activeContextId) return null;
-    const ctx = this.contexts.get(this.activeContextId);
-    if (!ctx || ctx.ownerId !== identity.ownerId || ctx.sessionId !== identity.sessionId) {
-      return null;
+    const key = this.sessionKey(identity);
+    let contextId = this.activeContextBySession.get(key);
+    let ctx = contextId ? this.contexts.get(contextId) : undefined;
+
+    if (!ctx || ctx.ownerId !== identity.ownerId || ctx.sessionId !== identity.sessionId ||
+        !['WAITING_FOR_SLOT', 'DISPATCHING', 'COMPLETED'].includes(ctx.status)) {
+      const candidates = Array.from(this.contexts.values())
+        .filter(candidate =>
+          candidate.ownerId === identity.ownerId &&
+          candidate.sessionId === identity.sessionId &&
+          ['WAITING_FOR_SLOT', 'DISPATCHING', 'COMPLETED'].includes(candidate.status)
+        );
+      const active = candidates.filter(c => ['WAITING_FOR_SLOT', 'DISPATCHING'].includes(c.status));
+      const pool = active.length > 0 ? active : candidates;
+      const replacement = pool.sort((a, b) => b.updatedAt - a.updatedAt)[0];
+
+      if (!replacement) {
+        this.activeContextBySession.delete(key);
+        if (contextId && this.activeContextId === contextId) this.activeContextId = null;
+        return null;
+      }
+      contextId = replacement.contextId;
+      ctx = replacement;
+      this.activeContextBySession.set(key, contextId);
     }
+
+    this.activeContextId = contextId!;
     return {
       ...ctx,
       slots: { ...ctx.slots },
@@ -195,7 +234,7 @@ export class DialogueStateManager {
     if (!ctx || ctx.ownerId !== identity.ownerId || ctx.sessionId !== identity.sessionId) {
       return false;
     }
-    this.activeContextId = contextId;
+    this.setActiveContext(contextId, identity);
     return true;
   }
 
@@ -325,7 +364,7 @@ export class DialogueStateManager {
             c.status === 'WAITING_FOR_SLOT'
         );
         if (existing) {
-          this.activeContextId = existing.contextId;
+          this.setActiveContext(existing.contextId, identity);
           return {
             ...existing,
             slots: { ...existing.slots },
@@ -370,7 +409,7 @@ export class DialogueStateManager {
     };
 
     this.contexts.set(contextId, newContext);
-    this.activeContextId = contextId;
+    this.setActiveContext(contextId, identity);
 
     if (missingSlots.length > 0) {
       this.scheduleTtlTimer(contextId, this.defaultTtlMs);
@@ -404,7 +443,7 @@ export class DialogueStateManager {
           if (ctx.ownerId !== identity.ownerId || ctx.sessionId !== identity.sessionId) {
             return { status: 'CONTEXT_ACCESS_DENIED' };
           }
-          this.activeContextId = ctx.contextId;
+          this.setActiveContext(ctx.contextId, identity);
           return { status: 'RESOLVED', contextId: ctx.contextId };
         }
       }
@@ -417,7 +456,7 @@ export class DialogueStateManager {
     });
 
     if (candidates.length === 1) {
-      this.activeContextId = candidates[0].contextId;
+      this.setActiveContext(candidates[0].contextId, identity);
       return { status: 'RESOLVED', contextId: candidates[0].contextId };
     }
 
@@ -438,7 +477,7 @@ export class DialogueStateManager {
     identity: SessionIdentity,
     expectedVersion?: number
   ): Promise<MutationResult<DialogueContext>> {
-    const targetId = contextId || this.activeContextId;
+    const targetId = contextId || this.activeContextBySession.get(this.sessionKey(identity)) || null;
     if (!targetId) {
       return { success: false, error: 'CONTEXT_NOT_FOUND', message: 'No target contextId specified' };
     }
@@ -479,7 +518,7 @@ export class DialogueStateManager {
     identity: SessionIdentity,
     expectedVersion?: number
   ): Promise<MutationResult<boolean>> {
-    const targetId = contextId || this.activeContextId;
+    const targetId = contextId || this.activeContextBySession.get(this.sessionKey(identity)) || null;
     if (!targetId) {
       return { success: false, error: 'CONTEXT_NOT_FOUND', message: 'No target contextId specified' };
     }
@@ -606,6 +645,10 @@ export class DialogueStateManager {
       intent: ctx.intent,
       actionType: ctx.actionType,
       payload: { ...ctx.slots },
+      event: {
+        type: ctx.actionType,
+        payload: { ...ctx.slots }
+      },
       status: 'PENDING',
       attempt: 0,
       createdAt: now,
@@ -634,6 +677,10 @@ export class DialogueStateManager {
     if (JSON.stringify(execution.payload) !== JSON.stringify(payload)) {
       throw new Error('CONTRACT_VIOLATION: Payload cannot be mutated for same executionId');
     }
+
+    // Concurrent retries for one execution must share the same in-flight dispatch.
+    const inFlight = this.executionDispatchPromises.get(executionId);
+    if (inFlight) return inFlight;
 
     if (execution.status === 'SUCCEEDED') {
       return { status: 'SUCCEEDED', executionId: execution.executionId, attempt: execution.attempt };
@@ -780,6 +827,12 @@ export class DialogueStateManager {
     });
 
     this.contextMutationQueues.set(contextId, dispatchPromise);
+    this.executionDispatchPromises.set(executionId, dispatchPromise);
+    dispatchPromise.finally(() => {
+      if (this.executionDispatchPromises.get(executionId) === dispatchPromise) {
+        this.executionDispatchPromises.delete(executionId);
+      }
+    }).catch(() => undefined);
     return dispatchPromise;
   }
 
@@ -825,13 +878,27 @@ export class DialogueStateManager {
     if (exec.ownerId !== identity.ownerId || exec.sessionId !== identity.sessionId) {
       return undefined;
     }
-    return { ...exec, payload: { ...exec.payload } };
+    return {
+      ...exec,
+      payload: { ...exec.payload },
+      event: {
+        type: exec.actionType,
+        payload: { ...exec.payload }
+      }
+    };
   }
 
   public getExecutionLogs(identity: SessionIdentity): ActionExecution[] {
     this.validateIdentity(identity);
     return Array.from(this.executions.values())
       .filter(l => l.ownerId === identity.ownerId && l.sessionId === identity.sessionId)
-      .map(l => ({ ...l, payload: { ...l.payload } }));
+      .map(l => ({
+        ...l,
+        payload: { ...l.payload },
+        event: {
+          type: l.actionType,
+          payload: { ...l.payload }
+        }
+      }));
   }
 }

@@ -1,6 +1,10 @@
 import { test, expect } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 import { DialogueStateManager, type OfferDefinition } from '../../../src/platform/dialogue-manager';
 import { VoiceChannel } from '../../../src/platform/voice-channel';
 
@@ -149,7 +153,7 @@ test.describe('CONTRACT: SC-PASS-002 Multi-Offer Dialogue & Selection Suite', ()
 
     const res = await vc.handleIncomingVoice('тогда давайте второй', sessionPassengerA);
 
-    expect(res.status).toBe('OFFER_UNAVAILABLE');
+    expect(res.status).toBe('CANDIDATE_UNAVAILABLE');
     expect(res.offerId).toBe('OFFER-B');
 
     const ctx = dm.getActiveState(sessionPassengerA);
