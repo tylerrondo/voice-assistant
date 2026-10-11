@@ -660,7 +660,13 @@ export class VoiceChannel {
       const sc = intentRes.scenario;
 
       if (sc.query || sc.evaluation) {
-        const activeWaiting = this.dialogueManager.listContexts(identity).filter(c => c.status === 'WAITING_FOR_SLOT');
+        let activeWaiting = this.dialogueManager.listContexts(identity).filter(c => c.status === 'WAITING_FOR_SLOT');
+        const selectedContextId = this.explicitContextSelections.get(sessionKey);
+        if (selectedContextId) {
+          const selected = activeWaiting.find(context => context.contextId === selectedContextId);
+          if (selected) activeWaiting = [selected];
+          else this.explicitContextSelections.delete(sessionKey);
+        }
 
         if (activeWaiting.length === 0) {
           return {
@@ -698,6 +704,12 @@ export class VoiceChannel {
 
     // 3. Declarative Active Context Processing
     let activeWaiting = this.dialogueManager.listContexts(identity).filter(c => c.status === 'WAITING_FOR_SLOT');
+    const selectedContextId = this.explicitContextSelections.get(sessionKey);
+    if (selectedContextId) {
+      const selected = activeWaiting.find(context => context.contextId === selectedContextId);
+      if (selected) activeWaiting = [selected];
+      else this.explicitContextSelections.delete(sessionKey);
+    }
 
     // A repeated explicit activation with a different entity (for example,
     // "прими заказ 1002" while order 1001 is waiting for payment) starts a
