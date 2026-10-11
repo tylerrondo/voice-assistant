@@ -124,4 +124,29 @@ test.describe('CONTRACT: PLATFORM-013 Context Ownership & Session Isolation Suit
     expect(logsA[0].sessionId).toBe('session-A');
   });
 
+
+  test('CONTRACT-11: Numeric context routing requires an exact token match', async () => {
+    const dm = new DialogueStateManager();
+    const first = dm.createContext(
+      'ACCEPT_ORDER',
+      { orderId: 1001 },
+      ['payment'],
+      'driver.order.accepted',
+      {},
+      sessionA
+    );
+    const second = dm.createContext(
+      'ACCEPT_ORDER',
+      { orderId: 10010 },
+      ['payment'],
+      'driver.order.accepted',
+      {},
+      sessionA
+    );
+
+    const route = dm.resolveRouting('10010', [], sessionA);
+    expect(route).toMatchObject({ status: 'RESOLVED', contextId: second.contextId });
+    expect(route.status === 'RESOLVED' && route.contextId).not.toBe(first.contextId);
+  });
+
 });
