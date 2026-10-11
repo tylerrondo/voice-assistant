@@ -126,14 +126,9 @@ test.describe('SC-001: Live Application Runtime Execution E2E (External JSON & S
     await page.goto(appUrl);
     await expect(page.locator('body')).toBeVisible();
 
-    // 2. Select External JSON Source via UI
-    const fileSourceRadio = page.locator('[data-testid="scenario-source-file"]').or(page.getByLabel(/загрузить json|файл json|upload json/i)).or(page.locator('input[type="file"]').locator('..'));
-    if (await fileSourceRadio.isVisible()) {
-      await fileSourceRadio.click();
-    }
-
-    // 3. Upload the exact external scenario JSON file
-    const fileInput = page.locator('[data-testid="scenario-file-input"]').or(page.locator('input[type="file"]')).first();
+    // The production runtime exposes one direct JSON file input; it has no
+    // separate source-selection radio or Validation Bench wrapper.
+    const fileInput = page.locator('input[type="file"]').first();
     await fileInput.setInputFiles(scenarioFilePath);
 
     // 4. Verify External File is active and confirmed in UI
