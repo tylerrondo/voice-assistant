@@ -1,5 +1,5 @@
 import { fileURLToPath } from 'node:url';
-import { test, expect, beforeEach } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -32,7 +32,7 @@ test.describe('CONTRACT: SC-INTEGRATION-005 Generic Dialogue Scenario Routing & 
   let engine: DialogueEngine;
   let nannyScenarioSet: ScenarioSet;
 
-  beforeEach(() => {
+  test.beforeEach(() => {
     dm = new DialogueStateManager();
     vc = new VoiceChannel(dm);
 
