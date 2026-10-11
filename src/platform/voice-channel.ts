@@ -640,7 +640,7 @@ export class VoiceChannel {
     if (intentRes.status === 'RESOLVED') {
       const sc = intentRes.scenario;
       const normalize = (value: string) =>
-        value.replace(/^voice\\./i, '').replace(/[-_]/g, ' ').toLowerCase().trim().replace(/\\s+/g, ' ');
+        value.replace(/^voice\./i, '').replace(/[-_]/g, ' ').toLowerCase().trim().replace(/\s+/g, ' ');
       const activationTriggers = [
         sc.activation?.value,
         sc.expectedPhrase,
