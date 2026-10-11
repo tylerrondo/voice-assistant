@@ -141,6 +141,10 @@ export class VoiceChannel {
       if (!sc.intent || typeof sc.intent !== 'string') {
         throw new Error(`CONTRACT_VIOLATION: Scenario "${sc.id}" missing intent`);
       }
+
+      if (sc.priority !== undefined && !Number.isFinite(sc.priority)) {
+        throw new Error(`CONTRACT_VIOLATION: Scenario "${sc.id}" has invalid priority`);
+      }
     }
 
     const triggerOwners = new Map<string, string>();
