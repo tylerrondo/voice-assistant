@@ -130,10 +130,13 @@ test.describe('E2E: PLATFORM-010 Multi-Context Session Manager Runtime Suite', (
     await emitVoicePhrase(page, 'Прими заказ 1001');
     await emitVoicePhrase(page, 'Прими заказ 1002');
 
-    await page.evaluate(() => {
+    await page.evaluate(async () => {
       const dm = (window as any).__DIALOGUE_MANAGER__;
-      const ctxA = dm.listContexts((window as any).__VOICE_DEMO_APP__.getIdentity()).find((c: any) => c.slots.orderId === 1001);
-      if (ctxA) dm.expireContext(ctxA.contextId);
+      const identity = (window as any).__VOICE_DEMO_APP__.getIdentity();
+      const ctxA = dm.listContexts(identity).find((c: any) => c.slots.orderId === 1001);
+      if (!ctxA) throw new Error('Expected context 1001 before expiry');
+      const result = await dm.expireContext(ctxA.contextId, identity);
+      if (!result.success) throw new Error(`Context expiry failed: ${result.error}`);
     });
 
     const contexts = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.listContexts((window as any).__VOICE_DEMO_APP__.getIdentity()));
