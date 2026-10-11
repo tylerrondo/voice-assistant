@@ -124,7 +124,7 @@ export class VoiceChannel {
     this.dialogueManager = dialogueManager;
   }
 
-  public registerScenarioSet(scenarioSet: ScenarioSet): void {
+  public registerScenarioSet(scenarioSet: ScenarioSet, replaceActiveSet: boolean = false): void {
     if (!scenarioSet || !Array.isArray(scenarioSet.scenarios)) {
       throw new Error('CONTRACT_VIOLATION: Invalid ScenarioSet structure');
     }
@@ -179,7 +179,9 @@ export class VoiceChannel {
         this.scenarioRegistry.push({ ...sc });
       }
     }
-    this.activeScenarioIds = new Set(scenarioSet.scenarios.map(sc => sc.id));
+    this.activeScenarioIds = replaceActiveSet
+      ? new Set(scenarioSet.scenarios.map(sc => sc.id))
+      : new Set([...this.activeScenarioIds, ...scenarioSet.scenarios.map(sc => sc.id)]);
     this.activeScenarioSetId = scenarioSet.id;
   }
 
