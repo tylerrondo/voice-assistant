@@ -19,7 +19,7 @@ test.describe('CONTRACT: SC-PASS-001 Passenger Order Multi-turn Dialogue Suite',
     scenarioSet = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
   });
 
-  test.test.beforeEach(() => {
+  test.beforeEach(() => {
     dispatcherCalls = 0;
     dm = new DialogueStateManager({
       actionDispatcher: async (event, ctx, exec) => {
