@@ -572,12 +572,17 @@ export class DialogueStateManager {
     providedExecutionId?: string
   ): ActionExecution {
     this.validateIdentity(identity);
-    if (ctx.ownerId !== identity.ownerId || ctx.sessionId !== identity.sessionId) {
+    const currentCtx = this.contexts.get(ctx.contextId);
+    if (!currentCtx) {
+      throw new Error(`CONTRACT_VIOLATION: Context "${ctx.contextId}" not found`);
+    }
+
+    if (currentCtx.ownerId !== identity.ownerId || currentCtx.sessionId !== identity.sessionId) {
       throw new Error('SECURITY_VIOLATION: Cannot create execution for foreign context');
     }
 
-    if (['COMPLETED', 'CANCELLED', 'EXPIRED'].includes(ctx.status)) {
-      throw new Error(`CONTRACT_VIOLATION: Cannot create execution for terminal context (${ctx.status})`);
+    if (['COMPLETED', 'CANCELLED', 'EXPIRED'].includes(currentCtx.status)) {
+      throw new Error(`CONTRACT_VIOLATION: Cannot create execution for terminal context (${currentCtx.status})`);
     }
 
     const executionId = providedExecutionId || `exec_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -585,9 +590,9 @@ export class DialogueStateManager {
     if (this.executions.has(executionId)) {
       const existing = this.executions.get(executionId)!;
       const sameOwner = existing.ownerId === identity.ownerId && existing.sessionId === identity.sessionId;
-      const sameCtx = existing.contextId === ctx.contextId;
-      const sameAction = existing.actionType === ctx.actionType;
-      const samePayload = JSON.stringify(existing.payload) === JSON.stringify(ctx.slots);
+      const sameCtx = existing.contextId === currentCtx.contextId;
+      const sameAction = existing.actionType === currentCtx.actionType;
+      const samePayload = JSON.stringify(existing.payload) === JSON.stringify(currentCtx.slots);
 
       if (sameOwner && sameCtx && sameAction && samePayload) {
         return existing;
@@ -595,7 +600,7 @@ export class DialogueStateManager {
       throw new Error(`CONTRACT_VIOLATION: Cannot overwrite existing executionId "${executionId}" with different execution data`);
     }
 
-    const idempotencyKey = `idemp_${ctx.contextId}_${executionId}_${ctx.actionType}`;
+    const idempotencyKey = `idemp_${currentCtx.contextId}_${executionId}_${currentCtx.actionType}`;
     const now = Date.now();
 
     const execution: ActionExecution = {
@@ -603,11 +608,11 @@ export class DialogueStateManager {
       idempotencyKey,
       ownerId: identity.ownerId,
       sessionId: identity.sessionId,
-      contextId: ctx.contextId,
-      scenarioId: ctx.scenarioId || 'sc-default',
-      intent: ctx.intent,
-      actionType: ctx.actionType,
-      payload: { ...ctx.slots },
+      contextId: currentCtx.contextId,
+      scenarioId: currentCtx.scenarioId || 'sc-default',
+      intent: currentCtx.intent,
+      actionType: currentCtx.actionType,
+      payload: { ...currentCtx.slots },
       status: 'PENDING',
       attempt: 0,
       createdAt: now,
