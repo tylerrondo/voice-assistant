@@ -1,10 +1,10 @@
-import {
-  DialogueStateManager,
+import { DialogueStateManager } from './dialogue-manager';
+import type {
   ActionDispatcher,
-  type SessionIdentity,
-  type OfferDefinition,
-  type DialogueContext,
-  type RoutingResult
+  SessionIdentity,
+  OfferDefinition,
+  DialogueContext,
+  RoutingResult
 } from './dialogue-manager';
 
 export interface SlotRule {
