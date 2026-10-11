@@ -155,7 +155,7 @@ test.describe('CONTRACT: SC-PLATFORM-001 Declarative Scenario Portability Suite'
 
     const res = await vc.handleIncomingVoice('confirm', sessionUserA);
 
-    expect(res.status).toBe('SUCCEEDED');
+    expect(res.status).toBe('COMPLETED');
     expect(dm.getExecutionLogs(sessionUserA).length).toBe(1);
     expect(dispatcherCalls).toBe(1);
   });
