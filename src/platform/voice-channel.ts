@@ -167,11 +167,17 @@ export class VoiceChannel {
       }
     }
 
-    // The uploaded ScenarioSet is the active contract for this runtime.
-    // Do not retain scenarios from a previously loaded set: overlapping aliases
-    // can otherwise route a voice command into the wrong intent or leave a
-    // multi-slot context unresolved.
-    this.scenarioRegistry = scenarioSet.scenarios.map(sc => ({ ...sc }));
+    // Keep scenarios referenced by active dialogue contexts available after a
+    // new set is registered. Replace matching IDs in place and append new IDs;
+    // active contexts must continue using their original scenario's extraction rules.
+    for (const sc of scenarioSet.scenarios) {
+      const idx = this.scenarioRegistry.findIndex(existing => existing.id === sc.id);
+      if (idx >= 0) {
+        this.scenarioRegistry[idx] = { ...sc };
+      } else {
+        this.scenarioRegistry.push({ ...sc });
+      }
+    }
     this.activeScenarioSetId = scenarioSet.id;
   }
 
