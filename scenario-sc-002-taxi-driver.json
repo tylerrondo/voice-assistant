@@ -30,7 +30,8 @@
         {
           "kind": "end"
         }
-      ]
+      ],
+      "intent": "ACCEPT_ORDER"
     },
     {
       "id": "arrived",
@@ -62,7 +63,8 @@
         {
           "kind": "end"
         }
-      ]
+      ],
+      "intent": "DRIVER_ARRIVED"
     },
     {
       "id": "start-trip",
@@ -89,7 +91,8 @@
         {
           "kind": "end"
         }
-      ]
+      ],
+      "intent": "START_TRIP"
     },
     {
       "id": "finish-trip",
@@ -121,7 +124,8 @@
         {
           "kind": "end"
         }
-      ]
+      ],
+      "intent": "FINISH_TRIP"
     },
     {
       "id": "become-available",
@@ -149,7 +153,8 @@
         {
           "kind": "end"
         }
-      ]
+      ],
+      "intent": "DRIVER_AVAILABLE"
     }
   ]
 }
