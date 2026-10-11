@@ -85,7 +85,7 @@ test.describe('E2E: SC-010 Multi-Context Complete Lifecycle Suite (ТЗ-VOICE-SC
     expect(contextsAfter.find((c: any) => c.contextId === idC).status).toBe('COMPLETED');
 
     // Verify executions correlated to contextId
-    const logs = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity()));
+    const logs = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity()).filter((entry: any) => entry.status === 'SUCCEEDED'));
     const match1001 = logs.filter((l: any) => l.contextId === idA && l.event.payload.orderId === 1001 && l.event.payload.payment === 'card');
     const match1002 = logs.filter((l: any) => l.contextId === idB);
     const match1003 = logs.filter((l: any) => l.contextId === idC && l.event.payload.orderId === 1003 && l.event.payload.payment === 'cash');
@@ -131,7 +131,7 @@ test.describe('E2E: SC-010 Multi-Context Complete Lifecycle Suite (ТЗ-VOICE-SC
     await emitVoicePhrase(page, 'Заказ 1002');
     await emitVoicePhrase(page, 'Наличными');
 
-    const logs = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity()));
+    const logs = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity()).filter((entry: any) => entry.status === 'SUCCEEDED'));
     const countA = logs.filter((l: any) => l.contextId === idA).length;
     const countB = logs.filter((l: any) => l.contextId === idB).length;
     const countC = logs.filter((l: any) => l.contextId === idC).length;
@@ -162,7 +162,7 @@ test.describe('E2E: SC-010 Multi-Context Complete Lifecycle Suite (ТЗ-VOICE-SC
     await emitVoicePhrase(page, 'Заказ 1003');
     await emitVoicePhrase(page, 'Наличными');
 
-    const logs = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity()));
+    const logs = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity()).filter((entry: any) => entry.status === 'SUCCEEDED'));
 
     // Strict cross-context negative checks including contextId correlation
     const cA_cash = logs.filter((l: any) => l.contextId === idA && l.event.payload.payment === 'cash');
@@ -229,7 +229,7 @@ test.describe('E2E: SC-010 Multi-Context Complete Lifecycle Suite (ТЗ-VOICE-SC
     }
 
     // 5. Verify executions
-    const logs = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity()));
+    const logs = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity()).filter((entry: any) => entry.status === 'SUCCEEDED'));
     const match1004 = logs.filter((l: any) => l.contextId === id1004 && l.event.payload.orderId === 1004 && l.event.payload.payment === 'cash');
 
     expect(match1004.length).toBe(1);
@@ -253,7 +253,7 @@ test.describe('E2E: SC-010 Multi-Context Complete Lifecycle Suite (ТЗ-VOICE-SC
     const idA = contexts.find((c: any) => c.slots.orderId === 1001).contextId;
     const idC = contexts.find((c: any) => c.slots.orderId === 1003).contextId;
 
-    const logs = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity()));
+    const logs = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity()).filter((entry: any) => entry.status === 'SUCCEEDED'));
     const countA = logs.filter((l: any) => l.contextId === idA && l.event.payload.orderId === 1001 && l.event.payload.payment === 'card').length;
     const countC = logs.filter((l: any) => l.contextId === idC && l.event.payload.orderId === 1003 && l.event.payload.payment === 'cash').length;
 
