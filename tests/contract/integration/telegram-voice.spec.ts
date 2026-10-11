@@ -1,6 +1,9 @@
-import { test, expect } from '@playwright/test';
+import { fileURLToPath } from 'node:url';
+import { test, expect, beforeEach } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 import { DialogueStateManager } from '../../../src/platform/dialogue-manager';
 import { VoiceChannel, type ScenarioSet } from '../../../src/platform/voice-channel';
 import { TelegramDialogueAdapter } from '../../../src/platform/telegram-dialogue-adapter';

@@ -1,8 +1,11 @@
+import { fileURLToPath } from 'node:url';
 import { test, expect } from '@playwright/test';
 import { DialogueStateManager } from '../../../src/platform/dialogue-manager';
 import { VoiceChannel, ScenarioSet } from '../../../src/platform/voice-channel';
 import * as fs from 'fs';
 import * as path from 'path';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const scenarioPath = path.resolve(__dirname, '../../../scenario-platform-012-production-pipeline.json');
 const rawContent = fs.readFileSync(scenarioPath, 'utf-8');
