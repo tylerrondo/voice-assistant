@@ -30,7 +30,7 @@ test.describe('E2E: SC-007 Context Isolation & Cross-Contamination Protection Su
     await emitVoicePhrase(page, 'Прими заказ');
     await emitVoicePhrase(page, '1001');
 
-    const state = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getActiveState((window as any).__VOICE_DEMO_APP__.getIdentity()));
+    const state = await page.evaluate(() => ((window as any).__DIALOGUE_MANAGER__.listContexts((window as any).__VOICE_DEMO_APP__.getIdentity()).slice(-1)[0] || (window as any).__DIALOGUE_MANAGER__.getActiveState((window as any).__VOICE_DEMO_APP__.getIdentity())));
     expect(state.status).toBe('WAITING_FOR_SLOT');
     expect(state.intent).toBe('ACCEPT_ORDER');
     expect(state.slots.orderId).toBe(1001);
@@ -53,14 +53,14 @@ test.describe('E2E: SC-007 Context Isolation & Cross-Contamination Protection Su
 
     // 2. Switch to order 1002 without completing 1001
     await emitVoicePhrase(page, 'Прими заказ 1002');
-    let state = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getActiveState((window as any).__VOICE_DEMO_APP__.getIdentity()));
+    let state = await page.evaluate(() => ((window as any).__DIALOGUE_MANAGER__.listContexts((window as any).__VOICE_DEMO_APP__.getIdentity()).slice(-1)[0] || (window as any).__DIALOGUE_MANAGER__.getActiveState((window as any).__VOICE_DEMO_APP__.getIdentity())));
     expect(state.status).toBe('WAITING_FOR_SLOT');
     expect(state.slots.orderId).toBe(1002);
     expect(state.missingSlots).toEqual(['payment']);
 
     // 3. Fill payment for order 1002
     await emitVoicePhrase(page, 'Картой');
-    state = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getActiveState((window as any).__VOICE_DEMO_APP__.getIdentity()));
+    state = await page.evaluate(() => ((window as any).__DIALOGUE_MANAGER__.listContexts((window as any).__VOICE_DEMO_APP__.getIdentity()).slice(-1)[0] || (window as any).__DIALOGUE_MANAGER__.getActiveState((window as any).__VOICE_DEMO_APP__.getIdentity())));
     expect(state.status).toBe('COMPLETED');
     expect(state.slots).toEqual({ orderId: 1002, payment: 'card' });
 
@@ -170,7 +170,7 @@ test.describe('E2E: SC-007 Context Isolation & Cross-Contamination Protection Su
     await emitVoicePhrase(page, 'Не знаю');
     await emitVoicePhrase(page, 'Картой');
 
-    const state = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getActiveState((window as any).__VOICE_DEMO_APP__.getIdentity()));
+    const state = await page.evaluate(() => ((window as any).__DIALOGUE_MANAGER__.listContexts((window as any).__VOICE_DEMO_APP__.getIdentity()).slice(-1)[0] || (window as any).__DIALOGUE_MANAGER__.getActiveState((window as any).__VOICE_DEMO_APP__.getIdentity())));
     expect(state.status).toBe('COMPLETED');
     expect(state.slots).toEqual({ orderId: 1002, payment: 'card' });
 
