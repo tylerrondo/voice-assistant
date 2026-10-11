@@ -200,6 +200,7 @@ export class VoiceChannel {
   public resolveIntent(phrase: string): IntentResolutionResult {
     const text = phrase.trim().toLowerCase();
     const matchingScenarios: ScenarioDefinition[] = [];
+    const fullyMatchedScenarioIds = new Set<string>();
 
     for (const sc of this.scenarioRegistry) {
       const triggers: string[] = [];
@@ -209,14 +210,14 @@ export class VoiceChannel {
 
       const matches = triggers.some(trig => {
         const clean = trig.replace(/^voice\./, '').replace(/[-_]/g, ' ').toLowerCase().trim();
-        // A user may provide only the leading part of a multi-word trigger.
-        // Treat a complete leading token sequence as a candidate, not just a full trigger.
-        // This allows "take" to correctly surface ambiguity between "take trip" and
-        // "take order" instead of silently returning NO_MATCH.
-        return text === clean ||
+        // A user may provide only the leading part of a multi-word trigger. Keep it
+        // as a candidate for ambiguity, but do not let a partially matched information
+        // query steal an exact selection phrase such as "второй".
+        const fullMatch = text === clean ||
           text.startsWith(clean) ||
-          clean.startsWith(`${text} `) ||
           clean.split(/\s+/).every(w => text.includes(w));
+        if (fullMatch) fullyMatchedScenarioIds.add(sc.id);
+        return fullMatch || clean.startsWith(`${text} `);
       });
 
       if (matches) {
@@ -236,7 +237,7 @@ export class VoiceChannel {
     const maxPriority = Math.max(...matchingScenarios.map(s => s.priority ?? 0));
     const highestCandidates = matchingScenarios.filter(s => (s.priority ?? 0) === maxPriority);
 
-    const infoCandidate = highestCandidates.find(s => s.evaluation?.kind === 'query_attribute');
+    const infoCandidate = highestCandidates.find(s => s.evaluation?.kind === 'query_attribute' && fullyMatchedScenarioIds.has(s.id));
     if (infoCandidate) {
       return { status: 'RESOLVED', scenarioId: infoCandidate.id, intent: infoCandidate.intent, scenario: infoCandidate };
     }
