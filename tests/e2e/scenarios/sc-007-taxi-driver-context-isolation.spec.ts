@@ -53,6 +53,7 @@ test.describe('E2E: SC-007 Context Isolation & Cross-Contamination Protection Su
 
     // 2. Switch to order 1002 without completing 1001
     await emitVoicePhrase(page, 'Прими заказ 1002');
+    await emitVoicePhrase(page, 'Заказ 1002'); // Explicitly route the following slot to this context.
     let state = await page.evaluate(() => ((window as any).__DIALOGUE_MANAGER__.listContexts((window as any).__VOICE_DEMO_APP__.getIdentity()).slice(-1)[0] || (window as any).__DIALOGUE_MANAGER__.getActiveState((window as any).__VOICE_DEMO_APP__.getIdentity())));
     expect(state.status).toBe('WAITING_FOR_SLOT');
     expect(state.slots.orderId).toBe(1002);
@@ -89,6 +90,7 @@ test.describe('E2E: SC-007 Context Isolation & Cross-Contamination Protection Su
     await emitVoicePhrase(page, 'Прими заказ');
     await emitVoicePhrase(page, '1001');
     await emitVoicePhrase(page, 'Прими заказ 1002');
+    await emitVoicePhrase(page, 'Заказ 1002'); // Explicitly route the following slot to this context.
     await emitVoicePhrase(page, 'Картой');
 
     const logs = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity()));
@@ -109,6 +111,7 @@ test.describe('E2E: SC-007 Context Isolation & Cross-Contamination Protection Su
     await emitVoicePhrase(page, 'Прими заказ');
     await emitVoicePhrase(page, '1001');
     await emitVoicePhrase(page, 'Прими заказ 1002');
+    await emitVoicePhrase(page, 'Заказ 1002'); // Explicitly route the following slot to this context.
     await emitVoicePhrase(page, 'Картой');
 
     const total1002 = await page.evaluate(() => {
@@ -130,6 +133,7 @@ test.describe('E2E: SC-007 Context Isolation & Cross-Contamination Protection Su
     await emitVoicePhrase(page, 'Прими заказ');
     await emitVoicePhrase(page, '1001');
     await emitVoicePhrase(page, 'Прими заказ 1002');
+    await emitVoicePhrase(page, 'Заказ 1002'); // Explicitly route the following slot to this context.
     await emitVoicePhrase(page, 'Наличными');
 
     const matching1002 = await page.evaluate(() => {
@@ -167,6 +171,7 @@ test.describe('E2E: SC-007 Context Isolation & Cross-Contamination Protection Su
     await emitVoicePhrase(page, 'Прими заказ');
     await emitVoicePhrase(page, '1001');
     await emitVoicePhrase(page, 'Прими заказ 1002');
+    await emitVoicePhrase(page, 'Заказ 1002'); // Explicitly route the following slot to this context.
     await emitVoicePhrase(page, 'Не знаю');
     await emitVoicePhrase(page, 'Картой');
 
@@ -193,6 +198,7 @@ test.describe('E2E: SC-007 Context Isolation & Cross-Contamination Protection Su
     await emitVoicePhrase(page, 'Прими заказ');
     await emitVoicePhrase(page, '1001');
     await emitVoicePhrase(page, 'Прими заказ 1002');
+    await emitVoicePhrase(page, 'Заказ 1002'); // Explicitly route the following slot to this context.
     await emitVoicePhrase(page, 'Картой');
 
     // Duplicate utterances
