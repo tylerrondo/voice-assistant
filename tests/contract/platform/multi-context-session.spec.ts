@@ -58,9 +58,17 @@ test.describe('CONTRACT: PLATFORM-010 Multi-Context Session Manager Suite', () =
   });
 
   test('CONTRACT-06: Execution log contains contextId and strict actionType without fallback', async () => {
-    const dm = new DialogueStateManager();
+    const dm = new DialogueStateManager({
+      actionDispatcher: async (event, ctx, execution) => ({
+        status: 'SUCCEEDED',
+        executionId: execution.executionId,
+        attempt: execution.attempt
+      })
+    });
     const ctxA = dm.createContext('ACCEPT_ORDER', { orderId: 1001 }, ['orderId', 'payment'], 'driver.order.accepted', {}, identity);
     await dm.fillSlot('payment', 'card', ctxA.contextId, identity);
+    const execution = dm.createExecution(dm.getContext(ctxA.contextId, identity)!, identity);
+    await dm.dispatchAction(execution.executionId, execution.payload, identity);
 
     const logs = dm.getExecutionLogs(identity);
     expect(logs.length).toBe(1);
@@ -70,14 +78,24 @@ test.describe('CONTRACT: PLATFORM-010 Multi-Context Session Manager Suite', () =
   });
 
   test('CONTRACT-07: Idempotency is context-aware and does not conflict between orders', async () => {
-    const dm = new DialogueStateManager();
+    const dm = new DialogueStateManager({
+      actionDispatcher: async (event, ctx, execution) => ({
+        status: 'SUCCEEDED',
+        executionId: execution.executionId,
+        attempt: execution.attempt
+      })
+    });
     const ctxA = dm.createContext('ACCEPT_ORDER', { orderId: 1001 }, ['orderId', 'payment'], 'driver.order.accepted', {}, identity);
     const ctxB = dm.createContext('ACCEPT_ORDER', { orderId: 1002 }, ['orderId', 'payment'], 'driver.order.accepted', {}, identity);
 
     await dm.fillSlot('payment', 'card', ctxA.contextId, identity);
     await dm.fillSlot('payment', 'card', ctxA.contextId, identity); // duplicate
-
     await dm.fillSlot('payment', 'cash', ctxB.contextId, identity);
+
+    const executionA = dm.createExecution(dm.getContext(ctxA.contextId, identity)!, identity);
+    const executionB = dm.createExecution(dm.getContext(ctxB.contextId, identity)!, identity);
+    await dm.dispatchAction(executionA.executionId, executionA.payload, identity);
+    await dm.dispatchAction(executionB.executionId, executionB.payload, identity);
 
     const logs = dm.getExecutionLogs(identity);
     const matchA = logs.filter(l => l.contextId === ctxA.contextId);
