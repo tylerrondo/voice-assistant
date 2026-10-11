@@ -209,17 +209,28 @@ export class VoiceChannel {
     const matchingScenarios: ScenarioDefinition[] = [];
 
     for (const sc of this.scenarioRegistry) {
-      const triggers: string[] = [];
-      if (sc.activation?.value) triggers.push(sc.activation.value);
-      if (Array.isArray(sc.triggerPhrases)) triggers.push(...sc.triggerPhrases);
-      if (Array.isArray(sc.aliases)) triggers.push(...sc.aliases);
+      const normalize = (trigger: string) =>
+        trigger.replace(/^voice\./, '').replace(/[-_]/g, ' ').toLowerCase().trim();
 
-      const matches = triggers.some(trig => {
-        const clean = trig.replace(/^voice\./, '').replace(/[-_]/g, ' ').toLowerCase().trim();
-        return text === clean || text.startsWith(clean) || (text.length >= 3 && clean.startsWith(text)) || clean.split(/\s+/).every(w => text.includes(w));
-      });
+      const activation = sc.activation?.value ? normalize(sc.activation.value) : undefined;
+      const activationMatches = activation !== undefined && (
+        text === activation ||
+        text.startsWith(activation) ||
+        (text.length >= 3 && activation.startsWith(text)) ||
+        activation.split(/\s+/).every(word => text.includes(word))
+      );
 
-      if (matches) {
+      const phrases = [
+        ...(Array.isArray(sc.triggerPhrases) ? sc.triggerPhrases : []),
+        ...(Array.isArray(sc.aliases) ? sc.aliases : [])
+      ].map(normalize);
+      const phraseMatches = phrases.some(clean =>
+        text === clean ||
+        text.startsWith(clean) ||
+        clean.split(/\s+/).every(word => text.includes(word))
+      );
+
+      if (activationMatches || phraseMatches) {
         matchingScenarios.push(sc);
       }
     }
