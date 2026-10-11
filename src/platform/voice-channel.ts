@@ -654,7 +654,38 @@ export class VoiceChannel {
     }
 
     // 3. Declarative Active Context Processing
-    const activeWaiting = this.dialogueManager.listContexts(identity).filter(c => c.status === 'WAITING_FOR_SLOT');
+    let activeWaiting = this.dialogueManager.listContexts(identity).filter(c => c.status === 'WAITING_FOR_SLOT');
+
+    // A repeated explicit activation with a different entity (for example,
+    // "прими заказ 1002" while order 1001 is waiting for payment) starts a
+    // separate context instead of overwriting the entity in the first order.
+    if (intentRes.status === 'RESOLVED' && activeWaiting.length === 1) {
+      const activeCtx = activeWaiting[0];
+      const newScenario = intentRes.scenario;
+      if (activeCtx.scenarioId === newScenario.id && newScenario.slotExtractors) {
+        const normalize = (value: string) =>
+          value.replace(/^voice\./i, '').replace(/[-_]/g, ' ').toLowerCase().trim().replace(/\s+/g, ' ');
+        const activationTriggers = [
+          newScenario.activation?.value,
+          ...(newScenario.triggerPhrases || []),
+          ...(newScenario.aliases || [])
+        ].filter((value): value is string => typeof value === 'string' && value.trim().length > 0);
+        const normalizedText = normalize(text);
+        const explicitActivation = activationTriggers.some(trigger => {
+          const normalizedTrigger = normalize(trigger);
+          return normalizedText === normalizedTrigger || normalizedText.startsWith(`${normalizedTrigger} `);
+        });
+        if (explicitActivation) {
+          const extractedStart = this.extractSlotsDeterministically(text, newScenario.slotExtractors, newScenario.id);
+          if (extractedStart.status === 'RESOLVED') {
+            const changedEntity = Object.entries(extractedStart.slots).some(([slotName, value]) =>
+              activeCtx.slots[slotName] !== undefined && activeCtx.slots[slotName] !== value
+            );
+            if (changedEntity) activeWaiting = [];
+          }
+        }
+      }
+    }
 
     if (activeWaiting.length === 1) {
       const activeCtx = activeWaiting[0];
