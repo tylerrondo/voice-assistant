@@ -122,6 +122,10 @@ export class DialogueStateManager {
     this.reset();
   }
 
+  public hasActionDispatcher(): boolean {
+    return Boolean(this.actionDispatcher);
+  }
+
   public setActionDispatcher(dispatcher: ActionDispatcher): void {
     this.actionDispatcher = dispatcher;
   }
