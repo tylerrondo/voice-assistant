@@ -580,6 +580,15 @@ export class VoiceChannel {
                 };
               }
 
+              // Do not silently return the unchanged context when the user explicitly
+              // referred to a candidate that is not present in this OfferSet.
+              if (
+                candidateResolution.status === 'NO_MATCH' &&
+                Object.values(extracted).some(value => value !== 'CONFIRMED' && value !== 'REJECTED')
+              ) {
+                return { status: 'NO_MATCH' };
+              }
+
               if (candidateResolution.status === 'RESOLVED' && candidateResolution.targetId) {
                 const fillRes = await this.dialogueManager.fillSlot(targetSlot, candidateResolution.targetId, activeCtx.contextId, identity);
                 if (fillRes.success) {
