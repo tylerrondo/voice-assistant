@@ -23,6 +23,9 @@ jobs:
           node-version: 20
           cache: 'npm'
 
+      - name: Validate all repository JSON files
+        run: node scripts/validate-json.mjs
+
       - name: Install Dependencies
         run: npm ci || npm install
 
