@@ -185,7 +185,7 @@ export class DialogueEngine {
       const nonConfirmSlots = Object.keys(extractedSlots).filter(k => k !== confirmSlot);
 
       if (extractedSlots[confirmSlot] === rejectedVal && nonConfirmSlots.length === 0) {
-        this.dm.cancelContext(ctx.contextId, identity);
+        await this.dm.cancelContext(ctx.contextId, identity);
         return {
           status: 'CANCELLED',
           presentation: {
