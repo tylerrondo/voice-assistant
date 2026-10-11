@@ -233,8 +233,9 @@ export class DialogueEngine {
       if (remainingNonConfirm.length === 0) {
         await this.dm.fillSlot(confirmSlot, confirmationConfig.confirmedValue, ctx.contextId, identity);
         ctx = this.dm.getContext(ctx.contextId, identity)!;
-        const exec = this.dm.createExecution(ctx, identity);
-        const dispatchRes = await this.dm.dispatchAction(exec.executionId, ctx.slots, identity);
+        const eventPayload = activeScenario?.steps?.find(st => st.kind === 'emit')?.event?.payload || {};
+        const exec = this.dm.createExecution(ctx, identity, undefined, eventPayload);
+        const dispatchRes = await this.dm.dispatchAction(exec.executionId, exec.payload, identity);
 
         return {
           status: 'CONFIRMED',
