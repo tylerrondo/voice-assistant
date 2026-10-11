@@ -192,7 +192,7 @@ test.describe('E2E: SC-005 Taxi Driver Full Trip Workflow & Real FSM Suite (ТЗ
     // HIGH-4 FIX: Bind strictly to intent + orderId: 1001
     const executionCount = await page.evaluate(() => {
       const logs = (window as any).__DIALOGUE_MANAGER__.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity());
-      return logs.filter((l: any) => l.intent === 'DRIVER_ARRIVED' && l.payload?.orderId === 1001).length;
+      return logs.filter((l: any) => l.intent === 'DRIVER_ARRIVED' && l.status === 'SUCCEEDED' && l.payload?.orderId === 1001).length;
     });
 
     expect(executionCount).toBe(1);
