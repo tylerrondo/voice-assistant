@@ -185,7 +185,14 @@ export class VoiceChannel {
 
       const matches = triggers.some(trig => {
         const clean = trig.replace(/^voice\./, '').replace(/[-_]/g, ' ').toLowerCase().trim();
-        return text === clean || text.startsWith(clean) || clean.split(/\s+/).every(w => text.includes(w));
+        // A user may provide only the leading part of a multi-word trigger.
+        // Treat a complete leading token sequence as a candidate, not just a full trigger.
+        // This allows "take" to correctly surface ambiguity between "take trip" and
+        // "take order" instead of silently returning NO_MATCH.
+        return text === clean ||
+          text.startsWith(clean) ||
+          clean.startsWith(`${text} `) ||
+          clean.split(/\s+/).every(w => text.includes(w));
       });
 
       if (matches) {
