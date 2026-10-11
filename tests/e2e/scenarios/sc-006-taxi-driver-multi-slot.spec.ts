@@ -10,12 +10,21 @@ const scenarioFilePath = path.resolve(__dirname, '../../../scenario-sc-006-taxi-
 test.describe('E2E: SC-006 Multi-Slot Dialogue & Real Taxi FSM Suite (ТЗ-VOICE-SC-006)', () => {
 
   async function setupApp(page: any) {
-    const appUrl = process.env.APP_URL || 'https://voice-assistant-two-olive.vercel.app';
+    await page.addInitScript(() => {
+      (window as any).__AUTH_OWNER_ID__ = 'driver-sc006-e2e';
+      (window as any).__AUTH_SESSION_ID__ = 'session-sc006-e2e';
+    });
+    const appUrl = process.env.APP_URL || 'http://localhost:3000';
     await page.goto(appUrl);
     await expect(page.locator('body')).toBeVisible();
+    await page.waitForFunction(() => {
+      const w = window as any;
+      return !!w.__VOICE_CHANNEL__ && !!w.__DIALOGUE_MANAGER__ && !!w.__VOICE_DEMO_APP__ && typeof w.__DISPATCH_VOICE_COMMAND__ === 'function';
+    }, { timeout: 10000 });
 
     const fileInput = page.locator('input[type="file"]').first();
     await fileInput.setInputFiles(scenarioFilePath);
+    await expect(page.locator('body')).toContainText('Taxi Driver Multi-Slot');
   }
 
   async function emitVoicePhrase(page: any, phrase: string) {
