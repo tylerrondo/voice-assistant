@@ -47,6 +47,7 @@ export function mountApp(root: HTMLElement, runtime: any, authenticatedIdentity:
         <section style="margin:16px 0">
           <label for="scenario-source-file">Загрузить JSON-сценарий</label>
           <input id="scenario-source-file" data-testid="scenario-source-file" type="file" accept="application/json,.json" />
+          <div data-testid="scenario-file-name" aria-live="polite"></div>
         </section>
         <form id="voice-command-form" style="display:flex;gap:8px;margin:16px 0">
           <input data-testid="voice-input" name="voiceText" placeholder="Введите голосовую команду" style="flex:1;padding:8px" />
@@ -67,6 +68,7 @@ export function mountApp(root: HTMLElement, runtime: any, authenticatedIdentity:
 
   const fileInput = root.querySelector<HTMLInputElement>('#scenario-source-file');
   const title = root.querySelector<HTMLElement>('[data-testid="scenario-set-name"]');
+  const fileNameNode = root.querySelector<HTMLElement>('[data-testid="scenario-file-name"]');
   const statusNode = root.querySelector<HTMLElement>('[data-testid="fsm-status"]');
   const traceNode = root.querySelector<HTMLElement>('[data-testid="execution-trace"]');
   const voiceInput = root.querySelector<HTMLInputElement>('[data-testid="voice-input"]');
@@ -123,6 +125,7 @@ export function mountApp(root: HTMLElement, runtime: any, authenticatedIdentity:
         activeScenarioSet = scenarioSet;
         pendingScenarioSetId = scenarioSet.id;
         if (title) title.textContent = scenarioSet.name || scenarioSet.id;
+        if (fileNameNode) fileNameNode.textContent = file.name;
         isScenarioLoading = false;
         renderRuntimeState();
       });
