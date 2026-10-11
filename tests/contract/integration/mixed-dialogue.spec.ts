@@ -63,7 +63,7 @@ test.describe('CONTRACT: SC-INTEGRATION-001 Mixed Button / Text / Voice Dialogue
 
     const res = await adapter.handleMessage({ channel: 'button', button_payload: { slotName: 'confirmation', slotValue: 'CONFIRMED' } }, sessionUser, sc);
 
-    expect(res.status).toBe('ORDER_CONFIRMED');
+    expect(res.status).toBe('CONFIRMED');
     expect(res.slots.date).toBe('сегодня');
     expect(res.slots.selected_nanny).toBe('nanny-1');
     expect(dispatcherCalls).toBe(1);
@@ -89,7 +89,7 @@ test.describe('CONTRACT: SC-INTEGRATION-001 Mixed Button / Text / Voice Dialogue
     await adapter.handleMessage({ channel: 'voice', transcript: 'выбираю марию' }, sessionUser, sc);
     const res = await adapter.handleMessage({ channel: 'voice', transcript: 'да, подтверждаю' }, sessionUser, sc);
 
-    expect(res.status).toBe('ORDER_CONFIRMED');
+    expect(res.status).toBe('CONFIRMED');
     expect(res.slots.selected_nanny).toBe('nanny-1');
     expect(res.slots.date).toBe('завтра');
     expect(dispatcherCalls).toBe(1);
@@ -234,19 +234,19 @@ test.describe('CONTRACT: SC-INTEGRATION-001 Mixed Button / Text / Voice Dialogue
     const userBtn = { ownerId: 'u-conf-btn', sessionId: 's-conf-btn' };
     await fillSlots(userBtn);
     const resBtn = await adapter.handleMessage({ channel: 'button', button_payload: { slotName: 'confirmation', slotValue: 'CONFIRMED' } }, userBtn, sc);
-    expect(resBtn.status).toBe('ORDER_CONFIRMED');
+    expect(resBtn.status).toBe('CONFIRMED');
 
     // 2. Text confirmation
     const userTxt = { ownerId: 'u-conf-txt', sessionId: 's-conf-txt' };
     await fillSlots(userTxt);
     const resTxt = await adapter.handleMessage({ channel: 'text', raw_input: 'да, подтверждаю' }, userTxt, sc);
-    expect(resTxt.status).toBe('ORDER_CONFIRMED');
+    expect(resTxt.status).toBe('CONFIRMED');
 
     // 3. Voice confirmation
     const userVoice = { ownerId: 'u-conf-voice', sessionId: 's-conf-voice' };
     await fillSlots(userVoice);
     const resVoice = await adapter.handleMessage({ channel: 'voice', transcript: 'подтверждаю' }, userVoice, sc);
-    expect(resVoice.status).toBe('ORDER_CONFIRMED');
+    expect(resVoice.status).toBe('CONFIRMED');
 
     expect(dispatcherCalls).toBe(3);
   });
