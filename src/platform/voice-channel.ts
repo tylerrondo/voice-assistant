@@ -588,10 +588,17 @@ export class VoiceChannel {
       }
     }
 
+    // Ambiguous new intents must not be silently routed into an existing context.
+    if (intentRes.status === 'AMBIGUOUS_INTENT') {
+      return intentRes;
+    }
+
     // 3. Declarative Active Context Processing
     const activeWaiting = this.dialogueManager.listContexts(identity).filter(c => c.status === 'WAITING_FOR_SLOT');
 
-    if (activeWaiting.length === 1) {
+    // A phrase that resolves to a scenario is a new activation, not a slot value
+    // for the currently active scenario. This allows parallel contexts for repeated orders.
+    if (activeWaiting.length === 1 && intentRes.status === 'NO_MATCH') {
       const activeCtx = activeWaiting[0];
       const scenario = (activeCtx.scenarioId ? this.scenarioRegistry.find(s => s.id === activeCtx.scenarioId) : undefined)
         || this.getDeterministicScenarioForIntent(activeCtx.intent);
@@ -695,7 +702,7 @@ export class VoiceChannel {
           return updatedCtxState || this.dialogueManager.getContext(activeCtx.contextId, identity);
         }
       }
-    } else if (activeWaiting.length > 1) {
+    } else if (activeWaiting.length > 1 && intentRes.status === 'NO_MATCH') {
       const anyScenario = this.scenarioRegistry.find(s => s.slotExtractors);
       if (anyScenario?.slotExtractors) {
         const testSlot = this.extractSlotsDeterministically(text, anyScenario.slotExtractors, anyScenario.id);
