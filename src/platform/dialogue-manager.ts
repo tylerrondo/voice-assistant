@@ -50,6 +50,7 @@ export interface ActionExecution {
   createdAt: number;
   updatedAt: number;
   errorCode?: string;
+  event?: { type: string; payload: Record<string, any> };
 }
 
 export type DispatchResult =
@@ -885,6 +886,10 @@ export class DialogueStateManager {
     this.validateIdentity(identity);
     return Array.from(this.executions.values())
       .filter(l => l.ownerId === identity.ownerId && l.sessionId === identity.sessionId)
-      .map(l => ({ ...l, payload: { ...l.payload } }));
+      .map(l => ({
+        ...l,
+        payload: { ...l.payload },
+        event: { type: l.actionType, payload: { ...l.payload } }
+      }));
   }
 }
