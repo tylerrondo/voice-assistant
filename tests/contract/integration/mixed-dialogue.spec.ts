@@ -45,7 +45,7 @@ test.describe('CONTRACT: SC-INTEGRATION-001 Mixed Button / Text / Voice Dialogue
   const attachCandidates = (userId: typeof sessionUser, candidates: any[]) => {
     const ctx = dm.getActiveState(userId);
     if (ctx) {
-      ctx.offers = candidates as any;
+      dm.setOffersForContext(ctx.contextId, candidates as any, userId);
     }
   };
 
