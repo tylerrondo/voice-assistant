@@ -41,9 +41,9 @@ import {
  * field, not the rendered panel text, for the same reason.
  */
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const path.dirname(fileURLToPath(import.meta.url)) = path.dirname(fileURLToPath(import.meta.url))
 const BUILTIN_SCENARIO_PATH = path.join(
-    __dirname, "..", "..", "packages", "scenario-engine", "src", "scenarios", "builtin.json"
+    path.dirname(fileURLToPath(import.meta.url)), "..", "..", "packages", "scenario-engine", "src", "scenarios", "builtin.json"
 )
 
 interface ScenarioSetEntryLike {
