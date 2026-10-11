@@ -411,6 +411,7 @@ export class DialogueStateManager {
     const text = phrase.toLowerCase();
     const tokens = text.split(/\s+/);
 
+    let foreignContextMatched = false;
     for (const ctx of this.contexts.values()) {
       if (ctx.status !== 'WAITING_FOR_SLOT') continue;
 
@@ -420,12 +421,17 @@ export class DialogueStateManager {
 
         if (tokens.includes(valStr) || text.includes(valStr)) {
           if (ctx.ownerId !== identity.ownerId || ctx.sessionId !== identity.sessionId) {
-            return { status: 'CONTEXT_ACCESS_DENIED' };
+            foreignContextMatched = true;
+            continue;
           }
           this.activeContextId = ctx.contextId;
           return { status: 'RESOLVED', contextId: ctx.contextId };
         }
       }
+    }
+
+    if (foreignContextMatched) {
+      return { status: 'CONTEXT_ACCESS_DENIED' };
     }
 
     const candidates = Array.from(this.contexts.values()).filter(ctx => {
