@@ -53,7 +53,9 @@
         "value": "voice.arrived"
       },
       "intent": "DRIVER_ARRIVED",
-      "requiredSlots": [],
+      "requiredSlots": [
+        "orderId"
+      ],
       "steps": [
         {
           "kind": "emit",
@@ -73,7 +75,16 @@
         "Прибыл",
         "На месте",
         "I've arrived"
-      ]
+      ],
+      "clarificationPrompts": {
+        "orderId": "К какому заказу относится действие?"
+      },
+      "slotExtractors": {
+        "orderId": {
+          "type": "integer",
+          "pattern": "\\b\\d+\\b"
+        }
+      }
     },
     {
       "id": "sc005-step03-start-trip",
@@ -83,7 +94,9 @@
         "value": "voice.start-trip"
       },
       "intent": "START_TRIP",
-      "requiredSlots": [],
+      "requiredSlots": [
+        "orderId"
+      ],
       "steps": [
         {
           "kind": "emit",
@@ -103,7 +116,16 @@
         "Поехали",
         "Начинаем поездку",
         "Start trip"
-      ]
+      ],
+      "clarificationPrompts": {
+        "orderId": "К какому заказу относится действие?"
+      },
+      "slotExtractors": {
+        "orderId": {
+          "type": "integer",
+          "pattern": "\\b\\d+\\b"
+        }
+      }
     },
     {
       "id": "sc005-step04-finish-trip",
@@ -113,7 +135,10 @@
         "value": "voice.finish-trip"
       },
       "intent": "FINISH_TRIP",
-      "requiredSlots": [],
+      "requiredSlots": [
+        "orderId",
+        "payment"
+      ],
       "steps": [
         {
           "kind": "emit",
@@ -134,7 +159,34 @@
         "Закончить поездку",
         "Поездка завершена",
         "Finish trip"
-      ]
+      ],
+      "clarificationPrompts": {
+        "orderId": "К какому заказу относится действие?",
+        "payment": "Какой способ оплаты?"
+      },
+      "slotExtractors": {
+        "orderId": {
+          "type": "integer",
+          "pattern": "\\b\\d+\\b"
+        },
+        "payment": {
+          "type": "enum",
+          "mapping": {
+            "card": [
+              "картой",
+              "карта",
+              "безнал",
+              "card"
+            ],
+            "cash": [
+              "наличными",
+              "наличка",
+              "наличными деньгами",
+              "cash"
+            ]
+          }
+        }
+      }
     },
     {
       "id": "sc005-step05-available",
