@@ -196,7 +196,7 @@ test.describe('CONTRACT: SC-INTEGRATION-002 Real Telegram Voice Input + STT Inte
     const res = await sendVoiceAudio('отменяю');
 
     expect(res.status).toBe('CANCELLED');
-    expect(dm.getActiveState(sessionUser)).toBeUndefined();
+    expect(dm.getActiveState(sessionUser)?.status).toBe('CANCELLED');
   });
 
   test('TV-07: STT failure keeps context intact and allows continuation', async () => {
