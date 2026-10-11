@@ -574,8 +574,17 @@ export class DialogueStateManager {
       throw new Error('SECURITY_VIOLATION: Cannot create execution for foreign context');
     }
 
-    if (['COMPLETED', 'CANCELLED', 'EXPIRED'].includes(ctx.status)) {
-      throw new Error(`CONTRACT_VIOLATION: Cannot create execution for terminal context (${ctx.status})`);
+    // The caller may hold a stale context snapshot. Authorize and validate the
+    // current stored state, not the snapshot, before creating an execution.
+    const authoritativeCtx = this.contexts.get(ctx.contextId);
+    if (!authoritativeCtx) {
+      throw new Error(`CONTRACT_VIOLATION: Cannot create execution for missing context "${ctx.contextId}"`);
+    }
+    if (authoritativeCtx.ownerId !== identity.ownerId || authoritativeCtx.sessionId !== identity.sessionId) {
+      throw new Error('SECURITY_VIOLATION: Cannot create execution for foreign context');
+    }
+    if (['COMPLETED', 'CANCELLED', 'EXPIRED'].includes(authoritativeCtx.status)) {
+      throw new Error(`CONTRACT_VIOLATION: Cannot create execution for terminal context (${authoritativeCtx.status})`);
     }
 
     const executionId = providedExecutionId || `exec_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -585,7 +594,7 @@ export class DialogueStateManager {
       const sameOwner = existing.ownerId === identity.ownerId && existing.sessionId === identity.sessionId;
       const sameCtx = existing.contextId === ctx.contextId;
       const sameAction = existing.actionType === ctx.actionType;
-      const samePayload = JSON.stringify(existing.payload) === JSON.stringify(ctx.slots);
+      const samePayload = JSON.stringify(existing.payload) === JSON.stringify(authoritativeCtx.slots);
 
       if (sameOwner && sameCtx && sameAction && samePayload) {
         return existing;
@@ -593,7 +602,7 @@ export class DialogueStateManager {
       throw new Error(`CONTRACT_VIOLATION: Cannot overwrite existing executionId "${executionId}" with different execution data`);
     }
 
-    const idempotencyKey = `idemp_${ctx.contextId}_${executionId}_${ctx.actionType}`;
+    const idempotencyKey = `idemp_${authoritativeCtx.contextId}_${executionId}_${authoritativeCtx.actionType}`;
     const now = Date.now();
 
     const execution: ActionExecution = {
@@ -601,11 +610,11 @@ export class DialogueStateManager {
       idempotencyKey,
       ownerId: identity.ownerId,
       sessionId: identity.sessionId,
-      contextId: ctx.contextId,
-      scenarioId: ctx.scenarioId || 'sc-default',
-      intent: ctx.intent,
-      actionType: ctx.actionType,
-      payload: { ...ctx.slots },
+      contextId: authoritativeCtx.contextId,
+      scenarioId: authoritativeCtx.scenarioId || 'sc-default',
+      intent: authoritativeCtx.intent,
+      actionType: authoritativeCtx.actionType,
+      payload: { ...authoritativeCtx.slots },
       status: 'PENDING',
       attempt: 0,
       createdAt: now,
