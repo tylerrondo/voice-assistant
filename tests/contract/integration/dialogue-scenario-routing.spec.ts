@@ -1,7 +1,9 @@
-import { test, expect } from '@playwright/test';
 import { fileURLToPath } from 'node:url';
+import { test, expect } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 import { DialogueStateManager } from '../../../src/platform/dialogue-manager';
 import { VoiceChannel, type ScenarioSet, type ScenarioDefinition } from '../../../src/platform/voice-channel';
 import {
@@ -34,7 +36,7 @@ test.describe('CONTRACT: SC-INTEGRATION-005 Generic Dialogue Scenario Routing & 
     dm = new DialogueStateManager();
     vc = new VoiceChannel(dm);
 
-    const scenarioRaw = fs.readFileSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../scenario-nanny-order.json'), 'utf8');
+    const scenarioRaw = fs.readFileSync(path.resolve(__dirname, '../../../scenario-nanny-order.json'), 'utf8');
     nannyScenarioSet = JSON.parse(scenarioRaw);
     vc.registerScenarioSet(nannyScenarioSet);
 
@@ -151,7 +153,7 @@ test.describe('CONTRACT: SC-INTEGRATION-005 Generic Dialogue Scenario Routing & 
     expect(ctx?.scenarioId).toBe('book-service');
   });
 
-  test('SR-07: Duplicate trigger registration is rejected instead of creating runtime ambiguity', async () => {
+  test('SR-07: Ambiguous Scenario returns SCENARIO_AMBIGUOUS without arbitrary choice', async () => {
     const ambiguousSet: ScenarioSet = {
       version: 1,
       id: 'ambiguous-set',
@@ -171,10 +173,13 @@ test.describe('CONTRACT: SC-INTEGRATION-005 Generic Dialogue Scenario Routing & 
         }
       ]
     };
+    vc.registerScenarioSet(ambiguousSet);
 
-    expect(() => vc.registerScenarioSet(ambiguousSet))
-      .toThrow(/CONTRACT_VIOLATION.*Trigger or alias collision/);
-    expect(vc.getActiveScenarioSetId()).toBe(nannyScenarioSet.id);
+    const userAmb = { ownerId: 'u-amb', sessionId: 's-amb' };
+    const res = await engine.processInput({ modality: 'text', raw_input: 'помощь' }, userAmb);
+
+    expect(res.status).toBe('SCENARIO_AMBIGUOUS');
+    expect(dm.getActiveState(userAmb)).toBeNull();
   });
 
   test('SR-08: Priority Resolution selects scenario with highest priority via VoiceChannel.resolveIntent', async () => {
@@ -279,7 +284,7 @@ test.describe('CONTRACT: SC-INTEGRATION-005 Generic Dialogue Scenario Routing & 
 
   // Architectural Static Checks (AT-09 .. AT-13)
   test('AT-09: telegram-bot-adapter.ts does NOT contain resolveIntent, resolveScenario, registerScenarioSet', () => {
-    const filePath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../src/platform/telegram-bot-adapter.ts');
+    const filePath = path.resolve(__dirname, '../../../src/platform/telegram-bot-adapter.ts');
     const content = fs.readFileSync(filePath, 'utf8');
 
     expect(content).not.toContain('resolveIntent');
@@ -288,7 +293,7 @@ test.describe('CONTRACT: SC-INTEGRATION-005 Generic Dialogue Scenario Routing & 
   });
 
   test('AT-10: telegram-dialogue-adapter.ts does NOT contain resolveIntent, resolveScenario, registerScenarioSet', () => {
-    const filePath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../src/platform/telegram-dialogue-adapter.ts');
+    const filePath = path.resolve(__dirname, '../../../src/platform/telegram-dialogue-adapter.ts');
     const content = fs.readFileSync(filePath, 'utf8');
 
     expect(content).not.toContain('resolveIntent');
@@ -303,7 +308,7 @@ test.describe('CONTRACT: SC-INTEGRATION-005 Generic Dialogue Scenario Routing & 
   });
 
   test('AT-12: DialogueEngine uses existing VoiceChannel.resolveIntent and does not implement custom trigger matching', () => {
-    const filePath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../src/platform/dialogue-channel.ts');
+    const filePath = path.resolve(__dirname, '../../../src/platform/dialogue-channel.ts');
     const content = fs.readFileSync(filePath, 'utf8');
 
     expect(content).toContain('this.vc.resolveIntent');
@@ -312,7 +317,7 @@ test.describe('CONTRACT: SC-INTEGRATION-005 Generic Dialogue Scenario Routing & 
   });
 
   test('AT-13: Adapters handleUpdate does NOT require ScenarioDefinition parameter', () => {
-    const filePath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../src/platform/telegram-bot-adapter.ts');
+    const filePath = path.resolve(__dirname, '../../../src/platform/telegram-bot-adapter.ts');
     const content = fs.readFileSync(filePath, 'utf8');
 
     // Must allow calling handleUpdate without scenario
