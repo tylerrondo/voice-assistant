@@ -632,15 +632,34 @@ export class VoiceChannel {
       return { status: 'NO_MATCH' };
     }
 
-    // Explicit references to another session's entity must be denied, not
-    // downgraded to NO_MATCH merely because that context is filtered from reads.
-    const ownershipRoute = this.dialogueManager.resolveRouting(text, [], identity);
-    if (ownershipRoute.status === 'CONTEXT_ACCESS_DENIED') {
-      return ownershipRoute;
-    }
-
     // 2. Intent Resolution (Evaluation / Comparison Queries)
     const intentRes = this.resolveIntent(text);
+    const isExplicitActivation = (() => {
+      if (intentRes.status !== 'RESOLVED') return false;
+      const sc = intentRes.scenario;
+      const normalize = (value: string) =>
+        value.replace(/^voice\./i, '').replace(/[-_]/g, ' ').toLowerCase().trim().replace(/\s+/g, ' ');
+      const triggers = [
+        sc.activation?.value,
+        sc.expectedPhrase,
+        ...(sc.triggerPhrases || []),
+        ...(sc.aliases || [])
+      ].filter((value): value is string => typeof value === 'string' && value.trim().length > 0);
+      const normalizedText = normalize(text);
+      return triggers.some(trigger => {
+        const normalizedTrigger = normalize(trigger);
+        return normalizedText === normalizedTrigger || normalizedText.startsWith(`${normalizedTrigger} `);
+      });
+    })();
+
+    // Explicit references to another session's entity must be denied, not
+    // downgraded to NO_MATCH merely because that context is filtered from reads.
+    // A fresh activation is exempt: it may legitimately create a separate context
+    // with the same external entity ID in another session.
+    const ownershipRoute = this.dialogueManager.resolveRouting(text, [], identity);
+    if (ownershipRoute.status === 'CONTEXT_ACCESS_DENIED' && !isExplicitActivation) {
+      return ownershipRoute;
+    }
 
     // A fresh explicit activation starts a new routing decision and must not
     // inherit a previous explicit context selection.
