@@ -39,7 +39,7 @@ test.describe('CONTRACT: SC-INTEGRATION-004 Generic Dialogue Channel Contract Su
   let nannyScenarioSet: ScenarioSet;
   let dispatcherCalls: number;
 
-  test.test.beforeEach(() => {
+  test.beforeEach(() => {
     dispatcherCalls = 0;
     dm = new DialogueStateManager({
       actionDispatcher: async (event, ctx, exec) => {
