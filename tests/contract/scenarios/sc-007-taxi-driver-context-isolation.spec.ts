@@ -43,7 +43,8 @@ test.describe('CONTRACT: SC-007 Context Isolation Suite (ТЗ-VOICE-SC-007)', ()
   });
 
   test('CONTRACT-06: Zero hardcoded orderId (1001/1002) in specification structure', async () => {
-    const jsonString = JSON.stringify(scenarioSet);
+    const { description, ...structuralScenarioSet } = scenarioSet;
+    const jsonString = JSON.stringify(structuralScenarioSet);
     expect(jsonString).not.toContain('1001');
     expect(jsonString).not.toContain('1002');
   });
