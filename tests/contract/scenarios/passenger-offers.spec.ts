@@ -88,7 +88,7 @@ test.describe('CONTRACT: SC-PASS-002 Multi-Offer Dialogue & Selection Suite', ()
     const res = await vc.handleIncomingVoice('а второй это комфорт', sessionPassengerA);
 
     expect(res.status).toBe('OFFER_QUERY_RESOLVED');
-    expect(res.offerId).toBe('OFFER-B');
+    expect(res.targetId).toBe('OFFER-B');
     expect(res.attributes.vehicleType).toBe('comfort');
     expect((res as any).vehicleType).toBeUndefined();
     expect((res as any).isComfort).toBeUndefined();
@@ -152,7 +152,7 @@ test.describe('CONTRACT: SC-PASS-002 Multi-Offer Dialogue & Selection Suite', ()
 
     const res = await vc.handleIncomingVoice('тогда давайте второй', sessionPassengerA);
 
-    expect(res.status).toBe('OFFER_UNAVAILABLE');
+    expect(res.status).toBe('CANDIDATE_UNAVAILABLE');
     expect(res.offerId).toBe('OFFER-B');
 
     const ctx = dm.getActiveState(sessionPassengerA);
