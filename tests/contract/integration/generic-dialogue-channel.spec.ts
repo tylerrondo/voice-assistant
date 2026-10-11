@@ -148,10 +148,11 @@ test.describe('CONTRACT: SC-INTEGRATION-004 Generic Dialogue Channel Contract Su
 
     // Attach custom candidate items with non-standard fields
     const ctx = dm.getActiveState(userS)!;
-    ctx.offers = [
+    const offers = [
       { serviceId: 'svc-17', title: 'Cleaning', position: 1, status: 'AVAILABLE' },
       { serviceId: 'svc-42', title: 'Repair', position: 2, status: 'AVAILABLE' }
     ] as any;
+    expect(dm.setOffersForContext(ctx.contextId, offers, userS)).toBe(true);
 
     // Send selection choice
     await adapter.send({ modality: 'voice', transcript: 'выбираю второй' }, userS, serviceScenario);
@@ -241,7 +242,7 @@ test.describe('CONTRACT: SC-INTEGRATION-004 Generic Dialogue Channel Contract Su
 
     expect(res.status).toBe('CANCELLED');
     expect(res.presentation.text).toBe(sc.confirmation?.cancelledMessage);
-    expect(dm.getActiveState(sessionUser)).toBeUndefined();
+    expect(dm.getActiveState(sessionUser)).toBeNull();
   });
 
   test('GC-08: Execution — ActionDispatcher called exactly once on confirmation', async () => {
