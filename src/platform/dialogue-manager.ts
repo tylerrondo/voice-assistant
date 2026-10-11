@@ -656,6 +656,21 @@ export class DialogueStateManager {
     const prevPromise = this.contextMutationQueues.get(contextId) || Promise.resolve();
 
     const dispatchPromise = prevPromise.then(async () => {
+      // Re-check after acquiring the per-context queue. Concurrent callers may
+      // have observed PENDING before the first dispatch completed.
+      if (execution.status === 'SUCCEEDED') {
+        return { status: 'SUCCEEDED', executionId: execution.executionId, attempt: execution.attempt } as DispatchResult;
+      }
+      if (execution.status === 'FAILED') {
+        throw new Error(`CONTRACT_VIOLATION: Cannot dispatch terminal FAILED execution "${executionId}". A new executionId must be created.`);
+      }
+      if (execution.status === 'UNKNOWN') {
+        throw new Error(`CONTRACT_VIOLATION: Execution "${executionId}" is in UNKNOWN state. Explicit reconciliation is required before retry.`);
+      }
+      if (execution.status === 'DISPATCHING') {
+        return { status: 'UNKNOWN', executionId: execution.executionId, errorCode: 'ALREADY_IN_PROGRESS', attempt: execution.attempt } as DispatchResult;
+      }
+
       const ctx = this.contexts.get(contextId);
       if (!ctx) {
         throw new Error(`CONTRACT_VIOLATION: Context "${contextId}" not found`);
