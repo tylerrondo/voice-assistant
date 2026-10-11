@@ -720,7 +720,7 @@ export class VoiceChannel {
               if (candidateResolution.status === 'RESOLVED' && candidateResolution.targetId) {
                 const fillRes = await this.dialogueManager.fillSlot(targetSlot, candidateResolution.targetId, activeCtx.contextId, identity);
                 if (fillRes.success && fillRes.data) {
-                  if (fillRes.data.missingSlots.length === 0 && !fillRes.data.requiredSlots?.includes('confirmation')) {
+                  if (fillRes.data.missingSlots.length === 0 && ) {
                     const execution = this.dialogueManager.createExecution(fillRes.data, identity);
                     const dispatchRes = await this.dialogueManager.dispatchAction(execution.executionId, fillRes.data.slots, identity);
                     return {
@@ -739,7 +739,7 @@ export class VoiceChannel {
 
           let updatedCtxState: any = null;
           for (const [slotKey, slotVal] of Object.entries(extracted)) {
-            if (slotKey !== 'confirmation' && (activeCtx.requiredSlots?.includes(slotKey) || activeCtx.slots[slotKey] !== undefined)) {
+            if (slotKey !== 'confirmation' && (activeCtx.missingSlots.includes(slotKey) || activeCtx.slots[slotKey] !== undefined)) {
               const fillRes = await this.dialogueManager.fillSlot(slotKey, slotVal, activeCtx.contextId, identity);
               if (fillRes.success) {
                 updatedCtxState = fillRes.data;
@@ -778,7 +778,7 @@ export class VoiceChannel {
           }
 
           const latestCtx = this.dialogueManager.getContext(activeCtx.contextId, identity) || activeCtx;
-          if (updatedCtxState && latestCtx.missingSlots.length === 0 && !latestCtx.requiredSlots?.includes('confirmation')) {
+          if (updatedCtxState && latestCtx.missingSlots.length === 0 && ) {
             const execution = this.dialogueManager.createExecution(latestCtx, identity);
             const dispatchRes = await this.dialogueManager.dispatchAction(execution.executionId, latestCtx.slots, identity);
             return {
