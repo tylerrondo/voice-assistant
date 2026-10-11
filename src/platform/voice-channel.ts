@@ -466,7 +466,7 @@ export class VoiceChannel {
       return {
         status: 'OFFER_QUERY_RESOLVED',
         intent: sc.intent,
-        offerId: targetId,
+        targetId,
         attributes: { ...target, distanceMeters },
         response: responseText
       };
