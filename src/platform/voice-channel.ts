@@ -643,7 +643,18 @@ export class VoiceChannel {
 
     // 3. Declarative Active Context Processing
     const activeWaiting = this.dialogueManager.listContexts(identity).filter(c => c.status === 'WAITING_FOR_SLOT');
-    const isFreshScenarioActivation = intentRes.status === 'RESOLVED' && !(intentRes.scenario.candidateBinding?.targetSlot && activeWaiting.some(context => (context.offers?.length || 0) > 0)) && (() => {
+    // An active dialogue gets first refusal when the utterance supplies one of
+    // its currently missing slots, even if the same words match another
+    // registered scenario's activation phrase.
+    const activeContextCanConsumeInput = activeWaiting.some(context => {
+      if (!context.scenarioId) return false;
+      const activeScenario = this.scenarioRegistry.find(s => s.id === context.scenarioId);
+      if (!activeScenario?.slotExtractors) return false;
+      const extracted = this.extractSlotsDeterministically(text, activeScenario.slotExtractors, activeScenario.id);
+      return extracted.status === 'RESOLVED' &&
+        Object.keys(extracted.slots).some(slotName => context.missingSlots.includes(slotName));
+    });
+    const isFreshScenarioActivation = intentRes.status === 'RESOLVED' && !activeContextCanConsumeInput && !(intentRes.scenario.candidateBinding?.targetSlot && activeWaiting.some(context => (context.offers?.length || 0) > 0)) && (() => {
       const scenario = intentRes.scenario;
       const triggers: string[] = [];
       if (scenario.activation?.value) triggers.push(scenario.activation.value);
