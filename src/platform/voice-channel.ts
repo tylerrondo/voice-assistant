@@ -119,6 +119,7 @@ export class VoiceChannel {
   private scenarioRegistry: ScenarioDefinition[] = [];
   private activeScenarioSetId: string = '';
   private activeScenarioIds: Set<string> = new Set();
+  private explicitContextSelections: Map<string, string> = new Map();
 
   constructor(dialogueManager: DialogueStateManager) {
     this.dialogueManager = dialogueManager;
@@ -612,14 +613,48 @@ export class VoiceChannel {
       }
 
       const routeResult = this.dialogueManager.resolveRouting(text, [], identity);
+      if (routeResult.status === 'CONTEXT_ACCESS_DENIED') {
+        return routeResult;
+      }
       if (routeResult.status === 'RESOLVED') {
+        this.explicitContextSelections.delete(`${identity.ownerId}\u0000${identity.sessionId}`);
         return this.dialogueManager.cancelContext(routeResult.contextId, identity);
       }
       return { status: 'NO_MATCH' };
     }
 
+    const sessionKey = `${identity.ownerId}\u0000${identity.sessionId}`;
+
+    // Explicit references to another session's entity must be denied, not
+    // downgraded to NO_MATCH merely because that context is filtered from reads.
+    const ownershipRoute = this.dialogueManager.resolveRouting(text, [], identity);
+    if (ownershipRoute.status === 'CONTEXT_ACCESS_DENIED') {
+      return ownershipRoute;
+    }
+
     // 2. Intent Resolution (Evaluation / Comparison Queries)
     const intentRes = this.resolveIntent(text);
+
+    // A fresh explicit activation starts a new routing decision and must not
+    // inherit a previous explicit context selection.
+    if (intentRes.status === 'RESOLVED') {
+      const sc = intentRes.scenario;
+      const normalize = (value: string) =>
+        value.replace(/^voice\\./i, '').replace(/[-_]/g, ' ').toLowerCase().trim().replace(/\\s+/g, ' ');
+      const activationTriggers = [
+        sc.activation?.value,
+        sc.expectedPhrase,
+        ...(sc.triggerPhrases || []),
+        ...(sc.aliases || [])
+      ].filter((value): value is string => typeof value === 'string' && value.trim().length > 0);
+      const normalizedText = normalize(text);
+      if (activationTriggers.some(trigger => {
+        const normalizedTrigger = normalize(trigger);
+        return normalizedText === normalizedTrigger || normalizedText.startsWith(`${normalizedTrigger} `);
+      })) {
+        this.explicitContextSelections.delete(sessionKey);
+      }
+    }
 
     if (intentRes.status === 'RESOLVED') {
       const sc = intentRes.scenario;
@@ -880,7 +915,9 @@ export class VoiceChannel {
 
         if (extraction.status !== 'RESOLVED') continue;
         const matchingSlots = Object.entries(extraction.slots)
-          .filter(([slotName]) => ctx.missingSlots.includes(slotName) || ctx.slots[slotName] !== undefined);
+          .filter(([slotName, value]) =>
+            ctx.missingSlots.includes(slotName) || ctx.slots[slotName] === value
+          );
         if (matchingSlots.length === 0) continue;
 
         contextMatches.push({
@@ -921,6 +958,27 @@ export class VoiceChannel {
           candidates: contextMatches[0].candidates,
           clarificationPrompt: contextMatches[0].clarificationPrompt
         };
+      }
+
+      if (contextMatches.length === 1) {
+        const match = contextMatches[0];
+        const targetContext = this.dialogueManager.getContext(match.contextId, identity);
+        const explicitlyReferencesExistingSlot = targetContext && match.candidates.some(candidate =>
+          !targetContext.missingSlots.includes(candidate.slotName) &&
+          targetContext.slots[candidate.slotName] === candidate.value
+        );
+
+        if (targetContext && explicitlyReferencesExistingSlot) {
+          this.dialogueManager.activateContext(targetContext.contextId, identity);
+          this.explicitContextSelections.set(sessionKey, targetContext.contextId);
+          return {
+            status: targetContext.status,
+            contextId: targetContext.contextId,
+            slots: targetContext.slots,
+            missingSlots: targetContext.missingSlots,
+            clarificationPrompt: targetContext.clarificationPrompt
+          };
+        }
       }
     }
 
