@@ -183,7 +183,7 @@ test.describe('CONTRACT: SC-INTEGRATION-002 Real Telegram Voice Input + STT Inte
 
     const res = await sendVoiceAudio('да, подтверждаю');
 
-    expect(res.status).toBe('ORDER_CONFIRMED');
+    expect(res.status).toBe('CONFIRMED');
     expect(dispatcherCalls).toBe(1);
     expect(dm.getExecutionLogs(sessionUser).length).toBe(1);
   });
@@ -338,7 +338,7 @@ test.describe('CONTRACT: SC-INTEGRATION-002 Real Telegram Voice Input + STT Inte
     const finalResult = await adapter.handleMessage(transportRes.normalizedInput!, sessionUser, sc);
 
     // 5. Verify full business outcome: Execution created and Action dispatched!
-    expect(finalResult.status).toBe('ORDER_CONFIRMED');
+    expect(finalResult.status).toBe('CONFIRMED');
     expect(dispatcherCalls).toBe(1);
     expect(dm.getExecutionLogs(sessionUser).length).toBe(1);
   });
