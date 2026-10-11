@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import { test, expect } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -12,6 +13,8 @@ import {
   MockTelegramClient,
   type TelegramUpdate
 } from '../../../src/platform/telegram-bot-adapter';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 test.describe('CONTRACT: SC-INTEGRATION-003 Production Telegram Bot Voice Adapter Suite', () => {
 
