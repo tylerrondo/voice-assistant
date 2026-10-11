@@ -37,7 +37,14 @@
         "принять заказ",
         "принимаю заказ",
         "беру заказ"
-      ]
+      ],
+      "slotExtractors": {
+        "orderId": {
+          "type": "integer",
+          "pattern": "\\\\b\\\\d+\\\\b",
+          "priority": 100
+        }
+      }
     }
   ]
 }
