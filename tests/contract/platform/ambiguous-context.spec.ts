@@ -57,7 +57,7 @@ test.describe('CONTRACT: PLATFORM-011 Ambiguous Input Policy Suite', () => {
     const ctxA = dm.createContext('ACCEPT_ORDER', { orderId: 1001 }, ['orderId', 'payment'], 'driver.order.accepted', {}, identity);
     const ctxB = dm.createContext('ACCEPT_ORDER', { orderId: 1002 }, ['orderId', 'payment'], 'driver.order.accepted', {}, identity);
 
-    dm.cancelContext(ctxA.contextId, identity);
+    await dm.cancelContext(ctxA.contextId, identity);
 
     const result = dm.resolveRouting('картой', ['payment'], identity);
     expect(result.status).toBe('RESOLVED');
