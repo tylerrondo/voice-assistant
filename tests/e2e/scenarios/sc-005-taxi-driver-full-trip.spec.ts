@@ -58,7 +58,7 @@ test.describe('E2E: SC-005 Taxi Driver Full Trip Workflow & Real FSM Suite (ТЗ
     expect(acceptAction.payload).toEqual({ orderId: 1001 });
 
     // 3. "Я приехал" -> DRIVER_ARRIVED & validate event driver.arrived { orderId: 1001 }
-    await emitVoicePhrase(page, 'Я приехал');
+    await emitVoicePhrase(page, 'Я приехал заказ 1001');
     await expect(fsmLocator).toHaveText(/DRIVER_ARRIVED|На месте/i);
     const arrivedAction = await page.evaluate(() => {
       const logs = (window as any).__DIALOGUE_MANAGER__.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity());
@@ -68,7 +68,7 @@ test.describe('E2E: SC-005 Taxi Driver Full Trip Workflow & Real FSM Suite (ТЗ
     expect(arrivedAction.payload).toEqual({ orderId: 1001 });
 
     // 4. "Начать поездку" -> IN_TRIP & validate event driver.trip.started { orderId: 1001 }
-    await emitVoicePhrase(page, 'Начать поездку');
+    await emitVoicePhrase(page, 'Начать поездку заказ 1001');
     await expect(fsmLocator).toHaveText(/IN_TRIP|В пути/i);
     const startAction = await page.evaluate(() => {
       const logs = (window as any).__DIALOGUE_MANAGER__.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity());
@@ -78,7 +78,7 @@ test.describe('E2E: SC-005 Taxi Driver Full Trip Workflow & Real FSM Suite (ТЗ
     expect(startAction.payload).toEqual({ orderId: 1001 });
 
     // 5. "Завершить поездку" -> TRIP_FINISHED & validate event driver.trip.finished { orderId: 1001, payment: 'cash' }
-    await emitVoicePhrase(page, 'Завершить поездку');
+    await emitVoicePhrase(page, 'Завершить поездку заказ 1001 наличными');
     await expect(fsmLocator).toHaveText(/TRIP_FINISHED|Завершена/i);
     const finishAction = await page.evaluate(() => {
       const logs = (window as any).__DIALOGUE_MANAGER__.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity());
@@ -102,13 +102,13 @@ test.describe('E2E: SC-005 Taxi Driver Full Trip Workflow & Real FSM Suite (ТЗ
     await setupApp(page);
     const fsmLocator = page.locator('[data-testid="fsm-driver-state"], .driver-status, [data-testid="driver-status"]').first();
 
-    await emitVoicePhrase(page, 'Я приехал');
+    await emitVoicePhrase(page, 'Я приехал заказ 1001');
     // BLOCKER-1 FIX: Strict assertion of AVAILABLE state
     await expect(fsmLocator).toHaveText(/AVAILABLE|Свободен/i);
 
     const executed = await page.evaluate(() => {
       const logs = (window as any).__DIALOGUE_MANAGER__.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity());
-      return logs.some((l: any) => l.intent === 'DRIVER_ARRIVED');
+      return logs.some((l: any) => l.intent === 'DRIVER_ARRIVED' && l.status === 'SUCCEEDED');
     });
     expect(executed).toBe(false);
   });
@@ -122,13 +122,13 @@ test.describe('E2E: SC-005 Taxi Driver Full Trip Workflow & Real FSM Suite (ТЗ
     await expect(fsmLocator).toHaveText(/ORDER_ACCEPTED|Принят/i);
 
     // Illegal voice action
-    await emitVoicePhrase(page, 'Начать поездку');
+    await emitVoicePhrase(page, 'Начать поездку заказ 1001');
     await expect(fsmLocator).toHaveText(/ORDER_ACCEPTED|Принят/i);
 
     // HIGH-3 FIX: Assert zero execution of START_TRIP
     const illegalStarts = await page.evaluate(() => {
       const logs = (window as any).__DIALOGUE_MANAGER__.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity());
-      return logs.filter((l: any) => l.intent === 'START_TRIP');
+      return logs.filter((l: any) => l.intent === 'START_TRIP' && l.status === 'SUCCEEDED');
     });
     expect(illegalStarts).toHaveLength(0);
   });
@@ -139,17 +139,17 @@ test.describe('E2E: SC-005 Taxi Driver Full Trip Workflow & Real FSM Suite (ТЗ
 
     await emitVoicePhrase(page, 'Прими заказ');
     await emitVoicePhrase(page, '1001');
-    await emitVoicePhrase(page, 'Я приехал');
+    await emitVoicePhrase(page, 'Я приехал заказ 1001');
     await expect(fsmLocator).toHaveText(/DRIVER_ARRIVED|На месте/i);
 
     // Illegal voice action
-    await emitVoicePhrase(page, 'Завершить поездку');
+    await emitVoicePhrase(page, 'Завершить поездку заказ 1001 наличными');
     await expect(fsmLocator).toHaveText(/DRIVER_ARRIVED|На месте/i);
 
     // HIGH-3 FIX: Assert zero execution of FINISH_TRIP
     const illegalFinishes = await page.evaluate(() => {
       const logs = (window as any).__DIALOGUE_MANAGER__.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity());
-      return logs.filter((l: any) => l.intent === 'FINISH_TRIP');
+      return logs.filter((l: any) => l.intent === 'FINISH_TRIP' && l.status === 'SUCCEEDED');
     });
     expect(illegalFinishes).toHaveLength(0);
   });
@@ -163,7 +163,7 @@ test.describe('E2E: SC-005 Taxi Driver Full Trip Workflow & Real FSM Suite (ТЗ
     await emitVoicePhrase(page, '1001');
     await expect(fsmLocator).toHaveText(/ORDER_ACCEPTED|Принят/i);
 
-    await emitVoicePhrase(page, 'Я приехал');
+    await emitVoicePhrase(page, 'Я приехал заказ 1001');
     await expect(fsmLocator).toHaveText(/DRIVER_ARRIVED|На месте/i);
   });
 
@@ -186,8 +186,8 @@ test.describe('E2E: SC-005 Taxi Driver Full Trip Workflow & Real FSM Suite (ТЗ
     await setupApp(page);
     await emitVoicePhrase(page, 'Прими заказ');
     await emitVoicePhrase(page, '1001');
-    await emitVoicePhrase(page, 'Я приехал');
-    await emitVoicePhrase(page, 'Я приехал');
+    await emitVoicePhrase(page, 'Я приехал заказ 1001');
+    await emitVoicePhrase(page, 'Я приехал заказ 1001');
 
     // HIGH-4 FIX: Bind strictly to intent + orderId: 1001
     const executionCount = await page.evaluate(() => {
