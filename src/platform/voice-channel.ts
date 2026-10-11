@@ -341,6 +341,9 @@ export class VoiceChannel {
             addCandidate(slotName, value, match[0], priority);
           }
         }
+      } else if (extractor.type === 'string') {
+        const value = text.trim();
+        if (value) addCandidate(slotName, value, value, priority);
       }
     }
 
