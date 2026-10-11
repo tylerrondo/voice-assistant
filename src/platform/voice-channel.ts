@@ -717,28 +717,31 @@ export class VoiceChannel {
     if (intentRes.status === 'RESOLVED' && activeWaiting.length === 1) {
       const activeCtx = activeWaiting[0];
       const newScenario = intentRes.scenario;
-      if (activeCtx.scenarioId === newScenario.id && newScenario.slotExtractors) {
-        const normalize = (value: string) =>
-          value.replace(/^voice\./i, '').replace(/[-_]/g, ' ').toLowerCase().trim().replace(/\s+/g, ' ');
-        const activationTriggers = [
-          newScenario.activation?.value,
-          newScenario.expectedPhrase,
-          ...(newScenario.triggerPhrases || []),
-          ...(newScenario.aliases || [])
-        ].filter((value): value is string => typeof value === 'string' && value.trim().length > 0);
-        const normalizedText = normalize(text);
-        const explicitActivation = activationTriggers.some(trigger => {
-          const normalizedTrigger = normalize(trigger);
-          return normalizedText === normalizedTrigger || normalizedText.startsWith(`${normalizedTrigger} `);
-        });
-        if (explicitActivation) {
-          const extractedStart = this.extractSlotsDeterministically(text, newScenario.slotExtractors, newScenario.id);
-          if (extractedStart.status === 'RESOLVED') {
-            const changedEntity = Object.entries(extractedStart.slots).some(([slotName, value]) =>
-              activeCtx.slots[slotName] !== undefined && activeCtx.slots[slotName] !== value
-            );
-            if (changedEntity) activeWaiting = [];
-          }
+      const normalize = (value: string) =>
+        value.replace(/^voice\\./i, '').replace(/[-_]/g, ' ').toLowerCase().trim().replace(/\\s+/g, ' ');
+      const activationTriggers = [
+        newScenario.activation?.value,
+        newScenario.expectedPhrase,
+        ...(newScenario.triggerPhrases || []),
+        ...(newScenario.aliases || [])
+      ].filter((value): value is string => typeof value === 'string' && value.trim().length > 0);
+      const normalizedText = normalize(text);
+      const explicitActivation = activationTriggers.some(trigger => {
+        const normalizedTrigger = normalize(trigger);
+        return normalizedText === normalizedTrigger || normalizedText.startsWith(`${normalizedTrigger} `);
+      });
+
+      if (explicitActivation && activeCtx.scenarioId !== newScenario.id) {
+        // A new intent must not be interpreted as a slot answer for an unrelated
+        // pending dialogue. Let the new scenario create its own context.
+        activeWaiting = [];
+      } else if (explicitActivation && activeCtx.scenarioId === newScenario.id && newScenario.slotExtractors) {
+        const extractedStart = this.extractSlotsDeterministically(text, newScenario.slotExtractors, newScenario.id);
+        if (extractedStart.status === 'RESOLVED') {
+          const changedEntity = Object.entries(extractedStart.slots).some(([slotName, value]) =>
+            activeCtx.slots[slotName] !== undefined && activeCtx.slots[slotName] !== value
+          );
+          if (changedEntity) activeWaiting = [];
         }
       }
     }
