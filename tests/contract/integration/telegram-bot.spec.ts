@@ -249,7 +249,7 @@ test.describe('CONTRACT: SC-INTEGRATION-003 Production Telegram Bot Voice Adapte
       callback_query: { id: 'c-cancel', from: testUser, message: { chat: testChat }, data: botAdapter.encodeCallbackData('confirmation', 'REJECTED') }
     }, sc);
 
-    expect(dm.getActiveState(sessionUser)).toBeUndefined();
+    expect(dm.getActiveState(sessionUser)?.status).toBe('CANCELLED');
     expect(dispatcherCalls).toBe(0);
     expect(telegramClient.getLastMessage()?.text).toBe('Диалог отменён.');
   });
