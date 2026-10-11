@@ -109,9 +109,17 @@ test.describe('CONTRACT: PLATFORM-013 Context Ownership & Session Isolation Suit
   });
 
   test('CONTRACT-10: listContexts and getExecutionLogs strictly isolate records by session', async () => {
-    const dm = new DialogueStateManager();
+    const dm = new DialogueStateManager({
+      actionDispatcher: async (event, ctx, execution) => ({
+        status: 'SUCCEEDED',
+        executionId: execution.executionId,
+        attempt: execution.attempt
+      })
+    });
     const ctxA = dm.createContext('ACCEPT_ORDER', { orderId: 1001 }, ['orderId', 'payment'], 'driver.order.accepted', {}, sessionA);
-    dm.fillSlot('payment', 'card', ctxA.contextId, sessionA);
+    await dm.fillSlot('payment', 'card', ctxA.contextId, sessionA);
+    const execution = dm.createExecution(dm.getContext(ctxA.contextId, sessionA)!, sessionA);
+    await dm.dispatchAction(execution.executionId, execution.payload, sessionA);
 
     const listB = dm.listContexts(sessionB);
     expect(listB.length).toBe(0);
