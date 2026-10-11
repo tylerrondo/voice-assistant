@@ -387,25 +387,32 @@ export class VoiceChannel {
       byPhrase.set(candidate.matchedText, group);
     }
 
-    const ambiguousGroup = [...byPhrase.values()].find(group => {
-      if (group.length < 2) return false;
+    const finalWinners: MatchCandidate[] = [];
+    for (const group of byPhrase.values()) {
+      if (group.length < 2) {
+        finalWinners.push(...group);
+        continue;
+      }
+
       const maxPriority = Math.max(...group.map(candidate => candidate.priority));
-      return group.filter(candidate => candidate.priority === maxPriority).length > 1;
-    });
-    if (ambiguousGroup) {
-      const maxPriority = Math.max(...ambiguousGroup.map(candidate => candidate.priority));
-      return {
-        status: 'AMBIGUOUS_SLOT',
-        candidates: ambiguousGroup
-          .filter(candidate => candidate.priority === maxPriority)
-          .sort((a, b) => a.slotName.localeCompare(b.slotName))
-          .map(candidate => ({ slotName: candidate.slotName, value: candidate.value, scenarioId })),
-        clarificationPrompt: ambiguityPromptTemplate
-      };
+      const highest = group.filter(candidate => candidate.priority === maxPriority);
+      if (highest.length > 1) {
+        return {
+          status: 'AMBIGUOUS_SLOT',
+          candidates: highest
+            .sort((a, b) => a.slotName.localeCompare(b.slotName))
+            .map(candidate => ({ slotName: candidate.slotName, value: candidate.value, scenarioId })),
+          clarificationPrompt: ambiguityPromptTemplate
+        };
+      }
+
+      // The same phrase matched multiple slots; honor the unique highest-priority
+      // extractor instead of also returning lower-priority competing slots.
+      finalWinners.push(highest[0]);
     }
 
     const slots: Record<string, any> = {};
-    for (const candidate of slotWinners) {
+    for (const candidate of finalWinners) {
       slots[candidate.slotName] = candidate.value;
     }
     return { status: 'RESOLVED', slots };
