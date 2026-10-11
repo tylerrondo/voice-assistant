@@ -709,6 +709,14 @@ export class VoiceChannel {
                 };
               }
 
+              if (
+                candidateResolution.status === 'NO_MATCH' &&
+                extracted.confirmation !== 'CONFIRMED' &&
+                extracted.confirmation !== 'REJECTED'
+              ) {
+                return { status: 'NO_MATCH', contextId: activeCtx.contextId };
+              }
+
               if (candidateResolution.status === 'RESOLVED' && candidateResolution.targetId) {
                 const fillRes = await this.dialogueManager.fillSlot(targetSlot, candidateResolution.targetId, activeCtx.contextId, identity);
                 if (fillRes.success && fillRes.data) {
