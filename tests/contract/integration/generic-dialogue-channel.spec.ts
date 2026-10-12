@@ -1,4 +1,4 @@
-import {test, expect, beforeEach } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -40,7 +40,7 @@ test.describe('CONTRACT: SC-INTEGRATION-004 Generic Dialogue Channel Contract Su
   let nannyScenarioSet: ScenarioSet;
   let dispatcherCalls: number;
 
-  beforeEach(() => {
+  test.beforeEach(() => {
     dispatcherCalls = 0;
     dm = new DialogueStateManager({
       actionDispatcher: async (event, ctx, exec) => {
