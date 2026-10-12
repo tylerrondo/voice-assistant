@@ -11,7 +11,7 @@ import {
 import { TelegramBotAdapter, MockTelegramClient } from '../../../src/platform/telegram-bot-adapter';
 import { TelegramVoiceTransport } from '../../../src/platform/telegram-voice-transport';
 import { MockSTTProvider } from '../../../src/platform/stt-provider';
-import { MockTelegramFileProvider } from './telegram-voice.spec';
+import { MockTelegramFileProvider } from './mock-telegram-file-provider';
 
 class MockGenericChannelAdapter {
   constructor(private engine: DialogueEngine) {}
