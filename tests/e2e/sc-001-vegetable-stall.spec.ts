@@ -3,9 +3,7 @@ import * as fs from 'fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
-const scenarioFilePath = path.resolve(__dirname, '../../scenario-sc-001-vegetable-stall.json');
+const scenarioFilePath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../scenario-sc-001-vegetable-stall.json');
 const rawContent = fs.readFileSync(scenarioFilePath, 'utf-8');
 const scenarioSet = JSON.parse(rawContent);
 
