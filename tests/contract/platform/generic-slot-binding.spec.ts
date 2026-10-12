@@ -1,5 +1,11 @@
+import { test, expect } from '@playwright/test';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
 test('GENERIC-09: Архитектурная верификация — в VoiceChannel отсутствуют любые доменные slot names', () => {
-    const __dirname = path.dirname(fileURLToPath(import.meta.url));
     const vcPath = path.resolve(__dirname, '../../../src/platform/voice-channel.ts');
     const vcContent = fs.readFileSync(vcPath, 'utf8');
 
