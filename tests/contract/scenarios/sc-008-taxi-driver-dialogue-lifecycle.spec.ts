@@ -3,7 +3,6 @@ import * as fs from 'fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const scenarioPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../scenario-sc-008-taxi-driver-dialogue-lifecycle.json');
 const rawContent = fs.readFileSync(scenarioPath, 'utf-8');
 const scenarioSet = JSON.parse(rawContent);
