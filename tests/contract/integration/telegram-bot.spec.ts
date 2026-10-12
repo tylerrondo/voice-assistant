@@ -32,7 +32,7 @@ test.describe('CONTRACT: SC-INTEGRATION-003 Production Telegram Bot Voice Adapte
   let nannyScenarioSet: ScenarioSet;
   let dispatcherCalls: number;
 
-  test.beforeEach(() => {
+  test.test.beforeEach(() => {
     dispatcherCalls = 0;
     dm = new DialogueStateManager({
       actionDispatcher: async (event, ctx, exec) => {
