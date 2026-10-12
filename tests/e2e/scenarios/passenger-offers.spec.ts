@@ -2,9 +2,7 @@ import { test, expect } from '@playwright/test';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
-const scenarioFilePath = path.resolve(__dirname, '../../../scenario-passenger-offers.json');
+const scenarioFilePath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../scenario-passenger-offers.json');
 
 test.describe('E2E: SC-PASS-002 Canonical Multi-Offer Dialogue Suite', () => {
 
