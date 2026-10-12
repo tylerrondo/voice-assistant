@@ -17,7 +17,19 @@ Correctness and traceability take priority over speed, number of edits, and opti
 5. Distinguish confirmed facts from hypotheses. Do not present a guess as a verified diagnosis.
 6. Define the intended fix and how it will be verified. Prefer the smallest coherent change that fixes the root cause across the full affected scope.
 
-## 2. Make changes in controlled batches
+## 2. Mandatory pre-change audit
+
+Before broad, systemic, or multi-file changes, produce an auditable inventory before editing. It must include:
+
+1. The observed failure and evidence (command output, test name, log excerpt, or exact reproducible behavior).
+2. The likely root cause, clearly separated from confirmed facts and alternative explanations.
+3. The full set of candidate files/locations searched, the search method, and the results. For systemic patterns, use repository-wide searches and inspect relevant configuration and test-discovery rules; do not rely on a few examples.
+4. A list of affected files grouped as confirmed, suspected, and excluded, with a short reason for exclusions.
+5. The planned change batches and the verification command(s) and success criteria for each batch.
+
+If the inventory cannot be completed because tools, access, or the repository state are unavailable, state the limitation and do not present the scope as complete. For a one-line, isolated change, a short audit is sufficient, but the scope and verification must still be clear.
+
+## 3. Make changes in controlled batches
 
 1. Split broad work into small, logically complete batches with clear verification criteria.
 2. Do not start a dependent step while the previous step is still running or its result still needs to be inspected.
@@ -26,7 +38,7 @@ Correctness and traceability take priority over speed, number of edits, and opti
 5. Preserve unrelated work. Keep changes within the requested scope and the designated branch.
 6. After each batch, inspect the diff before proceeding.
 
-## 3. Check consistency across the whole affected scope
+## 4. Check consistency across the whole affected scope
 
 For a repeated or systemic failure, fix the shared cause rather than treating each visible symptom independently.
 
@@ -50,7 +62,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 Declare the compatibility variable no more than once per file, and only where needed. Follow the repository's established import and formatting conventions.
 
-## 4. Verify each change before expanding the scope
+## 5. Verify each change before expanding the scope
 
 After each batch:
 
@@ -63,7 +75,7 @@ After each batch:
 
 For changes affecting test discovery, imports, shared fixtures, module paths, or runtime configuration, inspect the discovered test list and ensure that the intended tests are included exactly as expected.
 
-## 5. Complete the validation ladder
+## 6. Complete the validation ladder
 
 Use a staged validation process appropriate to the change:
 
@@ -74,9 +86,11 @@ Use a staged validation process appropriate to the change:
 
 A focused test run is useful for diagnosis but does not replace full validation when the task or PR requires it. Wait for each run to finish before reporting its final result.
 
-If full validation cannot be completed, state exactly what was and was not run, why it could not be completed, and what remains unverified.
+For CI-driven work, record the workflow/run identifier, final conclusion, and tested commit SHA. Before retrying a run, inspect whether the prior run is still active. Do not treat a workflow result from an older commit as evidence for the current head. If CI fails, inspect the failed job and actionable logs before making the next change.
 
-## 6. Report status honestly
+If full validation cannot be completed, state exactly what was and was not run, why it could not be completed, and what remains unverified. This is a blocked or partially verified result, not a completed task. A user may explicitly authorize proceeding despite a known failing check; record that exception and the remaining risk, and never describe the checks as passing.
+
+## 7. Report status honestly
 
 Keep these states distinct:
 
@@ -99,7 +113,7 @@ Reports should include:
 
 Do not say a fix is complete merely because the proposed code looks correct.
 
-## 7. Recover systematically from failures
+## 8. Recover systematically from failures
 
 When the same class of error recurs, stop adding local patches and reassess the original diagnosis and the coverage of the fix.
 
@@ -112,7 +126,7 @@ When the same class of error recurs, stop adding local patches and reassess the 
 
 Do not conceal uncertainty, blame the user for failures in the implementation, or ask the user to repeatedly discover defects that available checks could have caught.
 
-## 8. Repository safety and change management
+## 9. Repository safety and change management
 
 1. Work only on the designated feature/fix branch unless the user explicitly authorizes another target.
 2. Do not merge a PR without explicit approval.
@@ -121,7 +135,7 @@ Do not conceal uncertainty, blame the user for failures in the implementation, o
 5. Prefer reviewable commits and a focused PR over unrelated bundled changes.
 6. Do not broaden a PR silently. If unrelated work is discovered, report it and keep it separate unless the user directs otherwise.
 
-## 9. Definition of done
+## 10. Definition of done
 
 Before declaring the task complete, confirm all applicable items:
 
@@ -137,3 +151,5 @@ Before declaring the task complete, confirm all applicable items:
 - [ ] The final report distinguishes verified results from remaining uncertainty.
 
 If any required item is not satisfied, report the task as incomplete or partially verified, not complete.
+
+The final report must distinguish implementation status from verification status. Use “implemented, validation pending/failed” when appropriate. Do not use “fixed”, “done”, or equivalent wording in a way that implies verified success when required checks are failing or have not finished. The exception is when the user explicitly accepts the remaining risk; even then, describe the work as merged/implemented with known failures, not as fully validated.
