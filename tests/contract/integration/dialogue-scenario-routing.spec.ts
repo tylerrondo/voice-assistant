@@ -1,6 +1,9 @@
 import { test, expect } from '@playwright/test';
 import * as fs from 'fs';
-import * as path from 'path';
+import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 import { DialogueStateManager } from '../../../src/platform/dialogue-manager';
 import { VoiceChannel, type ScenarioSet, type ScenarioDefinition } from '../../../src/platform/voice-channel';
 import {
@@ -29,7 +32,7 @@ test.describe('CONTRACT: SC-INTEGRATION-005 Generic Dialogue Scenario Routing & 
   let engine: DialogueEngine;
   let nannyScenarioSet: ScenarioSet;
 
-  beforeEach(() => {
+  test.beforeEach(() => {
     dm = new DialogueStateManager();
     vc = new VoiceChannel(dm);
 
