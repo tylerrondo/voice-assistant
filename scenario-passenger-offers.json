@@ -1,7 +1,63 @@
-"candidateBinding": {
+{
+  "version": 1,
+  "id": "scenario-set-passenger-offers-002",
+  "name": "Passenger Offer Selection",
+  "description": "Декларативный сценарий выбора предложения такси пассажиром с подтверждением.",
+  "scenarios": [
+    {
+      "id": "sc-select-passenger-offer",
+      "name": "Выбор предложения такси",
+      "intent": "SELECT_OFFER",
+      "triggerPhrases": [
+        "выбрать предложение",
+        "выбрать вариант",
+        "тогда давайте второй",
+        "тогда первый",
+        "нет лучше первый",
+        "какой быстрее",
+        "самый дешёвый",
+        "самый дешевый"
+      ],
+      "requiredSlots": ["selectedOfferId", "confirmation"],
+      "candidateBinding": {
+        "targetSlot": "selectedOfferId",
         "idField": "offerId",
+        "labelField": "driver",
         "indexField": "index",
         "statusField": "status",
         "unavailableValue": "UNAVAILABLE",
         "ambiguityTriggerValues": ["cheapest", "fastest"]
       },
+      "confirmation": {
+        "slot": "confirmation",
+        "confirmedValue": "CONFIRMED",
+        "rejectedValue": "REJECTED",
+        "confirmLabel": "Да",
+        "rejectLabel": "Нет",
+        "confirmedMessage": "Выбор подтверждён.",
+        "cancelledMessage": "Выбор отклонён."
+      },
+      "clarificationPrompts": {
+        "selectedOfferId": "Какое предложение выбрать?",
+        "confirmation": "Подтверждаете выбор?"
+      },
+      "slotExtractors": {
+        "selectedOfferId": {
+          "type": "string",
+          "rules": [
+            { "pattern": "втор(ой|ого|ую)|вариант\\s+2", "value": "OFFER-B" },
+            { "pattern": "перв(ый|ого|ую)|вариант\\s+1", "value": "OFFER-A" },
+            { "pattern": "трет(ий|ьего|ью)|вариант\\s+3", "value": "OFFER-C" }
+          ]
+        },
+        "confirmation": {
+          "type": "enum",
+          "rules": [
+            { "pattern": "\\b(да|подтверждаю|верно)\\b", "value": "CONFIRMED" },
+            { "pattern": "\\b(нет|отмена|отказываюсь)\\b", "value": "REJECTED" }
+          ]
+        }
+      }
+    }
+  ]
+}
