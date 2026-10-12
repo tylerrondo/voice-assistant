@@ -1,7 +1,6 @@
 test('GENERIC-09: Архитектурная верификация — в VoiceChannel отсутствуют любые доменные slot names', () => {
     const __dirname = path.dirname(fileURLToPath(import.meta.url));
-    const __dirname = path.dirname(fileURLToPath(import.meta.url));
-    const vcPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../src/platform/voice-channel.ts');
+    const vcPath = path.resolve(__dirname, '../../../src/platform/voice-channel.ts');
     const vcContent = fs.readFileSync(vcPath, 'utf8');
 
     // Проверяем полное отсутствие доменных имен слотов и их скрытых fallback'ов в VoiceChannel
