@@ -2,9 +2,7 @@ import { test, expect } from '@playwright/test';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
-const scenarioFilePath = path.resolve(__dirname, '../../../scenario-platform-012-production-pipeline.json');
+const scenarioFilePath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../scenario-platform-012-production-pipeline.json');
 
 test.describe('E2E: PLATFORM-012 Production Voice Pipeline Integration Suite', () => {
 
