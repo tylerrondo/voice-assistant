@@ -1,6 +1,9 @@
 import { test, expect } from '@playwright/test';
 import * as fs from 'fs';
-import * as path from 'path';
+import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 import { DialogueStateManager } from '../../../src/platform/dialogue-manager';
 import { VoiceChannel } from '../../../src/platform/voice-channel';
 
@@ -19,7 +22,7 @@ test.describe('CONTRACT: SC-PASS-001 Passenger Order Multi-turn Dialogue Suite',
     scenarioSet = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
   });
 
-  test.beforeEach(() => {
+  test.test.beforeEach(() => {
     dispatcherCalls = 0;
     dm = new DialogueStateManager({
       actionDispatcher: async (event, ctx, exec) => {
