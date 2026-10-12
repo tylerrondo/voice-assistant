@@ -5,8 +5,7 @@ import * as fs from 'fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const scenarioPath = path.resolve(__dirname, '../../../scenario-platform-012-production-pipeline.json');
+const scenarioPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../scenario-platform-012-production-pipeline.json');
 const rawContent = fs.readFileSync(scenarioPath, 'utf-8');
 const scenarioSet: ScenarioSet = JSON.parse(rawContent);
 
