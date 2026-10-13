@@ -1,9 +1,8 @@
 import { test, expect } from '@playwright/test';
-import * as fs from 'fs';
-import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import * as fs from 'fs';
+import * as path from 'path';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const scenarioPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../scenario-sc-009-taxi-driver-dialogue-concurrency.json');
 const rawContent = fs.readFileSync(scenarioPath, 'utf-8');
 const scenarioSet = JSON.parse(rawContent);
