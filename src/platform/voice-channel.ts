@@ -646,6 +646,24 @@ export class VoiceChannel {
       return intentRes;
     }
 
+    if (intentRes.status === 'RESOLVED') {
+      const waiting = this.dialogueManager.listContexts(identity).filter(c => c.status === 'WAITING_FOR_SLOT');
+      if (waiting.length > 0 && !waiting.some(c => c.intent === intentRes.intent)) {
+        const sc = intentRes.scenario;
+        const slotRes = this.extractSlotsDeterministically(text, sc.slotExtractors, sc.id, sc.ambiguityPrompt?.template);
+        if (slotRes.status === 'AMBIGUOUS_SLOT') return slotRes;
+        const slots = slotRes.status === 'RESOLVED' ? slotRes.slots : {};
+        const firstEmit = sc.steps?.find(step => step.kind === 'emit');
+        const ctx = this.dialogueManager.createContext(sc.intent, slots, sc.requiredSlots || [], firstEmit?.event?.type || (sc.intent.toLowerCase() + '.action'), sc.clarificationPrompts || {}, identity, sc.id);
+        if (ctx.missingSlots.length === 0) {
+          const execution = this.dialogueManager.createExecution(ctx, identity);
+          const result = await this.dialogueManager.dispatchAction(execution.executionId, ctx.slots, identity);
+          return { status: result.status === 'SUCCEEDED' ? 'COMPLETED' : result.status, intent: ctx.intent, contextId: ctx.contextId, executionId: execution.executionId, attempt: result.attempt, slots: ctx.slots, context: this.dialogueManager.getContext(ctx.contextId, identity) };
+        }
+        return ctx;
+      }
+    }
+
     // A repeated explicit order command with a different entity starts a separate context.
     // Do not overwrite the orderId in an already-open order when the user names another order.
     if (intentRes.status === 'RESOLVED' && !intentRes.scenario.query && !intentRes.scenario.evaluation) {
@@ -822,11 +840,13 @@ export class VoiceChannel {
           }
 
           const latestCtx = this.dialogueManager.getContext(activeCtx.contextId, identity) || activeCtx;
+          if (['COMPLETED', 'CANCELLED', 'EXPIRED'].includes(latestCtx.status)) return latestCtx;
           if (latestCtx.missingSlots.length === 0 && !scenario.confirmation) {
             const exec = this.dialogueManager.createExecution(latestCtx, identity);
             const dispatchRes = await this.dialogueManager.dispatchAction(exec.executionId, latestCtx.slots, identity);
             return {
               status: dispatchRes.status === 'SUCCEEDED' ? 'COMPLETED' : dispatchRes.status,
+              intent: latestCtx.intent,
               contextId: latestCtx.contextId,
               executionId: exec.executionId,
               attempt: dispatchRes.attempt,
@@ -847,6 +867,7 @@ export class VoiceChannel {
                 const dispatchRes = await this.dialogueManager.dispatchAction(exec.executionId, updated.slots, identity);
                 return {
                   status: dispatchRes.status === 'SUCCEEDED' ? 'COMPLETED' : dispatchRes.status,
+                  intent: updated.intent,
                   contextId: updated.contextId,
                   executionId: exec.executionId,
                   attempt: dispatchRes.attempt,
@@ -857,7 +878,9 @@ export class VoiceChannel {
             }
           }
 
-          return updatedCtxState || this.dialogueManager.getContext(activeCtx.contextId, identity);
+          const refreshed = this.dialogueManager.getContext(activeCtx.contextId, identity) || activeCtx;
+          if (['COMPLETED', 'CANCELLED', 'EXPIRED'].includes(refreshed.status)) return refreshed;
+          return updatedCtxState || refreshed;
         }
       }
     }
@@ -893,6 +916,7 @@ export class VoiceChannel {
         const dispatchRes = await this.dialogueManager.dispatchAction(exec.executionId, ctx.slots, identity);
         return {
           status: dispatchRes.status === 'SUCCEEDED' ? 'COMPLETED' : dispatchRes.status,
+          intent: ctx.intent,
           contextId: ctx.contextId,
           executionId: exec.executionId,
           attempt: dispatchRes.attempt,

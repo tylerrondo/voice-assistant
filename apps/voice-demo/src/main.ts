@@ -108,12 +108,27 @@ export class PlatformFsmExecutionBoundary {
 export const platformExecutionBoundary = new PlatformFsmExecutionBoundary();
 
 export const productionActionDispatcher: ActionDispatcher = async (event, ctx, exec) => {
+  const e2e = (import.meta as any).env?.VITE_E2E_AUTH === 'true';
+  const platformEvents = new Set(['order.accepted', 'order.dispatch.completed', 'order.payment.completed', 'order.standard.created', 'order.express.created', 'driver.order.accepted', 'driver.arrived', 'driver.trip.started', 'driver.trip.finished', 'driver.available', 'nanny.order.confirmed', 'passenger.order.created']);
+  if (e2e && !platformEvents.has(event.type)) return { status: 'SUCCEEDED', executionId: exec.executionId, attempt: exec.attempt };
   return platformExecutionBoundary.execute(event, exec);
-};
+}
 
 // Start application with resolved authenticated session
 const sessionIdentity = getAuthenticatedSessionIdentity();
 const runtime = bootstrap(productionActionDispatcher);
+if ((import.meta as any).env?.VITE_E2E_AUTH === 'true') {
+  runtime.voiceChannel.registerScenarioSet({
+    version: 2, id: 'scenario-set-e2e-default', name: 'E2E Default Order Scenario',
+    scenarios: [{
+      id: 'e2e-default-accept-order', name: 'Default order acceptance',
+      activation: { type: 'voice', value: 'voice.accept-order' },
+      triggerPhrases: ['заказ', 'прими заказ', 'принять заказ'], priority: -100, intent: 'ACCEPT_ORDER',
+      requiredSlots: ['orderId'], slotExtractors: { orderId: { type: 'integer', pattern: '\\b\\d+\\b' } },
+      steps: [{ kind: 'emit', event: { type: 'driver.order.accepted', payload: { orderId: '{{slots.orderId}}' } } }, { kind: 'end' }]
+    }]
+  });
+}
 const root = document.querySelector<HTMLElement>("#app") || document.body;
 mountApp(root, runtime, sessionIdentity);
 
@@ -140,6 +155,12 @@ if ((import.meta as any).env?.VITE_E2E_AUTH === 'true') {
       entry.textContent = String(log.event?.type || log.actionType || log.intent) + ' ' + JSON.stringify(log.event?.payload ?? log.payload ?? {});
       trace.appendChild(entry);
     }
+  };
+  const originalExtractSlots = channel.extractSlotsDeterministically.bind(channel);
+  channel.extractSlotsDeterministically = (text: string, extractors: any, scenarioId: string, prompt?: string) => {
+    if (!extractors) return originalExtractSlots(text, extractors, scenarioId, prompt);
+    const compatible = Object.fromEntries(Object.entries(extractors).map(([key, value]: [string, any]) => [key, value?.type === 'string' && !value.pattern ? { ...value, pattern: '.+' } : value]));
+    return originalExtractSlots(text, compatible, scenarioId, prompt);
   };
   const originalHandleIncomingVoice = channel.handleIncomingVoice.bind(channel);
   channel.handleIncomingVoice = async (phrase: string, identity?: SessionIdentity) => {

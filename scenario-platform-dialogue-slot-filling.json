@@ -12,8 +12,12 @@
         "value": "voice.process-test-action"
       },
       "intent": "PROCESS_TEST_ACTION",
-      "requiredSlots": ["item", "quantity"],
+      "requiredSlots": [
+        "item",
+        "quantity"
+      ],
       "clarificationPrompts": {
+        "item": "Какой товар?",
         "quantity": "Сколько?"
       },
       "steps": [
@@ -21,6 +25,96 @@
           "kind": "emit",
           "event": {
             "type": "platform.test_action.processed",
+            "payload": {
+              "item": "{{slots.item}}",
+              "quantity": "{{slots.quantity}}"
+            }
+          }
+        },
+        {
+          "kind": "end"
+        }
+      ],
+      "triggerPhrases": [
+        "обработай яблоки"
+      ],
+      "slotExtractors": {
+        "item": {
+          "type": "enum",
+          "mapping": {
+            "apples": [
+              "яблоки",
+              "яблоко"
+            ],
+            "tomatoes": [
+              "помидоры",
+              "помидор"
+            ]
+          }
+        },
+        "quantity": {
+          "type": "integer",
+          "rules": [
+            {
+              "pattern": "пять",
+              "value": 5
+            },
+            {
+              "pattern": "\\b5\\b",
+              "value": 5
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "sc-dialogue-process-sale",
+      "name": "Продажа помидоров",
+      "activation": {
+        "type": "voice",
+        "value": "voice.process-sale"
+      },
+      "triggerPhrases": [
+        "продай помидоры"
+      ],
+      "intent": "PROCESS_SALE",
+      "requiredSlots": [
+        "item",
+        "quantity"
+      ],
+      "slotExtractors": {
+        "item": {
+          "type": "enum",
+          "mapping": {
+            "tomatoes": [
+              "помидоры",
+              "помидор"
+            ]
+          }
+        },
+        "quantity": {
+          "type": "integer",
+          "rules": [
+            {
+              "pattern": "пять",
+              "value": 5
+            },
+            {
+              "pattern": "\\b5\\b",
+              "value": 5
+            }
+          ]
+        }
+      },
+      "clarificationPrompts": {
+        "item": "Какой товар?",
+        "quantity": "Сколько?"
+      },
+      "steps": [
+        {
+          "kind": "emit",
+          "event": {
+            "type": "platform.test_sale.processed",
             "payload": {
               "item": "{{slots.item}}",
               "quantity": "{{slots.quantity}}"
