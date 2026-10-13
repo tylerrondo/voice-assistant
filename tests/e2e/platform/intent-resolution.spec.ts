@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
-import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import * as path from 'path';
 
 const scenarioFilePath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../scenario-platform-014-intent-slot-resolution.json');
 
