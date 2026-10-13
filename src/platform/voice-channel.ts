@@ -52,6 +52,7 @@ export interface CandidateBindingDefinition {
 export interface ConfirmationDefinition {
   slot: string;
   confirmedValue: string;
+  confirmedStatus?: string;
   rejectedValue: string;
   confirmLabel?: string;
   rejectLabel?: string;
@@ -697,7 +698,7 @@ export class VoiceChannel {
           .filter(Boolean)
           .join(', ');
         const clarificationPrompt = promptScenario?.ambiguityPrompt?.template
-          ?.replace(/\\{candidateEntities\\}/g, candidateEntities);
+          ?.replaceAll('{candidateEntities}', candidateEntities);
         return {
           status: 'AMBIGUOUS_CONTEXT',
           candidateContextIds: matchingContexts.map(item => item.ctx.contextId),
@@ -799,6 +800,7 @@ export class VoiceChannel {
               contextId: latestCtx.contextId,
               executionId: exec.executionId,
               attempt: dispatchRes.attempt,
+              slots: latestCtx.slots,
               context: this.dialogueManager.getContext(latestCtx.contextId, identity)
             };
           }
@@ -818,6 +820,7 @@ export class VoiceChannel {
                   contextId: updated.contextId,
                   executionId: exec.executionId,
                   attempt: dispatchRes.attempt,
+                  slots: updated.slots,
                   context: this.dialogueManager.getContext(updated.contextId, identity)
                 };
               }

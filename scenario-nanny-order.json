@@ -35,6 +35,7 @@
       "confirmation": {
         "slot": "confirmation",
         "confirmedValue": "CONFIRMED",
+        "confirmedStatus": "ORDER_CONFIRMED",
         "rejectedValue": "REJECTED",
         "confirmLabel": "Да",
         "rejectLabel": "Отмена",

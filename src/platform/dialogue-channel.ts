@@ -289,7 +289,7 @@ export class DialogueEngine {
 
         return {
           status: dispatchRes.status === 'SUCCEEDED'
-            ? 'CONFIRMED'
+            ? (confirmationConfig.confirmedStatus || 'CONFIRMED')
             : dispatchRes.status,
           contextId: ctx.contextId,
           executionId: exec.executionId,

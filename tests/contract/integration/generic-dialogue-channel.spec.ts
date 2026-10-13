@@ -257,7 +257,7 @@ test.describe('CONTRACT: SC-INTEGRATION-004 Generic Dialogue Channel Contract Su
 
     const res = await adapter.send({ modality: 'button', payload: { slotName: 'confirmation', slotValue: 'CONFIRMED' } }, sessionUser, sc);
 
-    expect(res.status).toBe('CONFIRMED');
+    expect(res.status).toBe(sc.confirmation?.confirmedStatus || 'CONFIRMED');
     expect(dispatcherCalls).toBe(1);
     expect(dm.getExecutionLogs(sessionUser).length).toBe(1);
   });
