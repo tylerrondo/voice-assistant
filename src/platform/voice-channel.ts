@@ -343,44 +343,6 @@ export class VoiceChannel {
           });
         }
       }
-
-    if (unpatternedStringSlots.length > 0) {
-      let residual = text.toLowerCase();
-      const scenario = this.scenarioRegistry.find(candidate => candidate.id === scenarioId);
-      const triggers = scenario ? [
-        ...(scenario.activation?.value ? [scenario.activation.value] : []),
-        ...(scenario.triggerPhrases || []),
-        ...(scenario.aliases || []),
-        ...(scenario.expectedPhrase ? [scenario.expectedPhrase] : [])
-      ] : [];
-      for (const trigger of triggers.sort((a, b) => b.length - a.length)) {
-        const clean = trigger.replace(/^voice\./i, '').replace(/[-_]/g, ' ').trim().toLowerCase();
-        if (clean) residual = residual.replaceAll(clean, ' ');
-      }
-      for (const value of Object.values(resolvedSlots)) {
-        if (value !== undefined && value !== null && String(value)) {
-          residual = residual.replaceAll(String(value).toLowerCase(), ' ');
-        }
-      }
-      for (const [slotKey, extractor] of Object.entries(extractors)) {
-        if (resolvedSlots[slotKey] === undefined || !extractor.mapping) continue;
-        for (const synonyms of Object.values(extractor.mapping)) {
-          for (const synonym of synonyms) {
-            if (synonym) residual = residual.replaceAll(synonym.toLowerCase(), ' ');
-          }
-        }
-      }
-      residual = residual.replace(/[\p{P}\p{S}]+/gu, ' ').replace(/\s+/g, ' ').trim();
-      if (residual) {
-        for (const slot of unpatternedStringSlots) {
-          patternMatches.push({
-            slotName: slot.slotName,
-            value: residual,
-            matchedText: residual,
-            priority: slot.priority
-          });
-        }
-      }
     }
 
     const matchesByText = new Map<string, typeof patternMatches>();
