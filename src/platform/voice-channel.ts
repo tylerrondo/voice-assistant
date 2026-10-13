@@ -609,7 +609,7 @@ export class VoiceChannel {
 
     // A repeated explicit order command with a different entity starts a separate context.
     // Do not overwrite the orderId in an already-open order when the user names another order.
-    if (intentRes.status === 'RESOLVED' && !intentRes.sc.query && !intentRes.sc.evaluation) {
+    if (intentRes.status === 'RESOLVED' && !intentRes.scenario.query && !intentRes.scenario.evaluation) {
       const sc = intentRes.scenario;
       const slotRes = this.extractSlotsDeterministically(text, sc.slotExtractors, sc.id, sc.ambiguityPrompt?.template);
       const initialSlots = slotRes.status === 'RESOLVED' ? slotRes.slots : {};
