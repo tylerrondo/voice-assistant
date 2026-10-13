@@ -50,15 +50,15 @@
           "rules": [
             {
               "pattern": "втор(ой|ого|ую)|вариант\\s+2",
-              "value": "OFFER-B"
+              "value": 2
             },
             {
               "pattern": "перв(ый|ого|ую)|вариант\\s+1",
-              "value": "OFFER-A"
+              "value": 1
             },
             {
               "pattern": "трет(ий|ьего|ью)|вариант\\s+3",
-              "value": "OFFER-C"
+              "value": 3
             },
             {
               "pattern": "подешевле|дешевле",
@@ -148,6 +148,48 @@
         "attribute": "vehicleType",
         "targetIndex": 2,
         "responseTemplate": "Вариант {{index}} — {{vehicleType}}."
+      },
+      "slotExtractors": {
+        "choice": {
+          "type": "integer",
+          "rules": [
+            {
+              "pattern": "\\b(второй|второго|вторую|вариант\\s*2)\\b",
+              "value": 2
+            },
+            {
+              "pattern": "\\b(первый|первого|вариант\\s*1)\\b",
+              "value": 1
+            },
+            {
+              "pattern": "\\b(третий|третьего|вариант\\s*3)\\b",
+              "value": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "sc-query-offer-distance",
+      "name": "Вопрос о расстоянии до предложения",
+      "intent": "QUERY_OFFER_DISTANCE",
+      "triggerPhrases": [
+        "далеко находится второй водитель",
+        "как далеко второй водитель",
+        "расстояние до второго водителя",
+        "далеко второй водитель"
+      ],
+      "candidateBinding": {
+        "idField": "offerId",
+        "indexField": "index",
+        "statusField": "status",
+        "unavailableValue": "UNAVAILABLE"
+      },
+      "evaluation": {
+        "kind": "query_attribute",
+        "attribute": "distanceKm",
+        "targetIndex": 2,
+        "responseTemplate": "До {{driver}} примерно {{distanceMeters}} метров."
       },
       "slotExtractors": {
         "choice": {
