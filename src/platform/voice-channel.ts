@@ -596,6 +596,10 @@ export class VoiceChannel {
       }
     }
 
+    if (intentRes.status === 'AMBIGUOUS_INTENT') {
+      return intentRes;
+    }
+
     // 3. Declarative Active Context Processing
     const activeWaiting = this.dialogueManager.listContexts(identity).filter(c => c.status === 'WAITING_FOR_SLOT');
 
