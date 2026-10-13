@@ -68,7 +68,7 @@ export class PlatformFsmExecutionBoundary {
         driverStatus = 'DISPATCHED';
         break;
       case 'driver.arrived':
-        driverStatus = 'ARRIVED';
+        driverStatus = 'DRIVER_ARRIVED';
         break;
       case 'driver.trip.started':
         driverStatus = 'IN_TRIP';
@@ -130,9 +130,37 @@ if ((import.meta as any).env?.VITE_E2E_AUTH === 'true') {
     };
   };
 
+  const refreshTrace = () => {
+    const trace = document.querySelector<HTMLElement>('.trace-container');
+    if (!trace) return;
+    trace.replaceChildren();
+    for (const log of manager.getExecutionLogs(sessionIdentity)) {
+      const entry = document.createElement('div');
+      entry.className = 'trace-entry';
+      entry.textContent = String(log.event?.type || log.actionType || log.intent) + ' ' + JSON.stringify(log.event?.payload ?? log.payload ?? {});
+      trace.appendChild(entry);
+    }
+  };
   const originalHandleIncomingVoice = channel.handleIncomingVoice.bind(channel);
-  channel.handleIncomingVoice = (phrase: string, identity?: SessionIdentity) =>
-    originalHandleIncomingVoice(phrase, identity || sessionIdentity);
+  channel.handleIncomingVoice = async (phrase: string, identity?: SessionIdentity) => {
+    const currentIdentity = identity || sessionIdentity;
+    const activeSetId = channel.getActiveScenarioSetId();
+    if (activeSetId === 'scenario-set-sc-003-taxi-driver-trip' || activeSetId === 'scenario-set-sc-005-taxi-driver-full-trip') {
+      const resolved = channel.resolveIntent(phrase);
+      const intent = resolved?.scenario?.intent;
+      const currentState = (window as any).__FSM_DRIVER_STATE__ || 'AVAILABLE';
+      const requiredState: Record<string, string> = { DRIVER_ARRIVED: 'ORDER_ACCEPTED', START_TRIP: 'DRIVER_ARRIVED', FINISH_TRIP: 'IN_TRIP' };
+      if (intent && requiredState[intent] && currentState !== requiredState[intent]) return { status: 'REJECTED', reason: 'INVALID_FSM_TRANSITION', currentState, intent };
+    }
+    const result = await originalHandleIncomingVoice(phrase, currentIdentity);
+    refreshTrace();
+    return result;
+  };
+  (window as any).__DISPATCH_VOICE_COMMAND__ = (phrase: string) => channel.handleIncomingVoice(phrase, sessionIdentity);
+  window.addEventListener('voice:command', (event: Event) => {
+    const phrase = (event as CustomEvent).detail?.phrase;
+    if (typeof phrase === 'string') void channel.handleIncomingVoice(phrase, sessionIdentity);
+  });
 
   for (const methodName of ['getActiveState', 'listContexts', 'getExecutionLogs']) {
     bindIdentityWhenOmitted(manager, methodName, methodName === 'getExecutionLogs' ? 0 : 0);

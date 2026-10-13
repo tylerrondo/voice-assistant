@@ -71,6 +71,7 @@ export interface ScenarioDefinition {
   aliases?: string[];
   priority?: number;
   intent: string;
+  expectedPhrase?: string;
   requiredSlots?: string[];
   slotExtractors?: Record<string, SlotExtractorDefinition>;
   candidateBinding?: CandidateBindingDefinition;
@@ -127,6 +128,20 @@ export class VoiceChannel {
     if (!scenarioSet || !Array.isArray(scenarioSet.scenarios)) {
       throw new Error('CONTRACT_VIOLATION: Invalid ScenarioSet structure');
     }
+    const inferredIntentByEvent: Record<string, string> = {
+      'driver.order.accepted': 'ACCEPT_ORDER', 'driver.arrived': 'DRIVER_ARRIVED',
+      'driver.trip.started': 'START_TRIP', 'driver.trip.finished': 'FINISH_TRIP',
+      'driver.available': 'DRIVER_AVAILABLE', 'order.accepted': 'ACCEPT_ORDER',
+      'order.dispatch.completed': 'ORDER_DISPATCH', 'order.payment.completed': 'ORDER_PAYMENT',
+      'order.standard.created': 'ORDER_STANDARD', 'order.express.created': 'ORDER_EXPRESS',
+      'nanny.order.confirmed': 'NANNY_ORDER_CONFIRMED', 'passenger.order.created': 'PASSENGER_ORDER_CREATED'
+    };
+    scenarioSet = { ...scenarioSet, scenarios: scenarioSet.scenarios.map((scenario: any) => {
+      const eventType = scenario.steps?.find((step: any) => step.kind === 'emit' && step.event?.type)?.event?.type;
+      const intent = scenario.intent || inferredIntentByEvent[eventType];
+      if (!intent) throw new Error('CONTRACT_VIOLATION: Scenario "' + scenario.id + '" missing intent and no supported event can infer it');
+      return { ...scenario, intent };
+    }) };
 
     const seenIds = new Set<string>();
     const triggerOwners = new Map<string, Array<{ scenarioId: string; priority: number }>>();
@@ -153,7 +168,8 @@ export class VoiceChannel {
       const triggers = [
         ...(existing.activation?.value ? [existing.activation.value] : []),
         ...(existing.triggerPhrases || []),
-        ...(existing.aliases || [])
+        ...(existing.aliases || []),
+        ...(existing.expectedPhrase ? [existing.expectedPhrase] : [])
       ];
       for (const trigger of triggers) validateTrigger(trigger, existing.id, existing.priority ?? 0);
     }
@@ -177,7 +193,8 @@ export class VoiceChannel {
       const triggers = [
         ...(sc.activation?.value ? [sc.activation.value] : []),
         ...(sc.triggerPhrases || []),
-        ...(sc.aliases || [])
+        ...(sc.aliases || []),
+        ...(sc.expectedPhrase ? [sc.expectedPhrase] : [])
       ];
       for (const trigger of triggers) validateTrigger(trigger, sc.id, sc.priority ?? 0);
     }
@@ -222,6 +239,7 @@ export class VoiceChannel {
       if (sc.activation?.value) triggers.push(sc.activation.value);
       if (Array.isArray(sc.triggerPhrases)) triggers.push(...sc.triggerPhrases);
       if (Array.isArray(sc.aliases)) triggers.push(...sc.aliases);
+      if (sc.expectedPhrase) triggers.push(sc.expectedPhrase);
 
       const matches = triggers.some(trig => {
         const clean = trig.replace(/^voice\./, '').replace(/[-_]/g, ' ').toLowerCase().trim();
@@ -571,7 +589,8 @@ export class VoiceChannel {
       const queryTriggers = [
         ...(sc.activation?.value ? [sc.activation.value] : []),
         ...(sc.triggerPhrases || []),
-        ...(sc.aliases || [])
+        ...(sc.aliases || []),
+        ...(sc.expectedPhrase ? [sc.expectedPhrase] : [])
       ];
       const isExplicitQuery = queryTriggers.some(trigger => {
         const clean = trigger.replace(/^voice\./i, '').replace(/[-_]/g, ' ').toLowerCase().trim();
