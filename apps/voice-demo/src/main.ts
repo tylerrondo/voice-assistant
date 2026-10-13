@@ -156,12 +156,6 @@ if ((import.meta as any).env?.VITE_E2E_AUTH === 'true') {
       trace.appendChild(entry);
     }
   };
-  const originalExtractSlots = channel.extractSlotsDeterministically.bind(channel);
-  channel.extractSlotsDeterministically = (text: string, extractors: any, scenarioId: string, prompt?: string) => {
-    if (!extractors) return originalExtractSlots(text, extractors, scenarioId, prompt);
-    const compatible = Object.fromEntries(Object.entries(extractors).map(([key, value]: [string, any]) => [key, value?.type === 'string' && !value.pattern ? { ...value, pattern: '.+' } : value]));
-    return originalExtractSlots(text, compatible, scenarioId, prompt);
-  };
   const originalHandleIncomingVoice = channel.handleIncomingVoice.bind(channel);
   channel.handleIncomingVoice = async (phrase: string, identity?: SessionIdentity) => {
     const currentIdentity = identity || sessionIdentity;

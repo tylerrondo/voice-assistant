@@ -287,6 +287,7 @@ export class VoiceChannel {
 
     const resolvedSlots: Record<string, any> = {};
     const patternMatches: Array<{ slotName: string; value: string; priority: number; matchedText: string }> = [];
+    const unpatternedStringSlots: Array<{ slotName: string; priority: number }> = [];
     const unicodeWordBoundary = '(?:(?<![\\p{L}\\p{N}_])(?=[\\p{L}\\p{N}_])|(?<=[\\p{L}\\p{N}_])(?![\\p{L}\\p{N}_]))';
     const compilePattern = (pattern: string): RegExp =>
       new RegExp(pattern.replace(/\\b/g, unicodeWordBoundary), 'iu');
@@ -330,14 +331,60 @@ export class VoiceChannel {
         if (match) {
           resolvedSlots[slotKey] = parseInt(match[0], 10);
         }
-      } else if (extractor.type === 'string' && extractor.pattern) {
-        const match = text.match(compilePattern(extractor.pattern));
-        if (match) {
+      } else if (extractor.type === 'string') {
+        const priority = Number.isFinite(extractor.priority) ? extractor.priority as number : 0;
+        if (extractor.pattern) {
+          const match = text.match(compilePattern(extractor.pattern));
+          if (match) {
+            patternMatches.push({
+              slotName: slotKey,
+              value: match[0],
+              matchedText: match[0].toLowerCase(),
+              priority
+            });
+          }
+        } else {
+          // Legacy free-text slots consume only content left after removing
+          // this scenario's trigger and values parsed by typed extractors.
+          unpatternedStringSlots.push({ slotName: slotKey, priority });
+        }
+      }
+    }
+
+    if (unpatternedStringSlots.length > 0) {
+      let residual = text.toLowerCase();
+      const scenario = this.scenarioRegistry.find(candidate => candidate.id === scenarioId);
+      const triggers = scenario ? [
+        ...(scenario.activation?.value ? [scenario.activation.value] : []),
+        ...(scenario.triggerPhrases || []),
+        ...(scenario.aliases || []),
+        ...(scenario.expectedPhrase ? [scenario.expectedPhrase] : [])
+      ] : [];
+      for (const trigger of triggers.sort((a, b) => b.length - a.length)) {
+        const clean = trigger.replace(/^voice\\./i, '').replace(/[-_]/g, ' ').trim().toLowerCase();
+        if (clean) residual = residual.replaceAll(clean, ' ');
+      }
+      for (const value of Object.values(resolvedSlots)) {
+        if (value !== undefined && value !== null && String(value)) {
+          residual = residual.replaceAll(String(value).toLowerCase(), ' ');
+        }
+      }
+      for (const [slotKey, extractor] of Object.entries(extractors)) {
+        if (resolvedSlots[slotKey] === undefined || !extractor.mapping) continue;
+        for (const synonyms of Object.values(extractor.mapping)) {
+          for (const synonym of synonyms) {
+            if (synonym) residual = residual.replaceAll(synonym.toLowerCase(), ' ');
+          }
+        }
+      }
+      residual = residual.replace(/[\\p{P}\\p{S}]+/gu, ' ').replace(/\\s+/g, ' ').trim();
+      if (residual) {
+        for (const slot of unpatternedStringSlots) {
           patternMatches.push({
-            slotName: slotKey,
-            value: match[0],
-            matchedText: match[0].toLowerCase(),
-            priority: Number.isFinite(extractor.priority) ? extractor.priority as number : 0
+            slotName: slot.slotName,
+            value: residual,
+            matchedText: residual,
+            priority: slot.priority
           });
         }
       }
@@ -567,6 +614,11 @@ export class VoiceChannel {
       if (routeResult.status === 'CONTEXT_ACCESS_DENIED') return routeResult;
       return { status: 'NO_MATCH' };
     }
+
+    // Enforce ownership before intent resolution: explicit entity references
+    // must not create a new context or execute against another session's order.
+    const ownershipRoute = this.dialogueManager.resolveRouting(text, [], identity);
+    if (ownershipRoute.status === 'CONTEXT_ACCESS_DENIED') return ownershipRoute;
 
     // 2. Intent Resolution (Evaluation / Comparison Queries)
     const intentRes = this.resolveIntent(text);
