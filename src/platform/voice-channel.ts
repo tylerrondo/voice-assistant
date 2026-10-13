@@ -278,11 +278,14 @@ export class VoiceChannel {
 
     const resolvedSlots: Record<string, any> = {};
     const patternMatches: Array<{ slotName: string; value: string; priority: number; matchedText: string }> = [];
+    const unicodeWordBoundary = '(?:(?<![\\p{L}\\p{N}_])(?=[\\p{L}\\p{N}_])|(?<=[\\p{L}\\p{N}_])(?![\\p{L}\\p{N}_]))';
+    const compilePattern = (pattern: string): RegExp =>
+      new RegExp(pattern.replace(/\\b/g, unicodeWordBoundary), 'iu');
 
     for (const [slotKey, extractor] of Object.entries(extractors)) {
       if (extractor.rules && Array.isArray(extractor.rules)) {
         for (const rule of extractor.rules) {
-          if (new RegExp(rule.pattern, 'i').test(text)) {
+          if (compilePattern(rule.pattern).test(text)) {
             resolvedSlots[slotKey] = rule.value;
             break;
           }
@@ -290,7 +293,7 @@ export class VoiceChannel {
       } else if (extractor.type === 'enum') {
         if (extractor.patterns && Array.isArray(extractor.patterns)) {
           for (const pat of extractor.patterns) {
-            const match = text.match(new RegExp(pat, 'i'));
+            const match = text.match(compilePattern(pat));
             if (match) {
               resolvedSlots[slotKey] = 'CONFIRMED';
               break;
@@ -314,12 +317,12 @@ export class VoiceChannel {
           }
         }
       } else if (extractor.type === 'integer' && extractor.pattern) {
-        const match = text.match(new RegExp(extractor.pattern, 'i'));
+        const match = text.match(compilePattern(extractor.pattern));
         if (match) {
           resolvedSlots[slotKey] = parseInt(match[0], 10);
         }
       } else if (extractor.type === 'string' && extractor.pattern) {
-        const match = text.match(new RegExp(extractor.pattern, 'i'));
+        const match = text.match(compilePattern(extractor.pattern));
         if (match) {
           patternMatches.push({
             slotName: slotKey,
