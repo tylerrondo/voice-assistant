@@ -135,7 +135,6 @@
       "intent": "QUERY_OFFER_ATTRIBUTE",
       "triggerPhrases": [
         "второй это комфорт",
-        "а второй",
         "характеристики второго"
       ],
       "candidateBinding": {
