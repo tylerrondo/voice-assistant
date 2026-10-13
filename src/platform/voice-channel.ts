@@ -253,11 +253,20 @@ export class VoiceChannel {
             }
           }
         } else if (extractor.mapping) {
-          for (const [enumValue, synonyms] of Object.entries(extractor.mapping)) {
-            if (synonyms.some(synonym => text.includes(synonym.toLowerCase()))) {
-              resolvedSlots[slotKey] = enumValue;
-              break;
-            }
+          const matchingValues = Object.entries(extractor.mapping)
+            .filter(([, synonyms]) => synonyms.some(synonym => text.includes(synonym.toLowerCase())))
+            .map(([enumValue]) => enumValue);
+
+          if (matchingValues.length > 1) {
+            return {
+              status: 'AMBIGUOUS_SLOT',
+              candidates: matchingValues.map(value => ({ slotName: slotKey, value, scenarioId })),
+              clarificationPrompt: ambiguityPromptTemplate
+            };
+          }
+
+          if (matchingValues.length === 1) {
+            resolvedSlots[slotKey] = matchingValues[0];
           }
         }
       } else if (extractor.type === 'integer' && extractor.pattern) {
