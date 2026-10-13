@@ -604,6 +604,11 @@ export class VoiceChannel {
     let activeWaiting = this.dialogueManager.listContexts(identity).filter(c => c.status === 'WAITING_FOR_SLOT');
 
     if (activeWaiting.length > 1) {
+      const explicitRoute = this.dialogueManager.resolveRouting(text, [], identity);
+      if (explicitRoute.status === 'RESOLVED') {
+        activeWaiting = activeWaiting.filter(ctx => ctx.contextId === explicitRoute.contextId);
+      }
+
       const matchingContexts = activeWaiting.map(ctx => {
         const scenario = (ctx.scenarioId ? this.scenarioRegistry.find(s => s.id === ctx.scenarioId) : undefined)
           || this.getDeterministicScenarioForIntent(ctx.intent);
