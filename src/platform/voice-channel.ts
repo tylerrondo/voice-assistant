@@ -128,19 +128,23 @@ export class VoiceChannel {
     }
 
     const seenIds = new Set<string>();
-    const triggerOwners = new Map<string, string>();
+    const triggerOwners = new Map<string, Array<{ scenarioId: string; priority: number }>>();
     const normalizeTrigger = (value: string): string =>
       value.replace(/^voice\./i, '').replace(/[-_]/g, ' ').trim().toLowerCase().replace(/\s+/g, ' ');
     const scenariosBeingReplaced = new Set(scenarioSet.scenarios.map(sc => sc.id));
 
-    const validateTrigger = (value: string, scenarioId: string): void => {
+    const validateTrigger = (value: string, scenarioId: string, priority = 0): void => {
       const normalized = normalizeTrigger(value);
       if (!normalized) return;
-      const owner = triggerOwners.get(normalized);
-      if (owner && owner !== scenarioId) {
-        throw new Error(`CONTRACT_VIOLATION: Trigger or alias collision "${normalized}" between "${owner}" and "${scenarioId}"`);
+      const owners = triggerOwners.get(normalized) || [];
+      const conflict = owners.find(owner => owner.scenarioId !== scenarioId && owner.priority === priority);
+      if (conflict) {
+        throw new Error(`CONTRACT_VIOLATION: Trigger or alias collision "${normalized}" between "${conflict.scenarioId}" and "${scenarioId}"`);
       }
-      triggerOwners.set(normalized, scenarioId);
+      if (!owners.some(owner => owner.scenarioId === scenarioId)) {
+        owners.push({ scenarioId, priority });
+      }
+      triggerOwners.set(normalized, owners);
     };
 
     for (const existing of this.scenarioRegistry) {
@@ -150,7 +154,7 @@ export class VoiceChannel {
         ...(existing.triggerPhrases || []),
         ...(existing.aliases || [])
       ];
-      for (const trigger of triggers) validateTrigger(trigger, existing.id);
+      for (const trigger of triggers) validateTrigger(trigger, existing.id, existing.priority ?? 0);
     }
 
     for (const sc of scenarioSet.scenarios) {
@@ -174,7 +178,7 @@ export class VoiceChannel {
         ...(sc.triggerPhrases || []),
         ...(sc.aliases || [])
       ];
-      for (const trigger of triggers) validateTrigger(trigger, sc.id);
+      for (const trigger of triggers) validateTrigger(trigger, sc.id, sc.priority ?? 0);
     }
 
     for (const sc of scenarioSet.scenarios) {
