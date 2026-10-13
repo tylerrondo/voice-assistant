@@ -1,4 +1,4 @@
-import { DialogueStateManager, ActionDispatcher } from '../../../src/platform/dialogue-manager';
+import { DialogueStateManager, type ActionDispatcher } from '../../../src/platform/dialogue-manager';
 import { VoiceChannel } from '../../../src/platform/voice-channel';
 
 export function initializeVoicePlatform(dispatcher?: ActionDispatcher) {
