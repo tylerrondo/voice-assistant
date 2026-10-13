@@ -399,6 +399,7 @@ export class DialogueStateManager {
     const tokens = text.split(/\s+/);
 
     for (const ctx of this.contexts.values()) {
+      if (ctx.ownerId !== identity.ownerId || ctx.sessionId !== identity.sessionId) continue;
       if (ctx.status !== 'WAITING_FOR_SLOT') continue;
 
       for (const [slotKey, slotVal] of Object.entries(ctx.slots)) {
@@ -406,9 +407,6 @@ export class DialogueStateManager {
         const valStr = String(slotVal).toLowerCase();
 
         if (tokens.includes(valStr) || text.includes(valStr)) {
-          if (ctx.ownerId !== identity.ownerId || ctx.sessionId !== identity.sessionId) {
-            return { status: 'CONTEXT_ACCESS_DENIED' };
-          }
           this.activeContextId = ctx.contextId;
           return { status: 'RESOLVED', contextId: ctx.contextId };
         }
