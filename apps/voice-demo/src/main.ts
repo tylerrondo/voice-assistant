@@ -140,7 +140,7 @@ if ((import.meta as any).env?.VITE_E2E_AUTH === 'true') {
   const originalExtractSlots = channel.extractSlotsDeterministically.bind(channel);
   channel.extractSlotsDeterministically = (text: string, extractors: any, scenarioId: string, prompt?: string) => {
     if (!extractors) return originalExtractSlots(text, extractors, scenarioId, prompt);
-    const scenario = channel.getScenarioById(scenarioId);
+    const scenario = channel.scenarioRegistry?.find((candidate: any) => candidate.id === scenarioId);
     if (!scenario) return originalExtractSlots(text, extractors, scenarioId, prompt);
 
     let residual = text.toLowerCase();
