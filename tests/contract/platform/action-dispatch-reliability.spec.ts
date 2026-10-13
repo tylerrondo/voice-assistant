@@ -183,10 +183,11 @@ test.describe('CONTRACT: PLATFORM-015 Action Dispatch Reliability Suite', () => 
   test('CONTRACT-13: Execution cannot be created for terminal context states', async () => {
     const dm = new DialogueStateManager();
     const ctx = dm.createContext('ACCEPT_ORDER', { orderId: 1001 }, ['orderId'], 'order.accepted', {}, sessionA);
-    dm.cancelContext(ctx.contextId, sessionA);
+    await dm.cancelContext(ctx.contextId, sessionA);
+    const cancelledContext = dm.getContext(ctx.contextId, sessionA)!;
 
     expect(() => {
-      dm.createExecution(ctx, sessionA);
+      dm.createExecution(cancelledContext, sessionA);
     }).toThrow(/CONTRACT_VIOLATION.*Cannot create execution for terminal context/);
   });
 
