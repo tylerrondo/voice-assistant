@@ -648,7 +648,7 @@ export class VoiceChannel {
 
     if (intentRes.status === 'RESOLVED') {
       const waiting = this.dialogueManager.listContexts(identity).filter(c => c.status === 'WAITING_FOR_SLOT');
-      if (waiting.length > 0 && !waiting.some(c => c.intent === intentRes.intent)) {
+      if (waiting.length > 0 && !waiting.some(c => c.intent === intentRes.intent) && !waiting.some(c => c.offers && c.offers.length > 0)) {
         const sc = intentRes.scenario;
         const slotRes = this.extractSlotsDeterministically(text, sc.slotExtractors, sc.id, sc.ambiguityPrompt?.template);
         if (slotRes.status === 'AMBIGUOUS_SLOT') return slotRes;
@@ -842,7 +842,14 @@ export class VoiceChannel {
           const latestCtx = this.dialogueManager.getContext(activeCtx.contextId, identity) || activeCtx;
           if (['COMPLETED', 'CANCELLED', 'EXPIRED'].includes(latestCtx.status)) return latestCtx;
           if (latestCtx.missingSlots.length === 0 && !scenario.confirmation) {
-            const exec = this.dialogueManager.createExecution(latestCtx, identity);
+            let exec: any;
+            try {
+              exec = this.dialogueManager.createExecution(latestCtx, identity);
+            } catch (error) {
+              const current = this.dialogueManager.getContext(latestCtx.contextId, identity);
+              if (current && ['COMPLETED', 'CANCELLED', 'EXPIRED'].includes(current.status)) return current;
+              throw error;
+            }
             const dispatchRes = await this.dialogueManager.dispatchAction(exec.executionId, latestCtx.slots, identity);
             return {
               status: dispatchRes.status === 'SUCCEEDED' ? 'COMPLETED' : dispatchRes.status,
