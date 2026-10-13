@@ -137,6 +137,46 @@ mountApp(root, runtime, sessionIdentity);
 if ((import.meta as any).env?.VITE_E2E_AUTH === 'true') {
   const manager = runtime.dialogueManager as any;
   const channel = runtime.voiceChannel as any;
+  const originalExtractSlots = channel.extractSlotsDeterministically.bind(channel);
+  channel.extractSlotsDeterministically = (text: string, extractors: any, scenarioId: string, prompt?: string) => {
+    if (!extractors) return originalExtractSlots(text, extractors, scenarioId, prompt);
+    const scenario = channel.getScenarioById(scenarioId);
+    if (!scenario) return originalExtractSlots(text, extractors, scenarioId, prompt);
+
+    let residual = text.toLowerCase();
+    const triggers = [
+      ...(scenario.activation?.value ? [scenario.activation.value] : []),
+      ...(scenario.triggerPhrases || []),
+      ...(scenario.aliases || []),
+      ...(scenario.expectedPhrase ? [scenario.expectedPhrase] : [])
+    ];
+    for (const trigger of triggers.sort((a: string, b: string) => b.length - a.length)) {
+      const clean = trigger.replace(/^voice\./i, '').replace(/[-_]/g, ' ').trim().toLowerCase();
+      if (clean) residual = residual.replaceAll(clean, ' ');
+    }
+    const escapeRegex = (value: string) => value.split('').map(ch =>
+      '.^$*+?()[]{}|\\'.includes(ch) ? '\\' + ch : ch
+    ).join('');
+    for (const [key, extractor] of Object.entries(extractors) as [string, any][]) {
+      if (extractor.pattern) {
+        const match = residual.match(new RegExp(extractor.pattern, 'iu'));
+        if (match) residual = residual.replace(match[0].toLowerCase(), ' ');
+      }
+      if (extractor.mapping) {
+        for (const synonyms of Object.values(extractor.mapping) as string[][]) {
+          for (const synonym of synonyms) {
+            if (synonym) residual = residual.replaceAll(synonym.toLowerCase(), ' ');
+          }
+        }
+      }
+    }
+    residual = residual.replace(/[\p{P}\p{S}]+/gu, ' ').replace(/\s+/g, ' ').trim();
+    const compatible = Object.fromEntries(Object.entries(extractors).map(([key, value]: [string, any]) => {
+      if (value?.type !== 'string' || value.pattern || !residual) return [key, value];
+      return [key, { ...value, pattern: escapeRegex(residual).replace(/\s+/g, '\\s+') }];
+    }));
+    return originalExtractSlots(text, compatible, scenarioId, prompt);
+  };
   const bindIdentityWhenOmitted = (target: any, methodName: string, identityIndex: number) => {
     const original = target[methodName].bind(target);
     target[methodName] = (...args: any[]) => {

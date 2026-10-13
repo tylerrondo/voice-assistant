@@ -289,7 +289,6 @@ export class VoiceChannel {
 
     const resolvedSlots: Record<string, any> = {};
     const patternMatches: Array<{ slotName: string; value: string; priority: number; matchedText: string }> = [];
-    const unpatternedStringSlots: Array<{ slotName: string; priority: number }> = [];
     const unicodeWordBoundary = '(?:(?<![\\p{L}\\p{N}_])(?=[\\p{L}\\p{N}_])|(?<=[\\p{L}\\p{N}_])(?![\\p{L}\\p{N}_]))';
     const compilePattern = (pattern: string): RegExp =>
       new RegExp(pattern.replace(/\\b/g, unicodeWordBoundary), 'iu');
@@ -333,25 +332,17 @@ export class VoiceChannel {
         if (match) {
           resolvedSlots[slotKey] = parseInt(match[0], 10);
         }
-      } else if (extractor.type === 'string') {
-        const priority = Number.isFinite(extractor.priority) ? extractor.priority as number : 0;
-        if (extractor.pattern) {
-          const match = text.match(compilePattern(extractor.pattern));
-          if (match) {
-            patternMatches.push({
-              slotName: slotKey,
-              value: match[0],
-              matchedText: match[0].toLowerCase(),
-              priority
-            });
-          }
-        } else {
-          // Legacy free-text slots consume only content left after removing
-          // this scenario's trigger and values parsed by typed extractors.
-          unpatternedStringSlots.push({ slotName: slotKey, priority });
+      } else if (extractor.type === 'string' && extractor.pattern) {
+        const match = text.match(compilePattern(extractor.pattern));
+        if (match) {
+          patternMatches.push({
+            slotName: slotKey,
+            value: match[0],
+            matchedText: match[0].toLowerCase(),
+            priority: Number.isFinite(extractor.priority) ? extractor.priority as number : 0
+          });
         }
       }
-    }
 
     if (unpatternedStringSlots.length > 0) {
       let residual = text.toLowerCase();
