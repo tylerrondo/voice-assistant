@@ -186,7 +186,15 @@ export class VoiceChannel {
 
       const matches = triggers.some(trig => {
         const clean = trig.replace(/^voice\./, '').replace(/[-_]/g, ' ').toLowerCase().trim();
-        return text === clean || text.startsWith(`${clean} `) || clean.split(/\s+/).every(w => textWords.has(w));
+        const phraseWords = text.split(/[^\p{L}\p{N}_-]+/u).filter(Boolean);
+        const triggerWords = clean.split(/\s+/).filter(Boolean);
+        const containsTrigger = triggerWords.some((_, start) =>
+          triggerWords.every((word, offset) => phraseWords[start + offset] === word)
+        );
+        const phraseIsTriggerPrefix = phraseWords.length > 0
+          && phraseWords.length < triggerWords.length
+          && phraseWords.every((word, index) => triggerWords[index] === word);
+        return containsTrigger || phraseIsTriggerPrefix;
       });
 
       if (matches) {
