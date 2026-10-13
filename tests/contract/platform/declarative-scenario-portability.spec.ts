@@ -285,7 +285,7 @@ test.describe('CONTRACT: SC-PLATFORM-001 Declarative Scenario Portability Suite'
 
     const foreignConfirm = await dm.fillSlot('confirmation', 'CONFIRMED', ctx.contextId, sessionUserB);
     expect(foreignConfirm.success).toBe(false);
-    expect(foreignConfirm.error).toBe('CONTEXT_ACCESS_DENIED');
+    expect(foreignConfirm.error).toBe('ACCESS_DENIED');
   });
 
 });
