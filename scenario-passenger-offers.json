@@ -59,6 +59,14 @@
             {
               "pattern": "трет(ий|ьего|ью)|вариант\\s+3",
               "value": "OFFER-C"
+            },
+            {
+              "pattern": "подешевле|дешевле",
+              "value": "cheapest"
+            },
+            {
+              "pattern": "побыстрее|быстрее",
+              "value": "fastest"
             }
           ]
         },
