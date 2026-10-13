@@ -361,7 +361,7 @@ export class VoiceChannel {
         ...(scenario.expectedPhrase ? [scenario.expectedPhrase] : [])
       ] : [];
       for (const trigger of triggers.sort((a, b) => b.length - a.length)) {
-        const clean = trigger.replace(/^voice\\./i, '').replace(/[-_]/g, ' ').trim().toLowerCase();
+        const clean = trigger.replace(/^voice\./i, '').replace(/[-_]/g, ' ').trim().toLowerCase();
         if (clean) residual = residual.replaceAll(clean, ' ');
       }
       for (const value of Object.values(resolvedSlots)) {
@@ -377,7 +377,7 @@ export class VoiceChannel {
           }
         }
       }
-      residual = residual.replace(/[\\p{P}\\p{S}]+/gu, ' ').replace(/\\s+/g, ' ').trim();
+      residual = residual.replace(/[\p{P}\p{S}]+/gu, ' ').replace(/\s+/g, ' ').trim();
       if (residual) {
         for (const slot of unpatternedStringSlots) {
           patternMatches.push({
