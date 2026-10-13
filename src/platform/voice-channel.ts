@@ -794,7 +794,7 @@ export class VoiceChannel {
         const exec = this.dialogueManager.createExecution(ctx, identity);
         const dispatchRes = await this.dialogueManager.dispatchAction(exec.executionId, ctx.slots, identity);
         return {
-          status: dispatchRes.status,
+          status: dispatchRes.status === 'SUCCEEDED' ? 'COMPLETED' : dispatchRes.status,
           contextId: ctx.contextId,
           executionId: exec.executionId,
           attempt: dispatchRes.attempt,
