@@ -98,19 +98,70 @@ export function mountApp(root: HTMLElement, runtime: any, authenticatedIdentity:
     }
   });
 
-  startButton?.addEventListener('click', () => {
+  startButton?.addEventListener('click', async () => {
     if (!loadedScenarioSet || !traceDisplay) return;
-    const scenario = loadedScenarioSet.scenarios[0];
-    if (!scenario) return;
     traceDisplay.replaceChildren();
-    const resultEvents = scenario.steps?.filter(step => step.kind === 'emit' && step.event && step.event.type !== 'VOICE_INPUT_RECEIVED') || [];
-    resultEvents.forEach((step, index) => {
-      const entry = document.createElement('div');
-      entry.dataset.testid = 'step-result-' + index;
-      entry.textContent = String(step.event?.type) + ' ' + JSON.stringify(step.event?.payload || {});
-      traceDisplay.appendChild(entry);
-    });
-    if (terminalDisplay) terminalDisplay.textContent = 'kind: end — SCENARIO_STATE_COMPLETED — 6/6 — 100%';
+    if (terminalDisplay) terminalDisplay.textContent = 'Выполнение сценариев…';
+
+    const totalEvents = loadedScenarioSet.scenarios.reduce((total, scenario) =>
+      total + (scenario.steps || []).filter((step: any) => step.kind === 'emit' && step.event && step.event.type !== 'VOICE_INPUT_RECEIVED').length, 0);
+    let completedEvents = 0;
+    let eventIndex = 0;
+
+    for (const scenario of loadedScenarioSet.scenarios) {
+      for (const step of (scenario.steps || []) as any[]) {
+        if (step.kind === 'delay') {
+          await new Promise(resolve => window.setTimeout(resolve, Math.max(0, Number(step.ms) || 0)));
+          continue;
+        }
+        if (step.kind === 'end') continue;
+        if (step.kind !== 'emit' || !step.event || step.event.type === 'VOICE_INPUT_RECEIVED') continue;
+
+        const event = step.event as { type: string; payload: Record<string, any> };
+        const payload = { ...(event.payload || {}) };
+        const unresolved = Object.values(payload).some(value => typeof value === 'string' && /{{\\s*slots\\./.test(value));
+        if (unresolved) {
+          if (terminalDisplay) terminalDisplay.textContent = 'kind: error — SCENARIO_STATE_BLOCKED — отсутствуют значения обязательных слотов';
+          return;
+        }
+        if (typeof runtime.actionDispatcher !== 'function') {
+          if (terminalDisplay) terminalDisplay.textContent = 'kind: error — SCENARIO_STATE_FAILED — ActionDispatcher не настроен';
+          return;
+        }
+
+        try {
+          const context = runtime.dialogueManager.createContext(
+            scenario.intent || scenario.id,
+            payload,
+            [],
+            event.type,
+            {},
+            authenticatedIdentity,
+            scenario.id
+          );
+          const execution = runtime.dialogueManager.createExecution(context, authenticatedIdentity);
+          const result = await runtime.dialogueManager.dispatchAction(execution.executionId, payload, authenticatedIdentity);
+          if (result.status !== 'SUCCEEDED') {
+            if (terminalDisplay) terminalDisplay.textContent = 'kind: error — SCENARIO_STATE_FAILED — ' + String(result.status);
+            return;
+          }
+
+          const entry = document.createElement('div');
+          entry.className = 'trace-entry';
+          entry.dataset.testid = 'step-result-' + eventIndex;
+          entry.textContent = event.type + ' ' + JSON.stringify(payload);
+          traceDisplay.appendChild(entry);
+          completedEvents++;
+          eventIndex++;
+        } catch (error) {
+          if (terminalDisplay) terminalDisplay.textContent = 'kind: error — SCENARIO_STATE_FAILED — ' + (error instanceof Error ? error.message : 'Неизвестная ошибка');
+          return;
+        }
+      }
+    }
+
+    const percent = totalEvents === 0 ? 100 : Math.round(completedEvents / totalEvents * 100);
+    if (terminalDisplay) terminalDisplay.textContent = 'kind: end — SCENARIO_STATE_COMPLETED — ' + completedEvents + '/' + totalEvents + ' — ' + percent + '%';
   });
   return app;
 }
