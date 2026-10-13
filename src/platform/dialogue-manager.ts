@@ -147,7 +147,7 @@ export class DialogueStateManager {
     return this.activeContextId;
   }
 
-  public getActiveState(identity: SessionIdentity): DialogueContext | null {
+  public getActiveState(identity: SessionIdentity): DialogueContext | undefined {
     this.validateIdentity(identity);
     const active = this.activeContextId ? this.contexts.get(this.activeContextId) : undefined;
     const ctx = active
@@ -163,7 +163,7 @@ export class DialogueStateManager {
           )
           .sort((a, b) => b.updatedAt - a.updatedAt)[0];
 
-    if (!ctx) return null;
+    if (!ctx) return undefined;
     return {
       ...ctx,
       slots: { ...ctx.slots },
