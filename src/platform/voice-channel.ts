@@ -277,6 +277,7 @@ export class VoiceChannel {
     }
 
     const resolvedSlots: Record<string, any> = {};
+    const patternMatches: Array<{ slotName: string; value: string; priority: number; matchedText: string }> = [];
 
     for (const [slotKey, extractor] of Object.entries(extractors)) {
       if (extractor.rules && Array.isArray(extractor.rules)) {
@@ -320,9 +321,37 @@ export class VoiceChannel {
       } else if (extractor.type === 'string' && extractor.pattern) {
         const match = text.match(new RegExp(extractor.pattern, 'i'));
         if (match) {
-          resolvedSlots[slotKey] = match[0];
+          patternMatches.push({
+            slotName: slotKey,
+            value: match[0],
+            matchedText: match[0].toLowerCase(),
+            priority: Number.isFinite(extractor.priority) ? extractor.priority as number : 0
+          });
         }
       }
+    }
+
+    const matchesByText = new Map<string, typeof patternMatches>();
+    for (const match of patternMatches) {
+      const group = matchesByText.get(match.matchedText) || [];
+      group.push(match);
+      matchesByText.set(match.matchedText, group);
+    }
+    for (const group of matchesByText.values()) {
+      const maxPriority = Math.max(...group.map(match => match.priority));
+      const highest = group.filter(match => match.priority === maxPriority);
+      if (highest.length > 1) {
+        return {
+          status: 'AMBIGUOUS_SLOT',
+          candidates: highest.map(match => ({
+            slotName: match.slotName,
+            value: match.value,
+            scenarioId
+          })),
+          clarificationPrompt: ambiguityPromptTemplate
+        };
+      }
+      resolvedSlots[highest[0].slotName] = highest[0].value;
     }
 
     if (Object.keys(resolvedSlots).length === 0) {
