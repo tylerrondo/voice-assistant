@@ -12,7 +12,9 @@
         "value": "voice.accept-order"
       },
       "intent": "ACCEPT_ORDER",
-      "requiredSlots": ["orderId"],
+      "requiredSlots": [
+        "orderId"
+      ],
       "clarificationPrompts": {
         "orderId": "Какой заказ?"
       },
@@ -24,6 +26,45 @@
             "payload": {
               "orderId": "{{slots.orderId}}"
             }
+          }
+        },
+        {
+          "kind": "end"
+        }
+      ],
+      "triggerPhrases": [
+        "прими заказ",
+        "принять заказ",
+        "принимаю заказ",
+        "беру заказ"
+      ],
+      "slotExtractors": {
+        "orderId": {
+          "type": "integer",
+          "pattern": "\\b\\d+\\b",
+          "priority": 100
+        }
+      }
+    },
+    {
+      "id": "sc004-driver-arrived",
+      "name": "Independent driver-arrived command",
+      "activation": {
+        "type": "voice",
+        "value": "voice.driver-arrived"
+      },
+      "triggerPhrases": [
+        "я приехал",
+        "прибыл",
+        "на месте"
+      ],
+      "intent": "DRIVER_ARRIVED",
+      "requiredSlots": [],
+      "steps": [
+        {
+          "kind": "emit",
+          "event": {
+            "type": "driver.arrived"
           }
         },
         {
