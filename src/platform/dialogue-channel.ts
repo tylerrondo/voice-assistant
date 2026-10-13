@@ -196,7 +196,7 @@ export class DialogueEngine {
     if (!ctx) {
       ctx = this.dm.createContext(
         activeScenario.intent,
-        {},
+        extractedSlots,
         activeScenario.requiredSlots || [],
         activeScenario.steps?.[0]?.event?.type || `${activeScenario.intent.toLowerCase()}.action`,
         activeScenario.clarificationPrompts || {},

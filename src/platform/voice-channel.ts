@@ -607,6 +607,34 @@ export class VoiceChannel {
       return intentRes;
     }
 
+    // A repeated explicit order command with a different entity starts a separate context.
+    // Do not overwrite the orderId in an already-open order when the user names another order.
+    if (intentRes.status === 'RESOLVED' && !intentRes.sc.query && !intentRes.sc.evaluation) {
+      const sc = intentRes.scenario;
+      const slotRes = this.extractSlotsDeterministically(text, sc.slotExtractors, sc.id, sc.ambiguityPrompt?.template);
+      const initialSlots = slotRes.status === 'RESOLVED' ? slotRes.slots : {};
+      const activeForScenario = this.dialogueManager.listContexts(identity).filter(
+        c => c.status === 'WAITING_FOR_SLOT' && c.scenarioId === sc.id
+      );
+      const startsDistinctInstance = activeForScenario.some(ctx =>
+        Object.entries(initialSlots).some(([key, value]) =>
+          ctx.slots[key] !== undefined && ctx.slots[key] !== value
+        )
+      );
+      if (startsDistinctInstance) {
+        const emitStep = sc.steps?.find(st => st.kind === 'emit');
+        return this.dialogueManager.createContext(
+          sc.intent,
+          initialSlots,
+          sc.requiredSlots || [],
+          emitStep?.event?.type || `${sc.intent.toLowerCase()}.action`,
+          sc.clarificationPrompts || {},
+          identity,
+          sc.id
+        );
+      }
+    }
+
     // 3. Declarative Active Context Processing
     let activeWaiting = this.dialogueManager.listContexts(identity).filter(c => c.status === 'WAITING_FOR_SLOT');
 
