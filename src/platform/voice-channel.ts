@@ -128,6 +128,30 @@ export class VoiceChannel {
     }
 
     const seenIds = new Set<string>();
+    const triggerOwners = new Map<string, string>();
+    const normalizeTrigger = (value: string): string =>
+      value.replace(/^voice\./i, '').replace(/[-_]/g, ' ').trim().toLowerCase().replace(/\s+/g, ' ');
+    const scenariosBeingReplaced = new Set(scenarioSet.scenarios.map(sc => sc.id));
+
+    const validateTrigger = (value: string, scenarioId: string): void => {
+      const normalized = normalizeTrigger(value);
+      if (!normalized) return;
+      const owner = triggerOwners.get(normalized);
+      if (owner && owner !== scenarioId) {
+        throw new Error(`CONTRACT_VIOLATION: Trigger or alias collision "${normalized}" between "${owner}" and "${scenarioId}"`);
+      }
+      triggerOwners.set(normalized, scenarioId);
+    };
+
+    for (const existing of this.scenarioRegistry) {
+      if (scenariosBeingReplaced.has(existing.id)) continue;
+      const triggers = [
+        ...(existing.activation?.value ? [existing.activation.value] : []),
+        ...(existing.triggerPhrases || []),
+        ...(existing.aliases || [])
+      ];
+      for (const trigger of triggers) validateTrigger(trigger, existing.id);
+    }
 
     for (const sc of scenarioSet.scenarios) {
       if (!sc.id || typeof sc.id !== 'string') {
@@ -141,6 +165,16 @@ export class VoiceChannel {
       if (!sc.intent || typeof sc.intent !== 'string') {
         throw new Error(`CONTRACT_VIOLATION: Scenario "${sc.id}" missing intent`);
       }
+      if (sc.priority !== undefined && !Number.isFinite(sc.priority)) {
+        throw new Error(`CONTRACT_VIOLATION: invalid priority for scenario "${sc.id}"`);
+      }
+
+      const triggers = [
+        ...(sc.activation?.value ? [sc.activation.value] : []),
+        ...(sc.triggerPhrases || []),
+        ...(sc.aliases || [])
+      ];
+      for (const trigger of triggers) validateTrigger(trigger, sc.id);
     }
 
     for (const sc of scenarioSet.scenarios) {
