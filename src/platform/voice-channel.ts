@@ -189,7 +189,10 @@ export class VoiceChannel {
       for (const trigger of triggers) validateTrigger(trigger, sc.id, sc.priority ?? 0);
     }
 
-    this.scenarioRegistry = [...scenarioSet.scenarios];
+    this.scenarioRegistry = [
+      ...this.scenarioRegistry.filter(existing => !scenarioSet.scenarios.some(incoming => incoming.id === existing.id)),
+      ...scenarioSet.scenarios
+    ];
     this.activeScenarioSetId = scenarioSet.id;
   }
 
