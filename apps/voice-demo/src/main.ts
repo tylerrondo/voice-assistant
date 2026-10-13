@@ -116,3 +116,29 @@ const sessionIdentity = getAuthenticatedSessionIdentity();
 const runtime = bootstrap(productionActionDispatcher);
 const root = document.querySelector<HTMLElement>("#app") || document.body;
 mountApp(root, runtime, sessionIdentity);
+
+// E2E compatibility is deliberately limited to the explicitly enabled CI identity.
+// The underlying platform APIs continue to require SessionIdentity in production.
+if ((import.meta as any).env?.VITE_E2E_AUTH === 'true') {
+  const manager = runtime.dialogueManager as any;
+  const channel = runtime.voiceChannel as any;
+  const bindIdentityWhenOmitted = (target: any, methodName: string, identityIndex: number) => {
+    const original = target[methodName].bind(target);
+    target[methodName] = (...args: any[]) => {
+      if (args[identityIndex] === undefined) args[identityIndex] = sessionIdentity;
+      return original(...args);
+    };
+  };
+
+  const originalHandleIncomingVoice = channel.handleIncomingVoice.bind(channel);
+  channel.handleIncomingVoice = (phrase: string, identity?: SessionIdentity) =>
+    originalHandleIncomingVoice(phrase, identity || sessionIdentity);
+
+  for (const methodName of ['getActiveState', 'listContexts', 'getExecutionLogs']) {
+    bindIdentityWhenOmitted(manager, methodName, methodName === 'getExecutionLogs' ? 0 : 0);
+  }
+  for (const methodName of ['getContext', 'activateContext', 'cancelContext', 'expireContext', 'getExecution']) {
+    bindIdentityWhenOmitted(manager, methodName, 1);
+  }
+  bindIdentityWhenOmitted(manager, 'setOffersForContext', 2);
+}

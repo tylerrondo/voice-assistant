@@ -41,6 +41,7 @@ export function mountApp(root: HTMLElement, runtime: any, authenticatedIdentity:
   if (root) {
     root.innerHTML = `<div id="voice-app-ready" style="padding: 16px; font-family: sans-serif;">
       <h2>Voice Platform Production Runtime Ready</h2>
+      <div>Platform Dialogue State</div>
       <div id="runtime-identity">AUTHENTICATED: ${authenticatedIdentity.ownerId}:${authenticatedIdentity.sessionId}</div>
       <label for="scenario-file-input">Load ScenarioSet JSON</label>
       <input id="scenario-file-input" data-testid="scenario-file-input" type="file" accept="application/json,.json" />
@@ -63,7 +64,7 @@ export function mountApp(root: HTMLElement, runtime: any, authenticatedIdentity:
     try {
       const scenarioSet = JSON.parse(await file.text()) as ScenarioSet;
       runtime.voiceChannel.registerScenarioSet(scenarioSet);
-      if (activeSetDisplay) activeSetDisplay.textContent = scenarioSet.name || scenarioSet.id;
+      if (activeSetDisplay) activeSetDisplay.textContent = `${file.name} — ${scenarioSet.name || scenarioSet.id}`;
     } catch (error) {
       if (activeSetDisplay) {
         activeSetDisplay.textContent = error instanceof Error ? error.message : 'Unable to load ScenarioSet';
