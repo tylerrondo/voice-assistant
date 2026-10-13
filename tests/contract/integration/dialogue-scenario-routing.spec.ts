@@ -120,7 +120,7 @@ test.describe('CONTRACT: SC-INTEGRATION-005 Generic Dialogue Scenario Routing & 
     }, freshUser);
 
     expect(res.status).toBe('SCENARIO_NOT_FOUND');
-    expect(dm.getActiveState(freshUser)).toBeNull();
+    expect(dm.getActiveState(freshUser)).toBeUndefined();
   });
 
   test('SR-06: Independent Service Scenario routes correctly without nanny terminology', async () => {
@@ -210,7 +210,7 @@ test.describe('CONTRACT: SC-INTEGRATION-005 Generic Dialogue Scenario Routing & 
     const res = await engine.processInput({ modality: 'text', raw_input: 'расскажи анекдот' }, userNo);
 
     expect(res.status).toBe('SCENARIO_NOT_FOUND');
-    expect(dm.getActiveState(userNo)).toBeNull();
+    expect(dm.getActiveState(userNo)).toBeUndefined();
   });
 
   test('SR-10: Telegram Adapter handleUpdate does not receive Scenario parameter', async () => {

@@ -289,7 +289,7 @@ export class DialogueEngine {
 
         return {
           status: dispatchRes.status === 'SUCCEEDED'
-            ? (activeScenario.intent === 'ORDER_NANNY' ? 'ORDER_CONFIRMED' : 'CONFIRMED')
+            ? 'CONFIRMED'
             : dispatchRes.status,
           contextId: ctx.contextId,
           executionId: exec.executionId,
