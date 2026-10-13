@@ -151,7 +151,12 @@ export class DialogueStateManager {
     this.validateIdentity(identity);
     if (!this.activeContextId) return null;
     const ctx = this.contexts.get(this.activeContextId);
-    if (!ctx || ctx.ownerId !== identity.ownerId || ctx.sessionId !== identity.sessionId) {
+    if (
+      !ctx ||
+      ctx.ownerId !== identity.ownerId ||
+      ctx.sessionId !== identity.sessionId ||
+      ['COMPLETED', 'CANCELLED', 'EXPIRED'].includes(ctx.status)
+    ) {
       return null;
     }
     return {
