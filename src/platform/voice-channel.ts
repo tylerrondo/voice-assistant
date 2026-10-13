@@ -175,6 +175,7 @@ export class VoiceChannel {
 
   public resolveIntent(phrase: string): IntentResolutionResult {
     const text = phrase.trim().toLowerCase();
+    const textWords = new Set(text.split(/[^\p{L}\p{N}_-]+/u).filter(Boolean));
     const matchingScenarios: ScenarioDefinition[] = [];
 
     for (const sc of this.scenarioRegistry) {
@@ -185,7 +186,7 @@ export class VoiceChannel {
 
       const matches = triggers.some(trig => {
         const clean = trig.replace(/^voice\./, '').replace(/[-_]/g, ' ').toLowerCase().trim();
-        return text === clean || text.startsWith(clean) || clean.split(/\s+/).every(w => text.includes(w));
+        return text === clean || text.startsWith(`${clean} `) || clean.split(/\s+/).every(w => textWords.has(w));
       });
 
       if (matches) {
