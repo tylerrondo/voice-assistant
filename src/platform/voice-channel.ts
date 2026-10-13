@@ -118,6 +118,7 @@ export type SlotExtractionResult =
 export class VoiceChannel {
   private dialogueManager: DialogueStateManager;
   private scenarioRegistry: ScenarioDefinition[] = [];
+  private activeScenarioIds: Set<string> = new Set();
   private activeScenarioSetId: string = '';
   private selectedContextBySession: Map<string, string> = new Map();
 
@@ -193,6 +194,7 @@ export class VoiceChannel {
       ...this.scenarioRegistry.filter(existing => !scenarioSet.scenarios.some(incoming => incoming.id === existing.id)),
       ...scenarioSet.scenarios
     ];
+    this.activeScenarioIds = new Set(scenarioSet.scenarios.map(scenario => scenario.id));
     this.activeScenarioSetId = scenarioSet.id;
   }
 
@@ -220,7 +222,7 @@ export class VoiceChannel {
     const textWords = new Set(text.replace(/[-_]/g, ' ').split(/[^\p{L}\p{N}]+/u).filter(Boolean));
     const matchingScenarios: ScenarioDefinition[] = [];
 
-    for (const sc of this.scenarioRegistry) {
+    for (const sc of this.scenarioRegistry.filter(candidate => this.activeScenarioIds.has(candidate.id))) {
       const triggers: string[] = [];
       if (sc.activation?.value) triggers.push(sc.activation.value);
       if (Array.isArray(sc.triggerPhrases)) triggers.push(...sc.triggerPhrases);
