@@ -398,19 +398,28 @@ export class DialogueStateManager {
     const text = phrase.toLowerCase();
     const tokens = text.split(/\s+/);
 
+    const explicitMatches: DialogueContext[] = [];
     for (const ctx of this.contexts.values()) {
       if (ctx.ownerId !== identity.ownerId || ctx.sessionId !== identity.sessionId) continue;
       if (ctx.status !== 'WAITING_FOR_SLOT') continue;
 
-      for (const [slotKey, slotVal] of Object.entries(ctx.slots)) {
-        if (slotVal === undefined || slotVal === null) continue;
+      const hasExplicitEntity = Object.values(ctx.slots).some(slotVal => {
+        if (slotVal === undefined || slotVal === null) return false;
         const valStr = String(slotVal).toLowerCase();
+        return tokens.includes(valStr) || text.includes(valStr);
+      });
+      if (hasExplicitEntity) explicitMatches.push(ctx);
+    }
 
-        if (tokens.includes(valStr) || text.includes(valStr)) {
-          this.activeContextId = ctx.contextId;
-          return { status: 'RESOLVED', contextId: ctx.contextId };
-        }
-      }
+    if (explicitMatches.length === 1) {
+      this.activeContextId = explicitMatches[0].contextId;
+      return { status: 'RESOLVED', contextId: explicitMatches[0].contextId };
+    }
+    if (explicitMatches.length > 1) {
+      return {
+        status: 'AMBIGUOUS_CONTEXT',
+        candidateContextIds: explicitMatches.map(ctx => ctx.contextId)
+      };
     }
 
     const candidates = Array.from(this.contexts.values()).filter(ctx => {
