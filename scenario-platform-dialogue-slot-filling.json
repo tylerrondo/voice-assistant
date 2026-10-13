@@ -12,7 +12,10 @@
         "value": "voice.process-test-action"
       },
       "intent": "PROCESS_TEST_ACTION",
-      "requiredSlots": ["item", "quantity"],
+      "requiredSlots": [
+        "item",
+        "quantity"
+      ],
       "clarificationPrompts": {
         "quantity": "Сколько?"
       },
@@ -21,6 +24,161 @@
           "kind": "emit",
           "event": {
             "type": "platform.test_action.processed",
+            "payload": {
+              "item": "{{slots.item}}",
+              "quantity": "{{slots.quantity}}"
+            }
+          }
+        },
+        {
+          "kind": "end"
+        }
+      ],
+      "triggerPhrases": [
+        "обработай яблоки",
+        "обработай"
+      ],
+      "slotExtractors": {
+        "item": {
+          "type": "string",
+          "rules": [
+            {
+              "pattern": "яблоки|яблоко|яблок",
+              "value": "apples"
+            },
+            {
+              "pattern": "помидоры|помидор|томат|томаты",
+              "value": "tomatoes"
+            }
+          ]
+        },
+        "quantity": {
+          "type": "integer",
+          "rules": [
+            {
+              "pattern": "\\bодин\\b|\\bодна\\b|\\bодно\\b",
+              "value": 1
+            },
+            {
+              "pattern": "\\bдва\\b|\\bдве\\b",
+              "value": 2
+            },
+            {
+              "pattern": "\\bтри\\b",
+              "value": 3
+            },
+            {
+              "pattern": "\\bчетыре\\b",
+              "value": 4
+            },
+            {
+              "pattern": "\\bпять\\b",
+              "value": 5
+            },
+            {
+              "pattern": "\\bшесть\\b",
+              "value": 6
+            },
+            {
+              "pattern": "\\bсемь\\b",
+              "value": 7
+            },
+            {
+              "pattern": "\\bвосемь\\b",
+              "value": 8
+            },
+            {
+              "pattern": "\\bдевять\\b",
+              "value": 9
+            },
+            {
+              "pattern": "\\bдесять\\b",
+              "value": 10
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "sc-dialogue-process-sale",
+      "name": "Продажа тестового товара со слот-филлингом",
+      "triggerPhrases": [
+        "продай помидоры",
+        "продай"
+      ],
+      "intent": "PROCESS_SALE",
+      "requiredSlots": [
+        "item",
+        "quantity"
+      ],
+      "slotExtractors": {
+        "item": {
+          "type": "string",
+          "rules": [
+            {
+              "pattern": "яблоки|яблоко|яблок",
+              "value": "apples"
+            },
+            {
+              "pattern": "помидоры|помидор|томат|томаты",
+              "value": "tomatoes"
+            }
+          ]
+        },
+        "quantity": {
+          "type": "integer",
+          "rules": [
+            {
+              "pattern": "\\bодин\\b|\\bодна\\b|\\bодно\\b",
+              "value": 1
+            },
+            {
+              "pattern": "\\bдва\\b|\\bдве\\b",
+              "value": 2
+            },
+            {
+              "pattern": "\\bтри\\b",
+              "value": 3
+            },
+            {
+              "pattern": "\\bчетыре\\b",
+              "value": 4
+            },
+            {
+              "pattern": "\\bпять\\b",
+              "value": 5
+            },
+            {
+              "pattern": "\\bшесть\\b",
+              "value": 6
+            },
+            {
+              "pattern": "\\bсемь\\b",
+              "value": 7
+            },
+            {
+              "pattern": "\\bвосемь\\b",
+              "value": 8
+            },
+            {
+              "pattern": "\\bдевять\\b",
+              "value": 9
+            },
+            {
+              "pattern": "\\bдесять\\b",
+              "value": 10
+            }
+          ]
+        }
+      },
+      "clarificationPrompts": {
+        "quantity": "Сколько?"
+      },
+      "steps": [
+        {
+          "kind": "emit",
+          "event": {
+            "type": "platform.test_action.sold",
             "payload": {
               "item": "{{slots.item}}",
               "quantity": "{{slots.quantity}}"
