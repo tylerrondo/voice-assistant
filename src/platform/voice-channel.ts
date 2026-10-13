@@ -566,15 +566,15 @@ export class VoiceChannel {
     if (intentRes.status === 'RESOLVED') {
       const sc = intentRes.scenario;
 
-      const phraseWords = text.split(/[^\\p{L}\\p{N}_-]+/u).filter(Boolean);
+      const phraseWords = text.split(/[^\p{L}\p{N}_-]+/u).filter(Boolean);
       const queryTriggers = [
         ...(sc.activation?.value ? [sc.activation.value] : []),
         ...(sc.triggerPhrases || []),
         ...(sc.aliases || [])
       ];
       const isExplicitQuery = queryTriggers.some(trigger => {
-        const clean = trigger.replace(/^voice\\./i, '').replace(/[-_]/g, ' ').toLowerCase().trim();
-        const triggerWords = clean.split(/\\s+/).filter(Boolean);
+        const clean = trigger.replace(/^voice\./i, '').replace(/[-_]/g, ' ').toLowerCase().trim();
+        const triggerWords = clean.split(/\s+/).filter(Boolean);
         return triggerWords.length > 0 && triggerWords.some((_, start) =>
           triggerWords.every((word, offset) => phraseWords[start + offset] === word)
         );
