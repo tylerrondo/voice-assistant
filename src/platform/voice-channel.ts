@@ -213,7 +213,7 @@ export class VoiceChannel {
 
   public resolveIntent(phrase: string): IntentResolutionResult {
     const text = phrase.trim().toLowerCase();
-    const textWords = new Set(text.split(/[^\p{L}\p{N}_-]+/u).filter(Boolean));
+    const textWords = new Set(text.replace(/[-_]/g, ' ').split(/[^\p{L}\p{N}]+/u).filter(Boolean));
     const matchingScenarios: ScenarioDefinition[] = [];
 
     for (const sc of this.scenarioRegistry) {
@@ -224,7 +224,7 @@ export class VoiceChannel {
 
       const matches = triggers.some(trig => {
         const clean = trig.replace(/^voice\./, '').replace(/[-_]/g, ' ').toLowerCase().trim();
-        const phraseWords = text.split(/[^\p{L}\p{N}_-]+/u).filter(Boolean);
+        const phraseWords = text.replace(/[-_]/g, ' ').split(/[^\p{L}\p{N}]+/u).filter(Boolean);
         const triggerWords = clean.split(/\s+/).filter(Boolean);
         const containsTrigger = triggerWords.some((_, start) =>
           triggerWords.every((word, offset) => phraseWords[start + offset] === word)
@@ -630,7 +630,9 @@ export class VoiceChannel {
       const activeForScenario = this.dialogueManager.listContexts(identity).filter(
         c => c.status === 'WAITING_FOR_SLOT' && c.scenarioId === sc.id
       );
-      const startsDistinctInstance = activeForScenario.some(ctx =>
+      const isCandidateSelection = !!sc.candidateBinding?.targetSlot
+        && initialSlots[sc.candidateBinding.targetSlot] !== undefined;
+      const startsDistinctInstance = !isCandidateSelection && activeForScenario.some(ctx =>
         Object.entries(initialSlots).some(([key, value]) =>
           ctx.slots[key] !== undefined && ctx.slots[key] !== value
         )
