@@ -13,12 +13,12 @@
         "выбрать вариант",
         "тогда давайте второй",
         "тогда первый",
-        "нет лучше первый",
-        "какой быстрее",
-        "самый дешёвый",
-        "самый дешевый"
+        "нет лучше первый"
       ],
-      "requiredSlots": ["selectedOfferId", "confirmation"],
+      "requiredSlots": [
+        "selectedOfferId",
+        "confirmation"
+      ],
       "candidateBinding": {
         "targetSlot": "selectedOfferId",
         "idField": "offerId",
@@ -26,7 +26,10 @@
         "indexField": "index",
         "statusField": "status",
         "unavailableValue": "UNAVAILABLE",
-        "ambiguityTriggerValues": ["cheapest", "fastest"]
+        "ambiguityTriggerValues": [
+          "cheapest",
+          "fastest"
+        ]
       },
       "confirmation": {
         "slot": "confirmation",
@@ -45,16 +48,116 @@
         "selectedOfferId": {
           "type": "string",
           "rules": [
-            { "pattern": "втор(ой|ого|ую)|вариант\\s+2", "value": "OFFER-B" },
-            { "pattern": "перв(ый|ого|ую)|вариант\\s+1", "value": "OFFER-A" },
-            { "pattern": "трет(ий|ьего|ью)|вариант\\s+3", "value": "OFFER-C" }
+            {
+              "pattern": "втор(ой|ого|ую)|вариант\\s+2",
+              "value": "OFFER-B"
+            },
+            {
+              "pattern": "перв(ый|ого|ую)|вариант\\s+1",
+              "value": "OFFER-A"
+            },
+            {
+              "pattern": "трет(ий|ьего|ью)|вариант\\s+3",
+              "value": "OFFER-C"
+            }
           ]
         },
         "confirmation": {
           "type": "enum",
           "rules": [
-            { "pattern": "\\b(да|подтверждаю|верно)\\b", "value": "CONFIRMED" },
-            { "pattern": "\\b(нет|отмена|отказываюсь)\\b", "value": "REJECTED" }
+            {
+              "pattern": "\\b(да|подтверждаю|верно)\\b",
+              "value": "CONFIRMED"
+            },
+            {
+              "pattern": "\\b(нет|отмена|отказываюсь)\\b",
+              "value": "REJECTED"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "sc-query-fastest-offer",
+      "name": "Сравнение предложений по времени",
+      "intent": "QUERY_FASTEST_OFFER",
+      "triggerPhrases": [
+        "какой быстрее",
+        "быстрее всего",
+        "самый быстрый"
+      ],
+      "candidateBinding": {
+        "idField": "offerId",
+        "indexField": "index",
+        "statusField": "status",
+        "unavailableValue": "UNAVAILABLE"
+      },
+      "evaluation": {
+        "kind": "compare",
+        "attribute": "etaMinutes",
+        "order": "min",
+        "responseTemplate": "Быстрее всего вариант {{index}}."
+      }
+    },
+    {
+      "id": "sc-query-cheapest-offer",
+      "name": "Сравнение предложений по цене",
+      "intent": "QUERY_CHEAPEST_OFFER",
+      "triggerPhrases": [
+        "какой дешевле",
+        "самый дешёвый",
+        "самый дешевый"
+      ],
+      "candidateBinding": {
+        "idField": "offerId",
+        "indexField": "index",
+        "statusField": "status",
+        "unavailableValue": "UNAVAILABLE"
+      },
+      "evaluation": {
+        "kind": "compare",
+        "attribute": "price",
+        "order": "min",
+        "responseTemplate": "Самый дешёвый вариант {{index}}."
+      }
+    },
+    {
+      "id": "sc-query-offer-attribute",
+      "name": "Вопрос о характеристиках предложения",
+      "intent": "QUERY_OFFER_ATTRIBUTE",
+      "triggerPhrases": [
+        "второй это комфорт",
+        "а второй",
+        "характеристики второго"
+      ],
+      "candidateBinding": {
+        "idField": "offerId",
+        "indexField": "index",
+        "statusField": "status",
+        "unavailableValue": "UNAVAILABLE"
+      },
+      "evaluation": {
+        "kind": "query_attribute",
+        "attribute": "vehicleType",
+        "targetIndex": 2,
+        "responseTemplate": "Вариант {{index}} — {{vehicleType}}."
+      },
+      "slotExtractors": {
+        "choice": {
+          "type": "integer",
+          "rules": [
+            {
+              "pattern": "\\b(второй|второго|вторую|вариант\\s*2)\\b",
+              "value": 2
+            },
+            {
+              "pattern": "\\b(первый|первого|вариант\\s*1)\\b",
+              "value": 1
+            },
+            {
+              "pattern": "\\b(третий|третьего|вариант\\s*3)\\b",
+              "value": 3
+            }
           ]
         }
       }
