@@ -780,6 +780,19 @@ export class VoiceChannel {
             };
           }
 
+          const latestCtx = this.dialogueManager.getContext(activeCtx.contextId, identity) || activeCtx;
+          if (latestCtx.missingSlots.length === 0 && !scenario.confirmation) {
+            const exec = this.dialogueManager.createExecution(latestCtx, identity);
+            const dispatchRes = await this.dialogueManager.dispatchAction(exec.executionId, latestCtx.slots, identity);
+            return {
+              status: dispatchRes.status === 'SUCCEEDED' ? 'COMPLETED' : dispatchRes.status,
+              contextId: latestCtx.contextId,
+              executionId: exec.executionId,
+              attempt: dispatchRes.attempt,
+              context: this.dialogueManager.getContext(latestCtx.contextId, identity)
+            };
+          }
+
           if (extracted.confirmation === 'CONFIRMED') {
             const currentCtx = this.dialogueManager.getContext(activeCtx.contextId, identity) || activeCtx;
             const remainingNonConfirm = currentCtx.missingSlots.filter(s => s !== 'confirmation');
@@ -791,7 +804,7 @@ export class VoiceChannel {
                 const exec = this.dialogueManager.createExecution(updated, identity);
                 const dispatchRes = await this.dialogueManager.dispatchAction(exec.executionId, updated.slots, identity);
                 return {
-                  status: dispatchRes.status,
+                  status: dispatchRes.status === 'SUCCEEDED' ? 'COMPLETED' : dispatchRes.status,
                   contextId: updated.contextId,
                   executionId: exec.executionId,
                   attempt: dispatchRes.attempt,

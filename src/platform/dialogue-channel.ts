@@ -288,7 +288,9 @@ export class DialogueEngine {
         const dispatchRes = await this.dm.dispatchAction(exec.executionId, ctx.slots, identity);
 
         return {
-          status: dispatchRes.status === 'SUCCEEDED' ? 'ORDER_CONFIRMED' : dispatchRes.status,
+          status: dispatchRes.status === 'SUCCEEDED'
+            ? (activeScenario.intent === 'ORDER_NANNY' ? 'ORDER_CONFIRMED' : 'CONFIRMED')
+            : dispatchRes.status,
           contextId: ctx.contextId,
           executionId: exec.executionId,
           dispatchStatus: dispatchRes.status,
