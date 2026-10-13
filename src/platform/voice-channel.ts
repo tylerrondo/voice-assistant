@@ -601,7 +601,50 @@ export class VoiceChannel {
     }
 
     // 3. Declarative Active Context Processing
-    const activeWaiting = this.dialogueManager.listContexts(identity).filter(c => c.status === 'WAITING_FOR_SLOT');
+    let activeWaiting = this.dialogueManager.listContexts(identity).filter(c => c.status === 'WAITING_FOR_SLOT');
+
+    if (activeWaiting.length > 1) {
+      const matchingContexts = activeWaiting.map(ctx => {
+        const scenario = (ctx.scenarioId ? this.scenarioRegistry.find(s => s.id === ctx.scenarioId) : undefined)
+          || this.getDeterministicScenarioForIntent(ctx.intent);
+        if (!scenario?.slotExtractors) return null;
+        const extracted = this.extractSlotsDeterministically(
+          text,
+          scenario.slotExtractors,
+          scenario.id,
+          scenario.ambiguityPrompt?.template
+        );
+        if (extracted.status !== 'RESOLVED') return null;
+        const relevantSlots = Object.entries(extracted.slots).filter(([key]) =>
+          ctx.missingSlots.includes(key) || ctx.slots[key] !== undefined
+        );
+        return relevantSlots.length > 0 ? { ctx, scenario, slots: relevantSlots } : null;
+      }).filter((item): item is { ctx: DialogueContext; scenario: ScenarioDefinition; slots: [string, any][] } => item !== null);
+
+      if (matchingContexts.length > 1) {
+        const slotNames = matchingContexts.flatMap(item => item.slots.map(([key]) => key));
+        const uniqueSlotNames = new Set(slotNames);
+        if (uniqueSlotNames.size > 1) {
+          return {
+            status: 'AMBIGUOUS_SLOT',
+            candidates: matchingContexts.flatMap(item => item.slots.map(([slotName, value]) => ({
+              slotName,
+              value,
+              scenarioId: item.scenario.id
+            }))),
+            clarificationPrompt: matchingContexts.find(item => item.scenario.ambiguityPrompt?.template)?.scenario.ambiguityPrompt?.template
+          };
+        }
+        return {
+          status: 'AMBIGUOUS_CONTEXT',
+          candidateContextIds: matchingContexts.map(item => item.ctx.contextId)
+        };
+      }
+
+      if (matchingContexts.length === 1) {
+        activeWaiting = [matchingContexts[0].ctx];
+      }
+    }
 
     if (activeWaiting.length === 1) {
       const activeCtx = activeWaiting[0];
@@ -705,20 +748,6 @@ export class VoiceChannel {
           }
 
           return updatedCtxState || this.dialogueManager.getContext(activeCtx.contextId, identity);
-        }
-      }
-    } else if (activeWaiting.length > 1) {
-      const anyScenario = this.scenarioRegistry.find(s => s.slotExtractors);
-      if (anyScenario?.slotExtractors) {
-        const testSlot = this.extractSlotsDeterministically(text, anyScenario.slotExtractors, anyScenario.id);
-        if (testSlot.status === 'RESOLVED') {
-          const hasCandidateSlot = Object.values(testSlot.slots).some(v => typeof v === 'number' || (typeof v === 'string' && v.includes('ambiguous')));
-          if (hasCandidateSlot) {
-            return {
-              status: 'AMBIGUOUS_CONTEXT',
-              candidateContextIds: activeWaiting.map(c => c.contextId)
-            };
-          }
         }
       }
     }
