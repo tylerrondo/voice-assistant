@@ -84,6 +84,32 @@ export class DialogueEngine {
     let activeScenario: ScenarioDefinition | undefined;
     let ctx = this.dm.getActiveState(identity);
 
+    // An active multi-turn context must not swallow an explicit independent
+    // command. Handle cancellation globally, then allow a recognized different
+    // scenario to replace the current context before extracting any slots.
+    if (ctx && rawText.trim()) {
+      const normalizedCommand = rawText.trim().toLocaleLowerCase();
+      if (/^(?:отмена|отменить|отмени|стоп|cancel| отмена|не надо|не\s+продолжай)[.!?\s]*$/iu.test(normalizedCommand)) {
+        await this.dm.cancelContext(ctx.contextId, identity);
+        return {
+          status: 'CANCELLED',
+          contextId: ctx.contextId,
+          presentation: { text: 'Диалог отменён.' }
+        };
+      }
+
+      const newIntent = inputModality === 'button' ? undefined : this.vc.resolveIntent(rawText);
+      if (
+        newIntent?.status === 'RESOLVED' &&
+        newIntent.scenarioId !== ctx.scenarioId &&
+        newIntent.intent !== ctx.intent
+      ) {
+        await this.dm.cancelContext(ctx.contextId, identity);
+        ctx = null;
+        activeScenario = newIntent.scenario;
+      }
+    }
+
     if (ctx) {
       // Rule A: Existing context drives the scenario strictly via scenarioId
       activeScenario = ctx.scenarioId
