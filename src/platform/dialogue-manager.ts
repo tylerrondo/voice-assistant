@@ -44,6 +44,7 @@ export interface ActionExecution {
   scenarioId: string;
   intent: string;
   actionType: string;
+  event: { type: string; payload: Record<string, any> };
   payload: Record<string, any>;
   status: ExecutionStatus;
   attempt: number;
@@ -631,6 +632,7 @@ export class DialogueStateManager {
       scenarioId: storedContext.scenarioId || 'sc-default',
       intent: storedContext.intent,
       actionType: storedContext.actionType,
+      event: { type: storedContext.actionType, payload: { ...storedContext.slots } },
       payload: { ...storedContext.slots },
       status: 'PENDING',
       attempt: 0,
@@ -861,13 +863,13 @@ export class DialogueStateManager {
     if (exec.ownerId !== identity.ownerId || exec.sessionId !== identity.sessionId) {
       return undefined;
     }
-    return { ...exec, payload: { ...exec.payload } };
+    return { ...exec, payload: { ...exec.payload }, event: { ...exec.event, payload: { ...exec.event.payload } } };
   }
 
   public getExecutionLogs(identity: SessionIdentity): ActionExecution[] {
     this.validateIdentity(identity);
     return Array.from(this.executions.values())
       .filter(l => l.ownerId === identity.ownerId && l.sessionId === identity.sessionId)
-      .map(l => ({ ...l, payload: { ...l.payload } }));
+      .map(l => ({ ...l, payload: { ...l.payload }, event: { ...l.event, payload: { ...l.event.payload } } }));
   }
 }

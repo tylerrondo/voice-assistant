@@ -691,9 +691,17 @@ export class VoiceChannel {
             clarificationPrompt: matchingContexts.find(item => item.scenario.ambiguityPrompt?.template)?.scenario.ambiguityPrompt?.template
           };
         }
+        const promptScenario = matchingContexts.find(item => item.scenario.ambiguityPrompt?.template)?.scenario;
+        const candidateEntities = matchingContexts
+          .map(item => Object.values(item.ctx.slots).filter(value => value !== undefined && value !== null).join(' '))
+          .filter(Boolean)
+          .join(', ');
+        const clarificationPrompt = promptScenario?.ambiguityPrompt?.template
+          ?.replace(/\\{candidateEntities\\}/g, candidateEntities);
         return {
           status: 'AMBIGUOUS_CONTEXT',
-          candidateContextIds: matchingContexts.map(item => item.ctx.contextId)
+          candidateContextIds: matchingContexts.map(item => item.ctx.contextId),
+          clarificationPrompt
         };
       }
 

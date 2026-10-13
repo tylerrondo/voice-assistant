@@ -79,6 +79,9 @@ test.describe('CONTRACT: PLATFORM-010 Multi-Context Session Manager Suite', () =
 
     await dm.fillSlot('payment', 'card', ctxA.contextId, identity);
     await dm.fillSlot('payment', 'card', ctxA.contextId, identity); // duplicate
+    const completedA = dm.getContext(ctxA.contextId, identity)!;
+    const executionA = dm.createExecution(completedA, identity);
+    await dm.dispatchAction(executionA.executionId, completedA.slots, identity);
 
     await dm.fillSlot('payment', 'cash', ctxB.contextId, identity);
     const completedB = dm.getContext(ctxB.contextId, identity)!;
