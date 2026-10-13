@@ -446,6 +446,16 @@ export class DialogueStateManager {
       };
     }
 
+    const foreignEntityMatch = Array.from(this.contexts.values()).some(ctx => {
+      if (ctx.ownerId === identity.ownerId && ctx.sessionId === identity.sessionId) return false;
+      if (ctx.status !== 'WAITING_FOR_SLOT') return false;
+      return Object.values(ctx.slots).some(value => {
+        if (value === undefined || value === null) return false;
+        const normalized = String(value).toLowerCase();
+        return tokens.includes(normalized) || text.includes(normalized);
+      });
+    });
+    if (foreignEntityMatch) return { status: 'CONTEXT_ACCESS_DENIED' };
     return { status: 'NO_MATCH' };
   }
 

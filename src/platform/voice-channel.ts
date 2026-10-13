@@ -119,6 +119,7 @@ export class VoiceChannel {
   private dialogueManager: DialogueStateManager;
   private scenarioRegistry: ScenarioDefinition[] = [];
   private activeScenarioSetId: string = '';
+  private selectedContextBySession: Map<string, string> = new Map();
 
   constructor(dialogueManager: DialogueStateManager) {
     this.dialogueManager = dialogueManager;
@@ -138,7 +139,8 @@ export class VoiceChannel {
     };
     scenarioSet = { ...scenarioSet, scenarios: scenarioSet.scenarios.map((scenario: any) => {
       const eventType = scenario.steps?.find((step: any) => step.kind === 'emit' && step.event?.type)?.event?.type;
-      const intent = scenario.intent || inferredIntentByEvent[eventType];
+      const actionName = scenario.steps?.find((step: any) => step.kind === 'emit' && step.event?.payload?.action)?.event?.payload?.action;
+      const intent = scenario.intent || inferredIntentByEvent[eventType] || actionName;
       if (!intent) throw new Error('CONTRACT_VIOLATION: Scenario "' + scenario.id + '" missing intent and no supported event can infer it');
       return { ...scenario, intent };
     }) };
@@ -552,6 +554,7 @@ export class VoiceChannel {
 
     const text = phrase.trim().toLowerCase();
     const tokens = text.split(/\s+/);
+    const selectionKey = identity.ownerId + ':' + identity.sessionId;
 
     // 1. Cancellation Flow
     const isCancelToken = tokens.includes('отмена') || tokens.includes('отменить') || tokens.includes('cancel');
@@ -574,8 +577,10 @@ export class VoiceChannel {
 
       const routeResult = this.dialogueManager.resolveRouting(text, [], identity);
       if (routeResult.status === 'RESOLVED') {
+        this.selectedContextBySession.delete(selectionKey);
         return this.dialogueManager.cancelContext(routeResult.contextId, identity);
       }
+      if (routeResult.status === 'CONTEXT_ACCESS_DENIED') return routeResult;
       return { status: 'NO_MATCH' };
     }
 
@@ -678,6 +683,12 @@ export class VoiceChannel {
       const explicitRoute = this.dialogueManager.resolveRouting(text, [], identity);
       if (explicitRoute.status === 'RESOLVED') {
         activeWaiting = activeWaiting.filter(ctx => ctx.contextId === explicitRoute.contextId);
+        this.selectedContextBySession.set(selectionKey, explicitRoute.contextId);
+      } else {
+        const selectedId = this.selectedContextBySession.get(selectionKey);
+        const selected = activeWaiting.find(ctx => ctx.contextId === selectedId);
+        if (selected) activeWaiting = [selected];
+        else this.selectedContextBySession.delete(selectionKey);
       }
 
       const matchingContexts = activeWaiting.map(ctx => {
@@ -895,6 +906,8 @@ if (intentRes.status === 'AMBIGUOUS_INTENT') {
       return intentRes;
     }
 
+    const routingResult = this.dialogueManager.resolveRouting(text, [], identity);
+    if (routingResult.status === 'CONTEXT_ACCESS_DENIED') return routingResult;
     return { status: 'NO_MATCH' };
   }
 
