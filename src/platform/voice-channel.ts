@@ -149,7 +149,6 @@ export class VoiceChannel {
     const triggerOwners = new Map<string, Array<{ scenarioId: string; priority: number }>>();
     const normalizeTrigger = (value: string): string =>
       value.replace(/^voice\./i, '').replace(/[-_]/g, ' ').trim().toLowerCase().replace(/\s+/g, ' ');
-    const scenariosBeingReplaced = new Set(scenarioSet.scenarios.map(sc => sc.id));
 
     const validateTrigger = (value: string, scenarioId: string, priority = 0): void => {
       const normalized = normalizeTrigger(value);
@@ -164,17 +163,6 @@ export class VoiceChannel {
       }
       triggerOwners.set(normalized, owners);
     };
-
-    for (const existing of this.scenarioRegistry) {
-      if (scenariosBeingReplaced.has(existing.id)) continue;
-      const triggers = [
-        ...(existing.activation?.value ? [existing.activation.value] : []),
-        ...(existing.triggerPhrases || []),
-        ...(existing.aliases || []),
-        ...(existing.expectedPhrase ? [existing.expectedPhrase] : [])
-      ];
-      for (const trigger of triggers) validateTrigger(trigger, existing.id, existing.priority ?? 0);
-    }
 
     for (const sc of scenarioSet.scenarios) {
       if (!sc.id || typeof sc.id !== 'string') {
@@ -201,14 +189,7 @@ export class VoiceChannel {
       for (const trigger of triggers) validateTrigger(trigger, sc.id, sc.priority ?? 0);
     }
 
-    for (const sc of scenarioSet.scenarios) {
-      const idx = this.scenarioRegistry.findIndex(s => s.id === sc.id);
-      if (idx >= 0) {
-        this.scenarioRegistry[idx] = sc;
-      } else {
-        this.scenarioRegistry.push(sc);
-      }
-    }
+    this.scenarioRegistry = [...scenarioSet.scenarios];
     this.activeScenarioSetId = scenarioSet.id;
   }
 
