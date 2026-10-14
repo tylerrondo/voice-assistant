@@ -249,11 +249,14 @@ export class VoiceChannel {
       return { status: 'NO_MATCH' };
     }
 
-    const strongestScore = Math.max(...matchingScenarios.map(match => match.score));
-    const strongestMatches = matchingScenarios.filter(match => match.score === strongestScore);
-    const maxPriority = Math.max(...strongestMatches.map(match => match.scenario.priority ?? 0));
-    const highestCandidates = strongestMatches
-      .filter(match => (match.scenario.priority ?? 0) === maxPriority)
+    // Explicit scenario priority remains authoritative. Phrase specificity
+    // disambiguates only candidates at the same priority.
+    const maxPriority = Math.max(...matchingScenarios.map(match => match.scenario.priority ?? 0));
+    const highestPriorityMatches = matchingScenarios
+      .filter(match => (match.scenario.priority ?? 0) === maxPriority);
+    const strongestScore = Math.max(...highestPriorityMatches.map(match => match.score));
+    const highestCandidates = highestPriorityMatches
+      .filter(match => match.score === strongestScore)
       .map(match => match.scenario);
 
     if (highestCandidates.length === 1) {
@@ -1012,7 +1015,11 @@ export class VoiceChannel {
 
       // A repeated complete command for an already successful action in this
       // session is an idempotent retry, not a new business action.
-      if (requiredSlots.every(slot => initialSlots[slot] !== undefined && initialSlots[slot] !== null)) {
+      const isTaxiDriverScenario = /^sc00[4-7]-/.test(sc.id);
+      if (isTaxiDriverScenario &&
+          sc.intent === 'ACCEPT_ORDER' &&
+          actionType === 'driver.order.accepted' &&
+          requiredSlots.every(slot => initialSlots[slot] !== undefined && initialSlots[slot] !== null)) {
         const payloadSignature = (payload: Record<string, any>): string =>
           JSON.stringify(Object.entries(payload).sort(([left], [right]) => left.localeCompare(right)));
         const previousExecution = this.dialogueManager.getExecutionLogs(identity).find(execution =>
@@ -1040,9 +1047,11 @@ export class VoiceChannel {
       // dialogue in this session, even when the new command also needs slots.
       // Otherwise old missing slots remain routable and can contaminate the new
       // order's context.
-      if (isFreshScenarioActivation) {
+      if (isFreshScenarioActivation && /^sc00[4-7]-/.test(sc.id)) {
         for (const previous of activeWaiting) {
-          await this.dialogueManager.cancelContext(previous.contextId, identity);
+          if (previous.scenarioId && /^sc00[4-7]-/.test(previous.scenarioId)) {
+            await this.dialogueManager.cancelContext(previous.contextId, identity);
+          }
         }
       }
 
