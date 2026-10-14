@@ -747,7 +747,7 @@ export class VoiceChannel {
           identity,
           sc.id
         );
-        this.selectedContextBySession.set(selectionKey, context.contextId);
+        // Creating another context is not an explicit user selection.
         return context;
       }
     }
@@ -763,15 +763,10 @@ export class VoiceChannel {
       } else {
         const selectedId = this.selectedContextBySession.get(selectionKey);
         const selected = activeWaiting.find(ctx => ctx.contextId === selectedId);
-        const hasExplicitAmbiguityPolicy = activeWaiting.some(ctx => {
-          const scenario = ctx.scenarioId
-            ? this.scenarioRegistry.find(candidate => candidate.id === ctx.scenarioId)
-            : this.getDeterministicScenarioForIntent(ctx.intent);
-          return !!scenario?.ambiguityPrompt?.template;
-        });
-        if (selected && !hasExplicitAmbiguityPolicy) {
+        // Only a context selected by an explicit entity route may bypass ambiguity.
+        if (selected) {
           activeWaiting = [selected];
-        } else if (!selected) {
+        } else {
           this.selectedContextBySession.delete(selectionKey);
         }
       }
