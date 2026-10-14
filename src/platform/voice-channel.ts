@@ -777,9 +777,12 @@ export class VoiceChannel {
           identity,
           sc.id
         );
-        // The command names the new order explicitly; subsequent slot values
-        // should continue in this context rather than the previously selected order.
-        this.selectedContextBySession.set(selectionKey, context.contextId);
+        // Without a declarative ambiguity policy, the explicit order command
+        // selects the new context for subsequent slot values. Scenarios that
+        // define an ambiguity prompt must still require explicit disambiguation.
+        if (!sc.ambiguityPrompt?.template) {
+          this.selectedContextBySession.set(selectionKey, context.contextId);
+        }
         return context;
       }
     }
