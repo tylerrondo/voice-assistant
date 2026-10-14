@@ -614,13 +614,43 @@ export class VoiceChannel {
       return { status: 'NO_MATCH' };
     }
 
-    // Enforce ownership before intent resolution: explicit entity references
-    // must not create a new context or execute against another session's order.
+    // Resolve intent before ownership routing so a new, explicitly activated order
+    // can use an order number that also exists in another session.
+    const intentRes = this.resolveIntent(text);
+    const explicitIntentWithRequiredEntity = (() => {
+      if (intentRes.status !== 'RESOLVED') return false;
+      const scenario = intentRes.scenario;
+      if (!scenario.slotExtractors) return false;
+      const triggers = [
+        ...(scenario.activation?.value ? [scenario.activation.value] : []),
+        ...(scenario.triggerPhrases || []),
+        ...(scenario.aliases || []),
+        ...(scenario.expectedPhrase ? [scenario.expectedPhrase] : [])
+      ];
+      const phraseWords = text.replace(/[-_]/g, ' ').split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+      const hasExplicitTrigger = triggers.some(trigger => {
+        const triggerWords = trigger.replace(/^voice\./i, '').replace(/[-_]/g, ' ')
+          .toLowerCase().trim().split(/\s+/).filter(Boolean);
+        return triggerWords.length > 0 && phraseWords.some((_, start) =>
+          triggerWords.every((word, offset) => phraseWords[start + offset] === word)
+        );
+      });
+      if (!hasExplicitTrigger) return false;
+      const extracted = this.extractSlotsDeterministically(
+        text, scenario.slotExtractors, scenario.id, scenario.ambiguityPrompt?.template
+      );
+      return extracted.status === 'RESOLVED'
+        && Object.keys(extracted.slots).some(key => (scenario.requiredSlots || []).includes(key));
+    })();
+
+    // A foreign entity is blocked for routing, but not when the utterance
+    // explicitly starts a new scenario and supplies one of that scenario's required entity slots.
     const ownershipRoute = this.dialogueManager.resolveRouting(text, [], identity);
-    if (ownershipRoute.status === 'CONTEXT_ACCESS_DENIED') return ownershipRoute;
+    if (ownershipRoute.status === 'CONTEXT_ACCESS_DENIED' && !explicitIntentWithRequiredEntity) {
+      return ownershipRoute;
+    }
 
     // 2. Intent Resolution (Evaluation / Comparison Queries)
-    const intentRes = this.resolveIntent(text);
 
     if (intentRes.status === 'RESOLVED') {
       const sc = intentRes.scenario;
