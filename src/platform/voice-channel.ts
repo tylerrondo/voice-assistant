@@ -627,7 +627,7 @@ export class VoiceChannel {
         ...(scenario.aliases || []),
         ...(scenario.expectedPhrase ? [scenario.expectedPhrase] : [])
       ];
-      const phraseWords = text.replace(/[-_]/g, ' ').split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+      const phraseWords = text.replace(/[-_]/g, ' ').toLocaleLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean);
       const hasExplicitTrigger = triggers.some(trigger => {
         const triggerWords = trigger.replace(/^voice\./i, '').replace(/[-_]/g, ' ')
           .toLowerCase().trim().split(/\s+/).filter(Boolean);
