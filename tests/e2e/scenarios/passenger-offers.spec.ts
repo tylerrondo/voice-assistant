@@ -17,6 +17,7 @@ test.describe('E2E: SC-PASS-002 Canonical Multi-Offer Dialogue Suite', () => {
 
     const fileInput = page.locator('input[type="file"]').first();
     await fileInput.setInputFiles(scenarioFilePath);
+    await expect.poll(async () => page.evaluate(() => (window as any).__SCENARIO_ENGINE__?.getActiveScenarioSetId())).toBe('scenario-set-passenger-offers-002');
 
     const result = await page.evaluate(async () => {
       const vc = (window as any).__VOICE_CHANNEL__;
