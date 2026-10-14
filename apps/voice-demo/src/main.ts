@@ -218,9 +218,16 @@ if ((import.meta as any).env?.VITE_E2E_AUTH === 'true') {
     if (typeof phrase === 'string') void channel.handleIncomingVoice(phrase, sessionIdentity);
   });
 
-  for (const methodName of ['getActiveState', 'listContexts', 'getExecutionLogs']) {
-    bindIdentityWhenOmitted(manager, methodName, methodName === 'getExecutionLogs' ? 0 : 0);
+  for (const methodName of ['listContexts', 'getExecutionLogs']) {
+    bindIdentityWhenOmitted(manager, methodName, 0);
   }
+  const originalGetActiveState = manager.getActiveState.bind(manager);
+  manager.getActiveState = (identity?: SessionIdentity) => {
+    const currentIdentity = identity || sessionIdentity;
+    const active = originalGetActiveState(currentIdentity);
+    if (active) return active;
+    return manager.listContexts(currentIdentity).sort((a: any, b: any) => b.updatedAt - a.updatedAt)[0];
+  };
   for (const methodName of ['getContext', 'activateContext', 'cancelContext', 'expireContext', 'getExecution']) {
     bindIdentityWhenOmitted(manager, methodName, 1);
   }

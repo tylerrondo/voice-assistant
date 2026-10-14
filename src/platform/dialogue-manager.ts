@@ -150,19 +150,19 @@ export class DialogueStateManager {
 
   public getActiveState(identity: SessionIdentity): DialogueContext | undefined {
     this.validateIdentity(identity);
-    const sessionContexts = Array.from(this.contexts.values()).filter(candidate =>
-      candidate.ownerId === identity.ownerId && candidate.sessionId === identity.sessionId
-    );
     const active = this.activeContextId ? this.contexts.get(this.activeContextId) : undefined;
     const ctx = active
       && active.ownerId === identity.ownerId
       && active.sessionId === identity.sessionId
       && !['COMPLETED', 'CANCELLED', 'EXPIRED'].includes(active.status)
       ? active
-      : sessionContexts
-          .filter(candidate => !['COMPLETED', 'CANCELLED', 'EXPIRED'].includes(candidate.status))
-          .sort((a, b) => b.updatedAt - a.updatedAt)[0]
-        || sessionContexts.sort((a, b) => b.updatedAt - a.updatedAt)[0];
+      : Array.from(this.contexts.values())
+          .filter(candidate =>
+            candidate.ownerId === identity.ownerId &&
+            candidate.sessionId === identity.sessionId &&
+            !['COMPLETED', 'CANCELLED', 'EXPIRED'].includes(candidate.status)
+          )
+          .sort((a, b) => b.updatedAt - a.updatedAt)[0];
 
     if (!ctx) return undefined;
     return {
