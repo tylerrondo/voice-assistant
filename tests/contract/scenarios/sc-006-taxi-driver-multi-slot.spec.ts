@@ -33,6 +33,15 @@ test.describe('CONTRACT: SC-006 Taxi Driver Multi-Slot Workflow Suite (ТЗ-VOIC
     expect(sc.slotExtractors.payment.mapping.card).toContain('картой');
   });
 
+  test('CONTRACT-02A: Independent DRIVER_ARRIVED command is configured for context switching', async () => {
+    const sc = scenarioSet.scenarios.find((s: any) => s.intent === 'DRIVER_ARRIVED');
+    expect(sc).toBeDefined();
+    expect(sc.aliases).toContain('Я приехал');
+    expect(sc.requiredSlots).toContain('orderId');
+    expect(sc.slotExtractors.orderId.type).toBe('integer');
+    expect(sc.slotExtractors.orderId.pattern).toBeTruthy();
+  });
+
   test('CONTRACT-03: orderId Slot Definition & Prompt Contract', async () => {
     const sc = scenarioSet.scenarios[0];
     expect(sc.clarificationPrompts.orderId).toBe('Какой заказ?');

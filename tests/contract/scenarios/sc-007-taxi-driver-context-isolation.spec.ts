@@ -30,6 +30,15 @@ test.describe('CONTRACT: SC-007 Context Isolation Suite (ТЗ-VOICE-SC-007)', ()
     expect(sc.slotExtractors.payment.mapping.card).toContain('картой');
   });
 
+  test('CONTRACT-02A: Independent DRIVER_ARRIVED command is configured for context isolation', async () => {
+    const sc = scenarioSet.scenarios.find((s: any) => s.intent === 'DRIVER_ARRIVED');
+    expect(sc).toBeDefined();
+    expect(sc.aliases).toContain('Я приехал');
+    expect(sc.requiredSlots).toContain('orderId');
+    expect(sc.slotExtractors.orderId.type).toBe('integer');
+    expect(sc.slotExtractors.orderId.pattern).toBeTruthy();
+  });
+
   test('CONTRACT-03: Action uses standard template interpolation for orderId and payment', async () => {
     const sc = scenarioSet.scenarios[0];
     const emitStep = sc.steps.find((st: any) => st.kind === 'emit');
