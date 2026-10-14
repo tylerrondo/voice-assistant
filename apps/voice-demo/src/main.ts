@@ -22,6 +22,11 @@ export function getAuthenticatedSessionIdentity(): SessionIdentity {
 export class PlatformFsmExecutionBoundary {
   private activeOrders: Map<number, { status: string; executionId: string; updatedAt: number }> = new Map();
 
+  public getDriverStatus(): string {
+    const latest = Array.from(this.activeOrders.values()).sort((a, b) => b.updatedAt - a.updatedAt)[0];
+    return latest?.status || 'AVAILABLE';
+  }
+
   public async execute(event: { type: string; payload: Record<string, any> }, exec: any) {
     if (!event || typeof event !== 'object' || !event.type || typeof event.type !== 'string') {
       return { status: 'FAILED' as const, executionId: exec.executionId, errorCode: 'INVALID_EVENT_FORMAT', attempt: exec.attempt };
@@ -116,7 +121,7 @@ export const productionActionDispatcher: ActionDispatcher = async (event, ctx, e
 
 // Start application with resolved authenticated session
 const sessionIdentity = getAuthenticatedSessionIdentity();
-const runtime = bootstrap(productionActionDispatcher);
+const runtime = Object.assign(bootstrap(productionActionDispatcher), { platformExecutionBoundary });
 if ((import.meta as any).env?.VITE_E2E_AUTH === 'true') {
   runtime.voiceChannel.registerScenarioSet({
     version: 2, id: 'scenario-set-e2e-default', name: 'E2E Default Order Scenario',

@@ -91,9 +91,7 @@ test.describe('E2E: PLATFORM-010 Multi-Context Session Manager Runtime Suite', (
     await emitVoicePhrase(page, 'Наличными');
 
     // 4. Assert execution correlation with exact contextId
-    const allLogs = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity()));
-    console.log('MULTICONTEXT-E2E-03 execution audit:', JSON.stringify(allLogs.map((l: any) => ({status:l.status, contextId:l.contextId, intent:l.intent, event:l.event}))));
-    const logs = allLogs.filter((entry: any) => entry.status === 'SUCCEEDED');
+    const logs = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity()).filter((entry: any) => entry.status === 'SUCCEEDED'));
     const match1001 = logs.filter((l: any) => l.contextId === idA);
     const match1002 = logs.filter((l: any) => l.contextId === idB);
 
@@ -186,9 +184,7 @@ test.describe('E2E: PLATFORM-010 Multi-Context Session Manager Runtime Suite', (
     await emitVoicePhrase(page, 'Заказ 1002');
     await emitVoicePhrase(page, 'Картой'); // Same payment slot on 1002
 
-    const allLogs = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity()));
-    console.log('MULTICONTEXT-E2E-08 execution audit:', JSON.stringify(allLogs.map((l: any) => ({status:l.status, contextId:l.contextId, intent:l.intent, event:l.event}))));
-    const logs = allLogs.filter((entry: any) => entry.status === 'SUCCEEDED');
+    const logs = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity()).filter((entry: any) => entry.status === 'SUCCEEDED'));
     const matchA = logs.filter((l: any) => l.contextId === idA);
     const matchB = logs.filter((l: any) => l.contextId === idB);
 
