@@ -12,7 +12,9 @@
         "value": "voice.accept-order"
       },
       "intent": "ACCEPT_ORDER",
-      "requiredSlots": ["orderId"],
+      "requiredSlots": [
+        "orderId"
+      ],
       "clarificationPrompts": {
         "orderId": "Какой заказ?"
       },
@@ -29,7 +31,18 @@
         {
           "kind": "end"
         }
-      ]
+      ],
+      "triggerPhrases": [
+        "прими заказ",
+        "принять заказ",
+        "заказ"
+      ],
+      "slotExtractors": {
+        "orderId": {
+          "type": "integer",
+          "pattern": "\\\\b\\\\d+\\\\b"
+        }
+      }
     }
   ]
 }
