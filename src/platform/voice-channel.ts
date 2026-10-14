@@ -549,7 +549,14 @@ export class VoiceChannel {
       const activeWaiting = this.dialogueManager.listContexts(identity).filter(c => c.status === 'WAITING_FOR_SLOT');
 
       if (isPureCancel) {
+        const selectedContextId = this.selectedContextBySession.get(selectionKey);
+        const selectedContext = activeWaiting.find(context => context.contextId === selectedContextId);
+        if (selectedContext) {
+          this.selectedContextBySession.delete(selectionKey);
+          return this.dialogueManager.cancelContext(selectedContext.contextId, identity);
+        }
         if (activeWaiting.length === 1) {
+          this.selectedContextBySession.delete(selectionKey);
           return this.dialogueManager.cancelContext(activeWaiting[0].contextId, identity);
         }
         if (activeWaiting.length > 1) {
@@ -558,6 +565,7 @@ export class VoiceChannel {
             candidateContextIds: activeWaiting.map(c => c.contextId)
           };
         }
+        this.selectedContextBySession.delete(selectionKey);
         return { status: 'NO_MATCH' };
       }
 
