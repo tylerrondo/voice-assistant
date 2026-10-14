@@ -1010,6 +1010,32 @@ export class VoiceChannel {
 
       const initialSlots = slotRes.status === 'RESOLVED' ? slotRes.slots : {};
 
+      // A repeated complete command for an already successful action in this
+      // session is an idempotent retry, not a new business action.
+      if (requiredSlots.every(slot => initialSlots[slot] !== undefined && initialSlots[slot] !== null)) {
+        const payloadSignature = (payload: Record<string, any>): string =>
+          JSON.stringify(Object.entries(payload).sort(([left], [right]) => left.localeCompare(right)));
+        const previousExecution = this.dialogueManager.getExecutionLogs(identity).find(execution =>
+          execution.status === 'SUCCEEDED' &&
+          execution.intent === sc.intent &&
+          execution.actionType === actionType &&
+          payloadSignature(execution.payload) === payloadSignature(initialSlots)
+        );
+        if (previousExecution) {
+          return {
+            status: 'SUCCEEDED',
+            dispatchStatus: 'SUCCEEDED',
+            deduplicated: true,
+            contextId: previousExecution.contextId,
+            executionId: previousExecution.executionId,
+            context: this.dialogueManager.getContext(previousExecution.contextId, identity),
+            intent: previousExecution.intent,
+            slots: { ...previousExecution.payload },
+            missingSlots: []
+          };
+        }
+      }
+
       // A fresh, explicitly recognized command replaces any incomplete
       // dialogue in this session, even when the new command also needs slots.
       // Otherwise old missing slots remain routable and can contaminate the new
