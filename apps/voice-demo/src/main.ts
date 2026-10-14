@@ -138,38 +138,6 @@ if ((import.meta as any).env?.VITE_E2E_AUTH === 'true') {
   const manager = runtime.dialogueManager as any;
   const channel = runtime.voiceChannel as any;
 
-  // Test fixtures often identify a voice intent with an activation key (for example,
-  // "voice.accept-order") but exercise it using natural Russian speech. In CI only,
-  // add explicit utterance aliases to the loaded scenario, preserving its own slot
-  // requirements and actions instead of routing to the generic fallback scenario.
-  const e2ePhrasesByIntent: Record<string, string[]> = {
-    ACCEPT_ORDER: ['прими заказ', 'принять заказ', 'заказ'],
-    DRIVER_ARRIVED: ['я на месте', 'на месте', 'прибыл', 'прибыла', 'водитель на месте'],
-    START_TRIP: ['начать поездку', 'поехали', 'начинаем поездку', 'начать маршрут'],
-    FINISH_TRIP: ['завершить поездку', 'поездка завершена', 'поездку завершил', 'завершить маршрут'],
-    DRIVER_AVAILABLE: ['я свободен', 'свободен', 'готов к заказу']
-  };
-  const originalRegisterScenarioSet = channel.registerScenarioSet.bind(channel);
-  channel.registerScenarioSet = (scenarioSet: any) => {
-    const counts = new Map<string, number>();
-    for (const scenario of scenarioSet?.scenarios || []) {
-      if (scenario.intent) counts.set(scenario.intent, (counts.get(scenario.intent) || 0) + 1);
-    }
-    const compatibleSet = {
-      ...scenarioSet,
-      scenarios: (scenarioSet?.scenarios || []).map((scenario: any) => {
-        const phrases = e2ePhrasesByIntent[scenario.intent];
-        // Avoid creating equal-priority trigger collisions between variants of one intent.
-        if (!phrases || counts.get(scenario.intent) !== 1) return scenario;
-        return {
-          ...scenario,
-          triggerPhrases: [...new Set([...(scenario.triggerPhrases || []), ...phrases])]
-        };
-      })
-    };
-    return originalRegisterScenarioSet(compatibleSet);
-  };
-
   const originalExtractSlots = channel.extractSlotsDeterministically.bind(channel);
   channel.extractSlotsDeterministically = (text: string, extractors: any, scenarioId: string, prompt?: string) => {
     if (!extractors) return originalExtractSlots(text, extractors, scenarioId, prompt);
