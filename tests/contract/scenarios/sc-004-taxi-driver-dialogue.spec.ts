@@ -25,10 +25,18 @@ test.describe('CONTRACT: SC-004 Taxi Driver Multi-Turn Dialogue Suite (ТЗ-VOIC
     expect(sc.clarificationPrompts.orderId).toBe('Какой заказ?');
   });
 
-  test('CONTRACT-03: Incomplete Activation Definition does not pre-populate orderId', async () => {
+  test('CONTRACT-03: Russian activation phrases and orderId extraction are declared', async () => {
     const sc = scenarioSet.scenarios[0];
     expect(sc.activation.value).toBe('voice.accept-order');
     expect(sc.activation.type).toBe('voice');
+    expect(sc.aliases).toContain('Прими заказ');
+    expect(sc.slotExtractors.orderId.type).toBe('integer');
+    expect(sc.slotExtractors.orderId.pattern).toBeTruthy();
+
+    const arrived = scenarioSet.scenarios.find((item: any) => item.intent === 'DRIVER_ARRIVED');
+    expect(arrived).toBeDefined();
+    expect(arrived.aliases).toContain('Я приехал');
+    expect(arrived.slotExtractors.orderId.type).toBe('integer');
   });
 
   test('CONTRACT-04: Event Step Payload contains Slot Interpolation for orderId', async () => {
