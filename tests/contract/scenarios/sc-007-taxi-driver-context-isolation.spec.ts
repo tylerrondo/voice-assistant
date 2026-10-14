@@ -18,10 +18,16 @@ test.describe('CONTRACT: SC-007 Context Isolation Suite (ТЗ-VOICE-SC-007)', ()
     expect(Array.isArray(scenarioSet.scenarios)).toBe(true);
   });
 
-  test('CONTRACT-02: Intent ACCEPT_ORDER specifies orderId and payment Slots', async () => {
+  test('CONTRACT-02: Intent ACCEPT_ORDER specifies Russian activation and both slot extractors', async () => {
     const sc = scenarioSet.scenarios.find((s: any) => s.intent === 'ACCEPT_ORDER');
     expect(sc).toBeDefined();
     expect(sc.requiredSlots).toEqual(['orderId', 'payment']);
+    expect(sc.aliases).toContain('Прими заказ');
+    expect(sc.slotExtractors.orderId.type).toBe('integer');
+    expect(sc.slotExtractors.orderId.pattern).toBeTruthy();
+    expect(sc.slotExtractors.payment.type).toBe('enum');
+    expect(sc.slotExtractors.payment.mapping.cash).toContain('наличными');
+    expect(sc.slotExtractors.payment.mapping.card).toContain('картой');
   });
 
   test('CONTRACT-03: Action uses standard template interpolation for orderId and payment', async () => {
