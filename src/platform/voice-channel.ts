@@ -231,7 +231,7 @@ export class VoiceChannel {
 
       const matches = triggers.some(trig => {
         const clean = trig.replace(/^voice\./, '').replace(/[-_]/g, ' ').toLowerCase().trim();
-        const phraseWords = text.replace(/[-_]/g, ' ').split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+        const phraseWords = text.replace(/[-_]/g, ' ').toLocaleLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean);
         const triggerWords = clean.split(/\s+/).filter(Boolean);
         const containsTrigger = triggerWords.some((_, start) =>
           triggerWords.every((word, offset) => phraseWords[start + offset] === word)
