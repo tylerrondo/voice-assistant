@@ -204,47 +204,66 @@ export class VoiceChannel {
     return highest[0];
   }
 
-  public resolveIntent(phrase: string): IntentResolutionResult {
-    const text = phrase.trim().toLowerCase();
-    const matchingScenarios: ScenarioDefinition[] = [];
+  private triggerMatchScore(phrase: string, trigger: string): number {
+    const normalize = (value: string): string => value
+      .replace(/^voice\./i, '')
+      .replace(/[-_]/g, ' ')
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}_]+/gu, ' ')
+      .trim()
+      .replace(/\s+/g, ' ');
 
-    for (const sc of this.scenarioRegistry) {
-      if (!this.activeScenarioIds.has(sc.id)) continue;
-      const triggers: string[] = [];
-      if (sc.activation?.value) triggers.push(sc.activation.value);
-      if (Array.isArray(sc.triggerPhrases)) triggers.push(...sc.triggerPhrases);
-      if (Array.isArray(sc.aliases)) triggers.push(...sc.aliases);
+    const text = normalize(phrase);
+    const clean = normalize(trigger);
+    if (!text || !clean) return 0;
 
-      const matches = triggers.some(trig => {
-        const clean = trig.replace(/^voice\./, '').replace(/[-_]/g, ' ').toLowerCase().trim();
-        return text === clean || text.startsWith(clean + ' ') || (text.length >= 3 && !/^(?:перв[а-яё]*|втор[а-яё]*|трет[а-яё]*|четверт[а-яё]*|first|second|third|fourth|\d+)$/i.test(text) && clean.startsWith(text)) || clean.split(/\s+/).every(w => text.includes(w));
-      });
+    if (text === clean) return 10000 + clean.length;
+    if (text.startsWith(clean + ' ')) return 9000 + clean.length;
+    if ((` ${text} `).includes(` ${clean} `)) return 8000 + clean.length;
 
-      if (matches) {
-        matchingScenarios.push(sc);
-      }
+    // Allow a caller to begin an activation phrase, but never match an
+    // unrelated utterance merely because it contains the same individual words.
+    const isSlotOnlyOrOrdinal = /^(?:перв[а-яё]*|втор[а-яё]*|трет[а-яё]*|четверт[а-яё]*|first|second|third|fourth|\d+)$/i.test(text);
+    if (text.length >= 3 && !isSlotOnlyOrOrdinal && clean.startsWith(text)) {
+      return 1000 + text.length;
     }
+
+    return 0;
+  }
+
+  private scenarioTriggerMatchScore(phrase: string, scenario: ScenarioDefinition): number {
+    const triggers: string[] = [];
+    if (scenario.activation?.value) triggers.push(scenario.activation.value);
+    if (Array.isArray(scenario.triggerPhrases)) triggers.push(...scenario.triggerPhrases);
+    if (Array.isArray(scenario.aliases)) triggers.push(...scenario.aliases);
+    return triggers.reduce((best, trigger) => Math.max(best, this.triggerMatchScore(phrase, trigger)), 0);
+  }
+
+  public resolveIntent(phrase: string): IntentResolutionResult {
+    const matchingScenarios = this.scenarioRegistry
+      .filter(sc => this.activeScenarioIds.has(sc.id))
+      .map(scenario => ({ scenario, score: this.scenarioTriggerMatchScore(phrase, scenario) }))
+      .filter(match => match.score > 0);
 
     if (matchingScenarios.length === 0) {
       return { status: 'NO_MATCH' };
     }
 
-    if (matchingScenarios.length === 1) {
-      const sc = matchingScenarios[0];
-      return { status: 'RESOLVED', scenarioId: sc.id, intent: sc.intent, scenario: sc };
-    }
-
-    const maxPriority = Math.max(...matchingScenarios.map(s => s.priority ?? 0));
-    const highestCandidates = matchingScenarios.filter(s => (s.priority ?? 0) === maxPriority);
-
-    const infoCandidate = highestCandidates.find(s => s.evaluation?.kind === 'query_attribute');
-    if (infoCandidate) {
-      return { status: 'RESOLVED', scenarioId: infoCandidate.id, intent: infoCandidate.intent, scenario: infoCandidate };
-    }
+    const strongestScore = Math.max(...matchingScenarios.map(match => match.score));
+    const strongestMatches = matchingScenarios.filter(match => match.score === strongestScore);
+    const maxPriority = Math.max(...strongestMatches.map(match => match.scenario.priority ?? 0));
+    const highestCandidates = strongestMatches
+      .filter(match => (match.scenario.priority ?? 0) === maxPriority)
+      .map(match => match.scenario);
 
     if (highestCandidates.length === 1) {
       const sc = highestCandidates[0];
       return { status: 'RESOLVED', scenarioId: sc.id, intent: sc.intent, scenario: sc };
+    }
+
+    const infoCandidate = highestCandidates.find(s => s.evaluation?.kind === 'query_attribute');
+    if (infoCandidate) {
+      return { status: 'RESOLVED', scenarioId: infoCandidate.id, intent: infoCandidate.intent, scenario: infoCandidate };
     }
 
     return {
@@ -656,20 +675,11 @@ export class VoiceChannel {
       return extracted.status === 'RESOLVED' &&
         Object.keys(extracted.slots).some(slotName => context.missingSlots.includes(slotName));
     });
-    const isFreshScenarioActivation = intentRes.status === 'RESOLVED' && !activeContextCanConsumeInput && !(intentRes.scenario.candidateBinding?.targetSlot && activeWaiting.some(context => (context.offers?.length || 0) > 0)) && (() => {
-      const scenario = intentRes.scenario;
-      const triggers: string[] = [];
-      if (scenario.activation?.value) triggers.push(scenario.activation.value);
-      if (Array.isArray(scenario.triggerPhrases)) triggers.push(...scenario.triggerPhrases);
-      if (Array.isArray(scenario.aliases)) triggers.push(...scenario.aliases);
-      return triggers.some(trigger => {
-        const clean = trigger.replace(/^voice\./i, '').replace(/[-_]/g, ' ').toLowerCase().trim();
-        return text === clean ||
-          text.startsWith(clean + ' ') ||
-          (text.length >= 3 && !/^(?:перв[а-яё]*|втор[а-яё]*|трет[а-яё]*|четверт[а-яё]*|first|second|third|fourth|\d+)$/i.test(text) && clean.startsWith(text)) ||
-          clean.split(/\s+/).every(word => text.includes(word));
-      });
-    })();
+    const isFreshScenarioActivation =
+      intentRes.status === 'RESOLVED' &&
+      !activeContextCanConsumeInput &&
+      !(intentRes.scenario.candidateBinding?.targetSlot && activeWaiting.some(context => (context.offers?.length || 0) > 0)) &&
+      this.scenarioTriggerMatchScore(text, intentRes.scenario) > 0;
 
     if (activeWaiting.length === 1 && !isFreshScenarioActivation) {
       const activeCtx = activeWaiting[0];
@@ -999,6 +1009,16 @@ export class VoiceChannel {
       }
 
       const initialSlots = slotRes.status === 'RESOLVED' ? slotRes.slots : {};
+
+      // A fresh, explicitly recognized command replaces any incomplete
+      // dialogue in this session, even when the new command also needs slots.
+      // Otherwise old missing slots remain routable and can contaminate the new
+      // order's context.
+      if (isFreshScenarioActivation) {
+        for (const previous of activeWaiting) {
+          await this.dialogueManager.cancelContext(previous.contextId, identity);
+        }
+      }
 
       const ctx = this.dialogueManager.createContext(
         sc.intent,
