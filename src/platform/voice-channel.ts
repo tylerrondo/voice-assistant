@@ -569,6 +569,40 @@ export class VoiceChannel {
     return { ...defaults, ...extractedSlots };
   }
 
+  private isActivationOnlyPhrase(scenario: ScenarioDefinition, phrase: string): boolean {
+    const normalize = (value: string): string => value
+      .replace(/^voice\./i, '')
+      .replace(/[-_]/g, ' ')
+      .toLowerCase()
+      .trim()
+      .replace(/\s+/g, ' ');
+    const normalizedPhrase = normalize(phrase);
+    const triggers = [
+      ...(scenario.activation?.value ? [scenario.activation.value] : []),
+      ...(scenario.triggerPhrases || []),
+      ...(scenario.aliases || []),
+      ...(scenario.expectedPhrase ? [scenario.expectedPhrase] : [])
+    ];
+    return triggers.some(trigger => normalize(trigger) === normalizedPhrase);
+  }
+
+  private findCompletedDuplicateContext(
+    scenario: ScenarioDefinition,
+    slots: Record<string, any>,
+    identity: SessionIdentity
+  ): DialogueContext | undefined {
+    const requiredSlots = scenario.requiredSlots || [];
+    if (requiredSlots.length === 0 || !requiredSlots.every(key => slots[key] !== undefined)) {
+      return undefined;
+    }
+    return this.dialogueManager.listContexts(identity).find(context =>
+      context.scenarioId === scenario.id &&
+      context.intent === scenario.intent &&
+      context.status === 'COMPLETED' &&
+      requiredSlots.every(key => Object.is(context.slots[key], slots[key]))
+    );
+  }
+
   public async handleIncomingVoice(phrase: string, identity: SessionIdentity): Promise<any> {
     if (!identity || !identity.ownerId || !identity.sessionId) {
       throw new Error('CONTRACT_VIOLATION: SessionIdentity is strictly required for handleIncomingVoice');
@@ -756,6 +790,10 @@ export class VoiceChannel {
       const sc = intentRes.scenario;
       const slotRes = this.extractSlotsDeterministically(text, sc.slotExtractors, sc.id, sc.ambiguityPrompt?.template);
       const initialSlots = slotRes.status === 'RESOLVED' ? slotRes.slots : {};
+      const candidateSlots = this.buildInitialScenarioSlots(sc, initialSlots);
+      const completedDuplicate = this.findCompletedDuplicateContext(sc, candidateSlots, identity);
+      if (completedDuplicate) return completedDuplicate;
+
       const activeForScenario = this.dialogueManager.listContexts(identity).filter(
         c => c.status === 'WAITING_FOR_SLOT' && c.scenarioId === sc.id
       );
@@ -1003,11 +1041,17 @@ export class VoiceChannel {
         return slotRes;
       }
 
-      const initialSlots = slotRes.status === 'RESOLVED' ? slotRes.slots : {};
+      const initialSlots = slotRes.status === 'RESOLVED' ? { ...slotRes.slots } : {};
+      if (initialSlots.confirmation === 'CONFIRMED' && this.isActivationOnlyPhrase(sc, phrase)) {
+        delete initialSlots.confirmation;
+      }
+      const candidateSlots = this.buildInitialScenarioSlots(sc, initialSlots);
+      const completedDuplicate = this.findCompletedDuplicateContext(sc, candidateSlots, identity);
+      if (completedDuplicate) return completedDuplicate;
 
       const ctx = this.dialogueManager.createContext(
         sc.intent,
-        this.buildInitialScenarioSlots(sc, initialSlots),
+        candidateSlots,
         requiredSlots,
         actionType,
         prompts,
