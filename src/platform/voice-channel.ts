@@ -738,7 +738,7 @@ export class VoiceChannel {
       );
       if (startsDistinctInstance) {
         const emitStep = sc.steps?.find(st => st.kind === 'emit');
-        return this.dialogueManager.createContext(
+        const context = this.dialogueManager.createContext(
           sc.intent,
           this.buildInitialScenarioSlots(sc, initialSlots),
           sc.requiredSlots || [],
@@ -747,6 +747,8 @@ export class VoiceChannel {
           identity,
           sc.id
         );
+        this.selectedContextBySession.set(selectionKey, context.contextId);
+        return context;
       }
     }
 
