@@ -685,6 +685,16 @@ export class VoiceChannel {
       const waiting = this.dialogueManager.listContexts(identity).filter(c => c.status === 'WAITING_FOR_SLOT');
       if (waiting.length > 0 && !waiting.some(c => c.intent === intentRes.intent) && !waiting.some(c => c.offers && c.offers.length > 0)) {
         const sc = intentRes.scenario;
+        const selectedContextId = this.selectedContextBySession.get(selectionKey);
+        const contextToInterrupt = waiting.find(context => context.contextId === selectedContextId)
+          || (waiting.length === 1 ? waiting[0] : undefined);
+        if (waiting.length > 1 && !contextToInterrupt) {
+          return { status: 'AMBIGUOUS_CONTEXT', candidateContextIds: waiting.map(context => context.contextId) };
+        }
+        if (contextToInterrupt) {
+          await this.dialogueManager.cancelContext(contextToInterrupt.contextId, identity);
+          this.selectedContextBySession.delete(selectionKey);
+        }
         const slotRes = this.extractSlotsDeterministically(text, sc.slotExtractors, sc.id, sc.ambiguityPrompt?.template);
         if (slotRes.status === 'AMBIGUOUS_SLOT') return slotRes;
         const slots = slotRes.status === 'RESOLVED' ? slotRes.slots : {};

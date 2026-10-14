@@ -43,6 +43,31 @@
           "pattern": "\\b\\d+\\b"
         }
       }
+    },
+    {
+      "id": "sc004-accept-order-dialogue-driver-arrived",
+      "name": "Independent command: driver arrived",
+      "intent": "DRIVER_ARRIVED",
+      "triggerPhrases": [
+        "я приехал",
+        "я приехала",
+        "я на месте",
+        "на месте"
+      ],
+      "steps": [
+        {
+          "kind": "emit",
+          "event": {
+            "type": "driver.arrived",
+            "payload": {
+              "orderId": 1001
+            }
+          }
+        },
+        {
+          "kind": "end"
+        }
+      ]
     }
   ]
 }
