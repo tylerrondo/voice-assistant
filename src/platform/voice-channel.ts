@@ -834,13 +834,37 @@ export class VoiceChannel {
         activeWaiting = activeWaiting.filter(ctx => ctx.contextId === explicitRoute.contextId);
         this.selectedContextBySession.set(selectionKey, explicitRoute.contextId);
       } else {
-        const selectedId = this.selectedContextBySession.get(selectionKey);
-        const selected = activeWaiting.find(ctx => ctx.contextId === selectedId);
-        // Only a context selected by an explicit entity route may bypass ambiguity.
-        if (selected) {
-          activeWaiting = [selected];
+        // Resolve entity routing against extracted slot values as well as text matching.
+        // This avoids stale selection winning when the utterance names a concrete order.
+        const entityMatches = activeWaiting.filter(ctx => {
+          const scenario = (ctx.scenarioId ? this.scenarioRegistry.find(s => s.id === ctx.scenarioId) : undefined)
+            || this.getDeterministicScenarioForIntent(ctx.intent);
+          if (!scenario?.slotExtractors) return false;
+          const extracted = this.extractSlotsDeterministically(
+            text, scenario.slotExtractors, scenario.id, scenario.ambiguityPrompt?.template
+          );
+          if (extracted.status !== 'RESOLVED') return false;
+          return Object.entries(extracted.slots).some(([key, value]) =>
+            ctx.slots[key] !== undefined && Object.is(ctx.slots[key], value)
+          );
+        });
+        if (entityMatches.length === 1) {
+          activeWaiting = entityMatches;
+          this.selectedContextBySession.set(selectionKey, entityMatches[0].contextId);
+        } else if (entityMatches.length > 1) {
+          return {
+            status: 'AMBIGUOUS_CONTEXT',
+            candidateContextIds: entityMatches.map(ctx => ctx.contextId)
+          };
         } else {
-          this.selectedContextBySession.delete(selectionKey);
+          const selectedId = this.selectedContextBySession.get(selectionKey);
+          const selected = activeWaiting.find(ctx => ctx.contextId === selectedId);
+          // Only a context selected by an explicit entity route may bypass ambiguity.
+          if (selected) {
+            activeWaiting = [selected];
+          } else {
+            this.selectedContextBySession.delete(selectionKey);
+          }
         }
       }
 
