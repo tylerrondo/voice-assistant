@@ -154,6 +154,7 @@ export class DialogueStateManager {
     const ctx = active
       && active.ownerId === identity.ownerId
       && active.sessionId === identity.sessionId
+      && !['CANCELLED', 'EXPIRED'].includes(active.status)
       ? active
       : Array.from(this.contexts.values())
           .filter(candidate =>
