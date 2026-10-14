@@ -24,11 +24,19 @@ test.describe('CONTRACT: SC-005 Taxi Driver Full Trip Workflow Suite (ТЗ-VOICE
     expect(intents).toEqual(['ACCEPT_ORDER', 'DRIVER_ARRIVED', 'START_TRIP', 'FINISH_TRIP', 'DRIVER_AVAILABLE']);
   });
 
-  test('CONTRACT-03: ACCEPT_ORDER Requires orderId Slot with Clarification Prompt', async () => {
+  test('CONTRACT-03: ACCEPT_ORDER declares Russian activation and orderId extraction', async () => {
     const sc = scenarioSet.scenarios[0];
     expect(sc.intent).toBe('ACCEPT_ORDER');
     expect(sc.requiredSlots).toEqual(['orderId']);
     expect(sc.clarificationPrompts.orderId).toBe('Какой заказ?');
+    expect(sc.aliases).toContain('Прими заказ');
+    expect(sc.slotExtractors.orderId.type).toBe('integer');
+    expect(sc.slotExtractors.orderId.pattern).toBeTruthy();
+
+    const arrived = scenarioSet.scenarios.find((item: any) => item.intent === 'DRIVER_ARRIVED');
+    expect(arrived).toBeDefined();
+    expect(arrived.aliases).toContain('Я приехал');
+    expect(arrived.slotExtractors.orderId.type).toBe('integer');
   });
 
   test('CONTRACT-04: Single Consistent orderId across Entire Workflow', async () => {
