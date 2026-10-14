@@ -533,6 +533,42 @@ export class VoiceChannel {
     };
   }
 
+  private buildInitialScenarioSlots(
+    scenario: ScenarioDefinition,
+    extractedSlots: Record<string, any>
+  ): Record<string, any> {
+    const emitPayload = scenario.steps?.find(step => step.kind === 'emit')?.event?.payload || {};
+    const requiredSlots = new Set(scenario.requiredSlots || []);
+    const defaults: Record<string, any> = {};
+
+    for (const [key, rawValue] of Object.entries(emitPayload)) {
+      if (requiredSlots.has(key) && extractedSlots[key] === undefined) continue;
+
+      if (typeof rawValue !== 'string') {
+        defaults[key] = rawValue;
+        continue;
+      }
+
+      const exactSlot = rawValue.match(/^\{\{\s*slots\.([\w]+)\s*\}\}$/);
+      if (exactSlot) {
+        if (extractedSlots[exactSlot[1]] !== undefined) defaults[key] = extractedSlots[exactSlot[1]];
+        continue;
+      }
+
+      let unresolved = false;
+      const resolved = rawValue.replace(/\{\{\s*slots\.([\w]+)\s*\}\}/g, (_match, slotName: string) => {
+        if (extractedSlots[slotName] === undefined) {
+          unresolved = true;
+          return '';
+        }
+        return String(extractedSlots[slotName]);
+      });
+      if (!unresolved && !resolved.includes('{{')) defaults[key] = resolved;
+    }
+
+    return { ...defaults, ...extractedSlots };
+  }
+
   public async handleIncomingVoice(phrase: string, identity: SessionIdentity): Promise<any> {
     if (!identity || !identity.ownerId || !identity.sessionId) {
       throw new Error('CONTRACT_VIOLATION: SessionIdentity is strictly required for handleIncomingVoice');
@@ -653,7 +689,7 @@ export class VoiceChannel {
         if (slotRes.status === 'AMBIGUOUS_SLOT') return slotRes;
         const slots = slotRes.status === 'RESOLVED' ? slotRes.slots : {};
         const firstEmit = sc.steps?.find(step => step.kind === 'emit');
-        const ctx = this.dialogueManager.createContext(sc.intent, slots, sc.requiredSlots || [], firstEmit?.event?.type || (sc.intent.toLowerCase() + '.action'), sc.clarificationPrompts || {}, identity, sc.id);
+        const ctx = this.dialogueManager.createContext(sc.intent, this.buildInitialScenarioSlots(sc, slots), sc.requiredSlots || [], firstEmit?.event?.type || (sc.intent.toLowerCase() + '.action'), sc.clarificationPrompts || {}, identity, sc.id);
         if (ctx.missingSlots.length === 0) {
           const execution = this.dialogueManager.createExecution(ctx, identity);
           const result = await this.dialogueManager.dispatchAction(execution.executionId, ctx.slots, identity);
@@ -683,7 +719,7 @@ export class VoiceChannel {
         const emitStep = sc.steps?.find(st => st.kind === 'emit');
         return this.dialogueManager.createContext(
           sc.intent,
-          initialSlots,
+          this.buildInitialScenarioSlots(sc, initialSlots),
           sc.requiredSlots || [],
           emitStep?.event?.type || `${sc.intent.toLowerCase()}.action`,
           sc.clarificationPrompts || {},
@@ -909,7 +945,7 @@ export class VoiceChannel {
 
       const ctx = this.dialogueManager.createContext(
         sc.intent,
-        initialSlots,
+        this.buildInitialScenarioSlots(sc, initialSlots),
         requiredSlots,
         actionType,
         prompts,
