@@ -777,7 +777,9 @@ export class VoiceChannel {
           identity,
           sc.id
         );
-        // Creating another context is not an explicit user selection.
+        // The command names the new order explicitly; subsequent slot values
+        // should continue in this context rather than the previously selected order.
+        this.selectedContextBySession.set(selectionKey, context.contextId);
         return context;
       }
     }
