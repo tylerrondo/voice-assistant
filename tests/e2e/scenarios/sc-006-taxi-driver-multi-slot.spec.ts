@@ -165,14 +165,20 @@ test.describe('E2E: SC-006 Multi-Slot Dialogue & Real Taxi FSM Suite (ТЗ-VOICE
     await emitVoicePhrase(page, '1001');
     await emitVoicePhrase(page, 'Отмена');
 
-    const state = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getActiveState((window as any).__VOICE_DEMO_APP__.getIdentity()));
-    expect(state.status).toBe('CANCELLED');
-
-    const executed = await page.evaluate(() => {
-      const logs = (window as any).__DIALOGUE_MANAGER__.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity());
-      return logs.some((l: any) => l.intent === 'ACCEPT_ORDER');
+    const cancellation = await page.evaluate(() => {
+      const dm = (window as any).__DIALOGUE_MANAGER__;
+      const identity = (window as any).__VOICE_DEMO_APP__.getIdentity();
+      const contexts = dm.listContexts(identity);
+      return {
+        contexts,
+        activeState: dm.getActiveState(identity),
+        logs: dm.getExecutionLogs(identity)
+      };
     });
-    expect(executed).toBe(false);
+    expect(cancellation.contexts).toHaveLength(1);
+    expect(cancellation.contexts[0].status).toBe('CANCELLED');
+    expect(cancellation.activeState).toBeNull();
+    expect(cancellation.logs.some((l: any) => l.intent === 'ACCEPT_ORDER')).toBe(false);
   });
 
   test('NEG-04: Independent command resets active multi-slot dialogue and subsequent slot cannot resume old dialogue', async ({ page }) => {
