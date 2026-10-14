@@ -763,8 +763,17 @@ export class VoiceChannel {
       } else {
         const selectedId = this.selectedContextBySession.get(selectionKey);
         const selected = activeWaiting.find(ctx => ctx.contextId === selectedId);
-        if (selected) activeWaiting = [selected];
-        else this.selectedContextBySession.delete(selectionKey);
+        const hasExplicitAmbiguityPolicy = activeWaiting.some(ctx => {
+          const scenario = ctx.scenarioId
+            ? this.scenarioRegistry.find(candidate => candidate.id === ctx.scenarioId)
+            : this.getDeterministicScenarioForIntent(ctx.intent);
+          return !!scenario?.ambiguityPrompt?.template;
+        });
+        if (selected && !hasExplicitAmbiguityPolicy) {
+          activeWaiting = [selected];
+        } else if (!selected) {
+          this.selectedContextBySession.delete(selectionKey);
+        }
       }
 
       const matchingContexts = activeWaiting.map(ctx => {
