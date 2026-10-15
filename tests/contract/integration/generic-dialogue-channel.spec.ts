@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, beforeEach } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
 import { DialogueStateManager } from '../../../src/platform/dialogue-manager';
