@@ -4,7 +4,7 @@ export default defineConfig({
   testDir: './tests',
   testMatch: ['**/*.spec.ts'],
   // Prevent copied nested test suites from being discovered and executed twice.
-  testIgnore: ['**/tests/**'],
+  testIgnore: ['**/contract/**/tests/**', '**/e2e/**/tests/**'],
   fullyParallel: false,
   workers: 1,
   retries: 0,
