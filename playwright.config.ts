@@ -4,7 +4,7 @@ export default defineConfig({
   testDir: './tests',
   // Match only the canonical suite locations. Nested copied `tests/` trees are intentionally excluded.
   testMatch: [
-    /(?:^|[/\\\\])tests[/\\\\](?:contract[/\\\\](?:integration|platform|scenarios)|e2e(?:[/\\\\](?:platform|scenarios))?)[/\\\\][^/\\\\]+\\.spec\\.ts$/,
+    /(?:^|\\/)tests\\/(?:contract\\/(?:integration|platform|scenarios)|e2e(?:\\/(?:platform|scenarios))?)\\/[^/]+\\.spec\\.ts$/,
   ],
   fullyParallel: false,
   workers: 1,
