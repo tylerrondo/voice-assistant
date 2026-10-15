@@ -5,7 +5,7 @@ export default defineConfig({
   // Match only the canonical suite locations. Nested copied `tests/` trees are intentionally excluded.
   testMatch: ['**/*.spec.ts'],
   // Playwright matches absolute paths; exclude any copied nested tests tree.
-  testIgnore: [/[/\\]tests[/\\](?:contract|e2e)[/\\].*[/\\]tests[/\\]/],
+  testIgnore: ['**/tests/contract/**/tests/**', '**/tests/e2e/**/tests/**'],
   fullyParallel: false,
   workers: 1,
   retries: 0,
