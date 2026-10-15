@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
 import { DialogueStateManager } from '../../../src/platform/dialogue-manager';
@@ -18,7 +18,7 @@ test.describe('CONTRACT: SC-INTEGRATION-001 Mixed Button / Text / Voice Dialogue
   let dispatcherCalls: number;
   let dispatchedPayloads: any[];
 
-  test.beforeEach(() => {
+  beforeEach(() => {
     dispatcherCalls = 0;
     dispatchedPayloads = [];
     dm = new DialogueStateManager({
