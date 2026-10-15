@@ -11,6 +11,7 @@ export default defineConfig({
     'e2e/platform/*.spec.ts',
     'e2e/scenarios/*.spec.ts',
   ],
+  reporter: [['list'], ['json', { outputFile: 'playwright-report-platform-012.json' }]],
     ['json', { outputFile: 'playwright-report-platform-012.json' }]
   ],
   use: {
