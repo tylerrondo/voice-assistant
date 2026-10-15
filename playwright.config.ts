@@ -3,8 +3,8 @@ import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
   testDir: './tests',
   testMatch: ['**/*.spec.ts'],
-  // Ignore recursively copied test suites; only the canonical suite tree is runnable.
-  testIgnore: ['**/tests/**/tests/**'],
+  // Match only canonical suite locations; exclude copied tests trees nested inside contract/e2e suites.
+  testIgnore: [/[/\\]tests[/\\](?:contract|e2e)[/\\].*[/\\]tests[/\\]/],
   fullyParallel: false,
   workers: 1,
   retries: 0,
