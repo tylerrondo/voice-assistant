@@ -1,6 +1,9 @@
 import { test, expect } from '@playwright/test';
+import { fileURLToPath } from 'node:url';
 import * as fs from 'fs';
 import * as path from 'path';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const scenarioPath = path.resolve(__dirname, '../../../scenario-platform-dialogue-slot-filling.json');
 const rawContent = fs.readFileSync(scenarioPath, 'utf-8');
