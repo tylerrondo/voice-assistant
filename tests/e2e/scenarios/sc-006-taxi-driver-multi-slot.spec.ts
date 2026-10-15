@@ -1,7 +1,8 @@
 import { test, expect } from '@playwright/test';
-import * as path from 'path';
+import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const scenarioFilePath = path.resolve(__dirname, '../../../scenario-sc-006-taxi-driver-multi-slot.json');
+const scenarioFilePath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../scenario-sc-006-taxi-driver-multi-slot.json');
 
 test.describe('E2E: SC-006 Multi-Slot Dialogue & Real Taxi FSM Suite (ТЗ-VOICE-SC-006)', () => {
 

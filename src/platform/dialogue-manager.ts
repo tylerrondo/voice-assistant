@@ -44,6 +44,7 @@ export interface ActionExecution {
   scenarioId: string;
   intent: string;
   actionType: string;
+  event: { type: string; payload: Record<string, any> };
   payload: Record<string, any>;
   status: ExecutionStatus;
   attempt: number;
@@ -147,13 +148,23 @@ export class DialogueStateManager {
     return this.activeContextId;
   }
 
-  public getActiveState(identity: SessionIdentity): DialogueContext | null {
+  public getActiveState(identity: SessionIdentity): DialogueContext | undefined {
     this.validateIdentity(identity);
-    if (!this.activeContextId) return null;
-    const ctx = this.contexts.get(this.activeContextId);
-    if (!ctx || ctx.ownerId !== identity.ownerId || ctx.sessionId !== identity.sessionId) {
-      return null;
-    }
+    const active = this.activeContextId ? this.contexts.get(this.activeContextId) : undefined;
+    const ctx = active
+      && active.ownerId === identity.ownerId
+      && active.sessionId === identity.sessionId
+      && !['CANCELLED', 'EXPIRED'].includes(active.status)
+      ? active
+      : Array.from(this.contexts.values())
+          .filter(candidate =>
+            candidate.ownerId === identity.ownerId &&
+            candidate.sessionId === identity.sessionId &&
+            !['COMPLETED', 'CANCELLED', 'EXPIRED'].includes(candidate.status)
+          )
+          .sort((a, b) => b.updatedAt - a.updatedAt)[0];
+
+    if (!ctx) return undefined;
     return {
       ...ctx,
       slots: { ...ctx.slots },
@@ -393,21 +404,28 @@ export class DialogueStateManager {
     const text = phrase.toLowerCase();
     const tokens = text.split(/\s+/);
 
+    const explicitMatches: DialogueContext[] = [];
     for (const ctx of this.contexts.values()) {
+      if (ctx.ownerId !== identity.ownerId || ctx.sessionId !== identity.sessionId) continue;
       if (ctx.status !== 'WAITING_FOR_SLOT') continue;
 
-      for (const [slotKey, slotVal] of Object.entries(ctx.slots)) {
-        if (slotVal === undefined || slotVal === null) continue;
+      const hasExplicitEntity = Object.values(ctx.slots).some(slotVal => {
+        if (slotVal === undefined || slotVal === null) return false;
         const valStr = String(slotVal).toLowerCase();
+        return tokens.includes(valStr) || text.includes(valStr);
+      });
+      if (hasExplicitEntity) explicitMatches.push(ctx);
+    }
 
-        if (tokens.includes(valStr) || text.includes(valStr)) {
-          if (ctx.ownerId !== identity.ownerId || ctx.sessionId !== identity.sessionId) {
-            return { status: 'CONTEXT_ACCESS_DENIED' };
-          }
-          this.activeContextId = ctx.contextId;
-          return { status: 'RESOLVED', contextId: ctx.contextId };
-        }
-      }
+    if (explicitMatches.length === 1) {
+      this.activeContextId = explicitMatches[0].contextId;
+      return { status: 'RESOLVED', contextId: explicitMatches[0].contextId };
+    }
+    if (explicitMatches.length > 1) {
+      return {
+        status: 'AMBIGUOUS_CONTEXT',
+        candidateContextIds: explicitMatches.map(ctx => ctx.contextId)
+      };
     }
 
     const candidates = Array.from(this.contexts.values()).filter(ctx => {
@@ -428,6 +446,16 @@ export class DialogueStateManager {
       };
     }
 
+    const foreignEntityMatch = Array.from(this.contexts.values()).some(ctx => {
+      if (ctx.ownerId === identity.ownerId && ctx.sessionId === identity.sessionId) return false;
+      if (ctx.status !== 'WAITING_FOR_SLOT') return false;
+      return Object.values(ctx.slots).some(value => {
+        if (value === undefined || value === null) return false;
+        const normalized = String(value).toLowerCase();
+        return tokens.includes(normalized) || text.includes(normalized);
+      });
+    });
+    if (foreignEntityMatch) return { status: 'CONTEXT_ACCESS_DENIED' };
     return { status: 'NO_MATCH' };
   }
 
@@ -570,12 +598,21 @@ export class DialogueStateManager {
     providedExecutionId?: string
   ): ActionExecution {
     this.validateIdentity(identity);
-    if (ctx.ownerId !== identity.ownerId || ctx.sessionId !== identity.sessionId) {
+    const storedContext = this.contexts.get(ctx.contextId);
+    if (!storedContext) {
+      throw new Error(`CONTRACT_VIOLATION: Context "${ctx.contextId}" not found`);
+    }
+    if (
+      storedContext.ownerId !== identity.ownerId ||
+      storedContext.sessionId !== identity.sessionId ||
+      ctx.ownerId !== identity.ownerId ||
+      ctx.sessionId !== identity.sessionId
+    ) {
       throw new Error('SECURITY_VIOLATION: Cannot create execution for foreign context');
     }
 
-    if (['COMPLETED', 'CANCELLED', 'EXPIRED'].includes(ctx.status)) {
-      throw new Error(`CONTRACT_VIOLATION: Cannot create execution for terminal context (${ctx.status})`);
+    if (['COMPLETED', 'CANCELLED', 'EXPIRED'].includes(storedContext.status)) {
+      throw new Error(`CONTRACT_VIOLATION: Cannot create execution for terminal context (${storedContext.status})`);
     }
 
     const executionId = providedExecutionId || `exec_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -584,8 +621,8 @@ export class DialogueStateManager {
       const existing = this.executions.get(executionId)!;
       const sameOwner = existing.ownerId === identity.ownerId && existing.sessionId === identity.sessionId;
       const sameCtx = existing.contextId === ctx.contextId;
-      const sameAction = existing.actionType === ctx.actionType;
-      const samePayload = JSON.stringify(existing.payload) === JSON.stringify(ctx.slots);
+      const sameAction = existing.actionType === storedContext.actionType;
+      const samePayload = JSON.stringify(existing.payload) === JSON.stringify(storedContext.slots);
 
       if (sameOwner && sameCtx && sameAction && samePayload) {
         return existing;
@@ -593,7 +630,7 @@ export class DialogueStateManager {
       throw new Error(`CONTRACT_VIOLATION: Cannot overwrite existing executionId "${executionId}" with different execution data`);
     }
 
-    const idempotencyKey = `idemp_${ctx.contextId}_${executionId}_${ctx.actionType}`;
+    const idempotencyKey = `idemp_${storedContext.contextId}_${executionId}_${storedContext.actionType}`;
     const now = Date.now();
 
     const execution: ActionExecution = {
@@ -601,11 +638,12 @@ export class DialogueStateManager {
       idempotencyKey,
       ownerId: identity.ownerId,
       sessionId: identity.sessionId,
-      contextId: ctx.contextId,
-      scenarioId: ctx.scenarioId || 'sc-default',
-      intent: ctx.intent,
-      actionType: ctx.actionType,
-      payload: { ...ctx.slots },
+      contextId: storedContext.contextId,
+      scenarioId: storedContext.scenarioId || 'sc-default',
+      intent: storedContext.intent,
+      actionType: storedContext.actionType,
+      event: { type: storedContext.actionType, payload: { ...storedContext.slots } },
+      payload: { ...storedContext.slots },
       status: 'PENDING',
       attempt: 0,
       createdAt: now,
@@ -656,6 +694,16 @@ export class DialogueStateManager {
     const prevPromise = this.contextMutationQueues.get(contextId) || Promise.resolve();
 
     const dispatchPromise = prevPromise.then(async () => {
+      if (execution.status === 'SUCCEEDED') {
+        return { status: 'SUCCEEDED' as const, executionId: execution.executionId, attempt: execution.attempt };
+      }
+      if (execution.status === 'FAILED') {
+        throw new Error(`CONTRACT_VIOLATION: Cannot dispatch terminal FAILED execution "${executionId}". A new executionId must be created.`);
+      }
+      if (execution.status === 'UNKNOWN') {
+        throw new Error(`CONTRACT_VIOLATION: Execution "${executionId}" is in UNKNOWN state. Explicit reconciliation is required before retry.`);
+      }
+
       const ctx = this.contexts.get(contextId);
       if (!ctx) {
         throw new Error(`CONTRACT_VIOLATION: Context "${contextId}" not found`);
@@ -825,13 +873,13 @@ export class DialogueStateManager {
     if (exec.ownerId !== identity.ownerId || exec.sessionId !== identity.sessionId) {
       return undefined;
     }
-    return { ...exec, payload: { ...exec.payload } };
+    return { ...exec, payload: { ...exec.payload }, event: { ...exec.event, payload: { ...exec.event.payload } } };
   }
 
   public getExecutionLogs(identity: SessionIdentity): ActionExecution[] {
     this.validateIdentity(identity);
     return Array.from(this.executions.values())
       .filter(l => l.ownerId === identity.ownerId && l.sessionId === identity.sessionId)
-      .map(l => ({ ...l, payload: { ...l.payload } }));
+      .map(l => ({ ...l, payload: { ...l.payload }, event: { ...l.event, payload: { ...l.event.payload } } }));
   }
 }

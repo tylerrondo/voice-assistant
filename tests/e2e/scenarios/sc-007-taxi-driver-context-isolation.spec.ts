@@ -1,7 +1,8 @@
 import { test, expect } from '@playwright/test';
-import * as path from 'path';
+import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const scenarioFilePath = path.resolve(__dirname, '../../../scenario-sc-007-taxi-driver-context-isolation.json');
+const scenarioFilePath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../scenario-sc-007-taxi-driver-context-isolation.json');
 
 test.describe('E2E: SC-007 Context Isolation & Cross-Contamination Protection Suite (ТЗ-VOICE-SC-007)', () => {
 

@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import * as fs from 'fs';
-import * as path from 'path';
+import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { DialogueStateManager } from '../../../src/platform/dialogue-manager';
 import { VoiceChannel, type ScenarioSet } from '../../../src/platform/voice-channel';
 import { TelegramDialogueAdapter } from '../../../src/platform/telegram-dialogue-adapter';
@@ -59,7 +60,7 @@ test.describe('CONTRACT: SC-INTEGRATION-002 Real Telegram Voice Input + STT Inte
   let nannyScenarioSet: ScenarioSet;
   let dispatcherCalls: number;
 
-  beforeEach(() => {
+  test.beforeEach(() => {
     dispatcherCalls = 0;
     dm = new DialogueStateManager({
       actionDispatcher: async (event, ctx, exec) => {
@@ -69,7 +70,7 @@ test.describe('CONTRACT: SC-INTEGRATION-002 Real Telegram Voice Input + STT Inte
     });
     vc = new VoiceChannel(dm);
 
-    const scenarioRaw = fs.readFileSync(path.resolve(__dirname, '../../../scenario-nanny-order.json'), 'utf8');
+    const scenarioRaw = fs.readFileSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../scenario-nanny-order.json'), 'utf8');
     nannyScenarioSet = JSON.parse(scenarioRaw);
     vc.registerScenarioSet(nannyScenarioSet);
 
@@ -155,10 +156,10 @@ test.describe('CONTRACT: SC-INTEGRATION-002 Real Telegram Voice Input + STT Inte
 
     await adapter.handleMessage({ channel: 'text', raw_input: 'завтра' }, sessionUser, sc);
     const ctx = dm.getActiveState(sessionUser)!;
-    ctx.offers = [
+    dm.setOffersForContext(ctx.contextId, [
       { id: 'xyz-17', name: 'Ирина', index: 1, status: 'AVAILABLE' },
       { id: 'xyz-42', name: 'Ольга', index: 2, status: 'AVAILABLE' }
-    ] as any;
+    ] as any, sessionUser);
 
     await sendVoiceAudio('выбираю вторую');
 
@@ -342,7 +343,7 @@ test.describe('CONTRACT: SC-INTEGRATION-002 Real Telegram Voice Input + STT Inte
 
   // Architectural Static Checks
   test('AT-01: TelegramVoiceTransport does NOT import DialogueStateManager, VoiceChannel, ScenarioDefinition, DomainNannyService', () => {
-    const transportPath = path.resolve(__dirname, '../../../src/platform/telegram-voice-transport.ts');
+    const transportPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../src/platform/telegram-voice-transport.ts');
     const content = fs.readFileSync(transportPath, 'utf8');
 
     expect(content).not.toContain('DialogueStateManager');
@@ -352,7 +353,7 @@ test.describe('CONTRACT: SC-INTEGRATION-002 Real Telegram Voice Input + STT Inte
   });
 
   test('AT-02: STT provider contains no domain business logic (nanny, order, confirmation, candidate)', () => {
-    const sttPath = path.resolve(__dirname, '../../../src/platform/stt-provider.ts');
+    const sttPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../src/platform/stt-provider.ts');
     const content = fs.readFileSync(sttPath, 'utf8');
 
     expect(content.toLowerCase()).not.toContain('nanny');
@@ -362,7 +363,7 @@ test.describe('CONTRACT: SC-INTEGRATION-002 Real Telegram Voice Input + STT Inte
   });
 
   test('AT-03: TelegramDialogueAdapter does NOT contain direct STT calls', () => {
-    const adapterPath = path.resolve(__dirname, '../../../src/platform/telegram-dialogue-adapter.ts');
+    const adapterPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../src/platform/telegram-dialogue-adapter.ts');
     const content = fs.readFileSync(adapterPath, 'utf8');
 
     expect(content).not.toContain('sttProvider');

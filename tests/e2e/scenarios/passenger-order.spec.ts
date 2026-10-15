@@ -1,7 +1,8 @@
 import { test, expect } from '@playwright/test';
-import * as path from 'path';
+import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const scenarioFilePath = path.resolve(__dirname, '../../../scenario-passenger-order.json');
+const scenarioFilePath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../scenario-passenger-order.json');
 
 test.describe('E2E: SC-PASS-001 Canonical Multi-turn Passenger Dialogue Suite', () => {
 
@@ -16,6 +17,7 @@ test.describe('E2E: SC-PASS-001 Canonical Multi-turn Passenger Dialogue Suite', 
 
     const fileInput = page.locator('input[type="file"]').first();
     await fileInput.setInputFiles(scenarioFilePath);
+    await expect.poll(async () => page.evaluate(() => (window as any).__SCENARIO_ENGINE__?.getActiveScenarioSetId())).toBe('scenario-set-passenger-order-001');
 
     const result = await page.evaluate(async () => {
       const vc = (window as any).__VOICE_CHANNEL__;

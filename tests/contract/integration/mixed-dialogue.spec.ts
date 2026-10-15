@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import * as fs from 'fs';
-import * as path from 'path';
+import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { DialogueStateManager } from '../../../src/platform/dialogue-manager';
 import { VoiceChannel, type ScenarioSet } from '../../../src/platform/voice-channel';
 import {
@@ -18,7 +19,7 @@ test.describe('CONTRACT: SC-INTEGRATION-001 Mixed Button / Text / Voice Dialogue
   let dispatcherCalls: number;
   let dispatchedPayloads: any[];
 
-  beforeEach(() => {
+  test.beforeEach(() => {
     dispatcherCalls = 0;
     dispatchedPayloads = [];
     dm = new DialogueStateManager({
@@ -30,7 +31,7 @@ test.describe('CONTRACT: SC-INTEGRATION-001 Mixed Button / Text / Voice Dialogue
     });
     vc = new VoiceChannel(dm);
 
-    const scenarioRaw = fs.readFileSync(path.resolve(__dirname, '../../../scenario-nanny-order.json'), 'utf8');
+    const scenarioRaw = fs.readFileSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../scenario-nanny-order.json'), 'utf8');
     nannyScenarioSet = JSON.parse(scenarioRaw);
     vc.registerScenarioSet(nannyScenarioSet);
 
@@ -42,7 +43,8 @@ test.describe('CONTRACT: SC-INTEGRATION-001 Mixed Button / Text / Voice Dialogue
   const attachCandidates = (userId: typeof sessionUser, candidates: any[]) => {
     const ctx = dm.getActiveState(userId);
     if (ctx) {
-      ctx.offers = candidates as any;
+      // getActiveState returns a defensive copy; update the stored context via its API.
+      dm.setOffersForContext(ctx.contextId, candidates as any, userId);
     }
   };
 
