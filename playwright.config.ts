@@ -2,9 +2,15 @@ import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
   testDir: './tests',
-  testMatch: ['**/*.spec.ts'],
-  // Prevent copied nested test suites from being discovered and executed twice.
-  testIgnore: ['**/contract/**/tests/**', '**/e2e/**/tests/**'], // Ignore only nested copied suites, not the primary test trees.
+  // Match only the canonical suite locations. Nested copied `tests/` trees are intentionally excluded.
+  testMatch: [
+    'contract/integration/*.spec.ts',
+    'contract/platform/*.spec.ts',
+    'contract/scenarios/*.spec.ts',
+    'e2e/*.spec.ts',
+    'e2e/platform/*.spec.ts',
+    'e2e/scenarios/*.spec.ts',
+  ],
   fullyParallel: false,
   workers: 1,
   retries: 0,
