@@ -4,7 +4,7 @@ export default defineConfig({
   testDir: './tests',
   testMatch: ['**/*.spec.ts'],
   // Ignore recursively copied test suites; only the canonical suite tree is runnable.
-  testIgnore: ['**/tests/**'],
+  testIgnore: ['**/tests/**/tests/**'],
   fullyParallel: false,
   workers: 1,
   retries: 0,
