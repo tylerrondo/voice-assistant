@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { fileURLToPath } from 'node:url';
 import * as fs from 'fs';
 import * as path from 'path';
 import { DialogueStateManager } from '../../../src/platform/dialogue-manager';
@@ -31,7 +32,7 @@ test.describe('CONTRACT: SC-INTEGRATION-002 Real Telegram Voice Input + STT Inte
     });
     vc = new VoiceChannel(dm);
 
-    const scenarioRaw = fs.readFileSync(path.resolve(__dirname, '../../../scenario-nanny-order.json'), 'utf8');
+    const scenarioRaw = fs.readFileSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../scenario-nanny-order.json'), 'utf8');
     nannyScenarioSet = JSON.parse(scenarioRaw);
     vc.registerScenarioSet(nannyScenarioSet);
 
@@ -304,7 +305,7 @@ test.describe('CONTRACT: SC-INTEGRATION-002 Real Telegram Voice Input + STT Inte
 
   // Architectural Static Checks
   test('AT-01: TelegramVoiceTransport does NOT import DialogueStateManager, VoiceChannel, ScenarioDefinition, DomainNannyService', () => {
-    const transportPath = path.resolve(__dirname, '../../../src/platform/telegram-voice-transport.ts');
+    const transportPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../src/platform/telegram-voice-transport.ts');
     const content = fs.readFileSync(transportPath, 'utf8');
 
     expect(content).not.toContain('DialogueStateManager');
@@ -314,7 +315,7 @@ test.describe('CONTRACT: SC-INTEGRATION-002 Real Telegram Voice Input + STT Inte
   });
 
   test('AT-02: STT provider contains no domain business logic (nanny, order, confirmation, candidate)', () => {
-    const sttPath = path.resolve(__dirname, '../../../src/platform/stt-provider.ts');
+    const sttPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../src/platform/stt-provider.ts');
     const content = fs.readFileSync(sttPath, 'utf8');
 
     expect(content.toLowerCase()).not.toContain('nanny');
@@ -324,7 +325,7 @@ test.describe('CONTRACT: SC-INTEGRATION-002 Real Telegram Voice Input + STT Inte
   });
 
   test('AT-03: TelegramDialogueAdapter does NOT contain direct STT calls', () => {
-    const adapterPath = path.resolve(__dirname, '../../../src/platform/telegram-dialogue-adapter.ts');
+    const adapterPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../src/platform/telegram-dialogue-adapter.ts');
     const content = fs.readFileSync(adapterPath, 'utf8');
 
     expect(content).not.toContain('sttProvider');
