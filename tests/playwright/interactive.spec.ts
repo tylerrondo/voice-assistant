@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test"
+import { test, expect, beforeEach } from "@playwright/test"
 import { setValidationMode, setInputSource, setSessionLanguage, completeInteractiveSessionWithInject } from "./utils/helpers"
 
 /**
