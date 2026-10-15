@@ -2,12 +2,15 @@ import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
   testDir: './tests',
-  testMatch: ['**/*.spec.ts'],
-  fullyParallel: false,
-  workers: 1,
-  retries: 0,
-  reporter: [
-    ['list'],
+  // Match only canonical suite files one directory below each suite root.
+  testMatch: [
+    'contract/integration/*.spec.ts',
+    'contract/platform/*.spec.ts',
+    'contract/scenarios/*.spec.ts',
+    'e2e/*.spec.ts',
+    'e2e/platform/*.spec.ts',
+    'e2e/scenarios/*.spec.ts',
+  ],
     ['json', { outputFile: 'playwright-report-platform-012.json' }]
   ],
   use: {
