@@ -2,7 +2,10 @@ import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
   testDir: './tests',
+  // Match only the canonical suite locations. Nested copied `tests/` trees are intentionally excluded.
   testMatch: ['**/*.spec.ts'],
+  // Playwright matches absolute paths; exclude any copied nested tests tree.
+  testIgnore: [/(?:^|\/)(?:contract|e2e)\/.*\/tests\//],
   fullyParallel: false,
   workers: 1,
   retries: 0,
