@@ -3,8 +3,13 @@ import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
   testDir: './tests',
   testMatch: ['**/*.spec.ts'],
-  // Playwright matches absolute paths; exclude any copied nested tests tree.
-  testIgnore: [/[/\\]tests[/\\](?:contract|e2e)[/\\].*[/\\]tests[/\\]/],
+  fullyParallel: false,
+  workers: 1,
+  retries: 0,
+  reporter: [
+    ['list'],
+    ['json', { outputFile: 'playwright-report-platform-012.json' }]
+  ],
   use: {
     baseURL: process.env.APP_URL || 'http://localhost:3000',
     trace: 'on-first-retry',
