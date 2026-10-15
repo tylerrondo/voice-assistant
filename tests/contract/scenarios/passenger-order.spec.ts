@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from '@playwright/test';
 import { fileURLToPath } from 'node:url';
 import * as fs from 'fs';
 import * as path from 'path';
