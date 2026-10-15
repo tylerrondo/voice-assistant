@@ -1,4 +1,4 @@
-import { test, expect, beforeEach } from '@playwright/test';
+import { test, expect } from '@playwright/test'
 import * as fs from 'fs';
 import * as path from 'path';
 import { DialogueStateManager } from '../../../src/platform/dialogue-manager';
@@ -29,7 +29,7 @@ test.describe('CONTRACT: SC-INTEGRATION-005 Generic Dialogue Scenario Routing & 
   let engine: DialogueEngine;
   let nannyScenarioSet: ScenarioSet;
 
-  beforeEach(() => {
+  test.beforeEach(() => {
     dm = new DialogueStateManager();
     vc = new VoiceChannel(dm);
 
