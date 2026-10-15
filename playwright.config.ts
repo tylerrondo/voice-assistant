@@ -3,6 +3,8 @@ import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
   testDir: './tests',
   testMatch: ['**/*.spec.ts'],
+  // Prevent nested test copies from being discovered as duplicate suites.
+  testIgnore: ['**/tests/**/tests/**'],
   fullyParallel: false,
   workers: 1,
   retries: 0,
