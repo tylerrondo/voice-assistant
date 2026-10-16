@@ -52,7 +52,7 @@ test.describe('E2E: PLATFORM-011 Ambiguous Input & Context Selection Suite', () 
     await emitVoicePhrase(page, 'Прими заказ 1001');
     await emitVoicePhrase(page, 'Прими заказ 1002');
 
-    const contexts = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.listContexts());
+    const contexts = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.listContexts((window as any).__VOICE_DEMO_APP__.getIdentity()));
     expect(contexts.length).toBe(2);
     const idA = contexts.find((c: any) => c.slots.orderId === 1001).contextId;
     const idB = contexts.find((c: any) => c.slots.orderId === 1002).contextId;
@@ -66,7 +66,7 @@ test.describe('E2E: PLATFORM-011 Ambiguous Input & Context Selection Suite', () 
     expect(ambResult.clarificationPrompt).toContain('1002');
 
     // 3. Verify zero execution
-    let logs = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getExecutionLogs());
+    let logs = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity()));
     expect(logs.length).toBe(0);
 
     // 4. Clarification via explicit entity
@@ -86,7 +86,7 @@ test.describe('E2E: PLATFORM-011 Ambiguous Input & Context Selection Suite', () 
     expect(logs[0].event.payload.payment).toBe('card');
 
     // Verify 1001 remains in WAITING_FOR_SLOT with 0 executions
-    const ctxA = await page.evaluate((id: string) => (window as any).__DIALOGUE_MANAGER__.getContext(id), idA);
+    const ctxA = await page.evaluate((id: string) => (window as any).__DIALOGUE_MANAGER__.getContext(id, (window as any).__VOICE_DEMO_APP__.getIdentity()), idA);
     expect(ctxA.status).toBe('WAITING_FOR_SLOT');
   });
 
@@ -100,8 +100,8 @@ test.describe('E2E: PLATFORM-011 Ambiguous Input & Context Selection Suite', () 
     const idA = contexts.find((c: any) => c.slots.orderId === 1001).contextId;
 
     // Set activeContext to 1001
-    await page.evaluate((id: string) => (window as any).__DIALOGUE_MANAGER__.activateContext(id), idA);
-    const currentActive = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getActiveContextId());
+    await page.evaluate((id: string) => (window as any).__DIALOGUE_MANAGER__.activateContext(id, (window as any).__VOICE_DEMO_APP__.getIdentity()), idA);
+    const currentActive = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getActiveContextId((window as any).__VOICE_DEMO_APP__.getIdentity()));
     expect(currentActive).toBe(idA);
 
     // Unaddressed utterance
