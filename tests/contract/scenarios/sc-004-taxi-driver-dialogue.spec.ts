@@ -43,7 +43,7 @@ test.describe('CONTRACT: SC-004 Taxi Driver Multi-Turn Dialogue Suite (ТЗ-VOIC
   });
 
   test('CONTRACT-06: Schema contains zero targetState and no artificial FSM hints', async () => {
-    const jsonString = JSON.stringify(scenarioSet);
+    const jsonString = JSON.stringify(scenarioSet.scenarios);
     expect(jsonString).not.toContain('targetState');
     expect(jsonString).not.toContain('ORDER_ACCEPTED');
   });
