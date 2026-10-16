@@ -253,11 +253,34 @@ export class VoiceChannel {
             }
           }
         } else if (extractor.mapping) {
-          for (const [enumValue, synonyms] of Object.entries(extractor.mapping)) {
-            if (synonyms.some(synonym => text.includes(synonym.toLowerCase()))) {
-              resolvedSlots[slotKey] = enumValue;
-              break;
+          const enumMatches = Object.entries(extractor.mapping)
+            .map(([enumValue, synonyms]) => {
+              const synonym = synonyms
+                .filter(item => text.includes(item.toLowerCase()))
+                .sort((a, b) => b.length - a.length)[0];
+              return synonym ? { value: enumValue, synonym } : undefined;
+            })
+            .filter((item): item is { value: string; synonym: string } => Boolean(item));
+
+          if (enumMatches.length > 0) {
+            const longestLength = Math.max(...enumMatches.map(item => item.synonym.length));
+            const bestMatches = enumMatches.filter(item => item.synonym.length === longestLength);
+            const samePhraseConflict = bestMatches.length > 1
+              && bestMatches.every(item => item.synonym.toLowerCase() === bestMatches[0].synonym.toLowerCase());
+
+            if (samePhraseConflict) {
+              return {
+                status: 'AMBIGUOUS_SLOT',
+                candidates: bestMatches.map(item => ({
+                  slotName: slotKey,
+                  value: item.value,
+                  scenarioId
+                })),
+                clarificationPrompt: ambiguityPromptTemplate
+              };
             }
+
+            resolvedSlots[slotKey] = bestMatches[0].value;
           }
         }
       } else if (extractor.type === 'integer' && extractor.pattern) {
