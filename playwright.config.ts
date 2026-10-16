@@ -2,9 +2,8 @@ import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
   testDir: './tests',
-  // Match only the canonical suite locations. Nested copied `tests/` trees are intentionally excluded.
   testMatch: ['**/*.spec.ts'],
-  // Playwright matches absolute paths; exclude any copied nested tests tree.
+  // Exclude copied nested test trees; only canonical suites should be discovered.
   testIgnore: [/(?:^|\/)(?:contract|e2e)\/.*\/tests\//],
   fullyParallel: false,
   workers: 1,
@@ -18,7 +17,7 @@ export default defineConfig({
     trace: 'on-first-retry',
   },
   webServer: {
-    command: 'cd apps/voice-demo && ../../node_modules/.bin/vite --port 3000 --host 0.0.0.0',
+    command: 'VITE_E2E_AUTH=true npm run start',
     url: 'http://localhost:3000',
     reuseExistingServer: !process.env.CI,
     timeout: 120000,

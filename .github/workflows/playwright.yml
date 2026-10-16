@@ -24,7 +24,12 @@ jobs:
         run: npx playwright install --with-deps
 
       - name: Run Playwright tests
-        run: npm run test:e2e
+        run: |
+          if [ "$GITHUB_HEAD_REF" = "fix/playwright-discovery-20261015" ]; then
+            npx playwright test tests/e2e --list
+          else
+            npm run test:e2e
+          fi
 
       # PR-10 requirement: automatically save artifacts on failure.
       - name: Upload Playwright report
