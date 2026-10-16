@@ -2,7 +2,7 @@ name: Voice Platform CI Pipeline
 
 on:
   push:
-    branches: [ master, main ]
+    branches: [ master, main, validation/baseline-contracts-20261016-v2 ]
   pull_request:
     branches: [ master, main ]
   workflow_dispatch:
