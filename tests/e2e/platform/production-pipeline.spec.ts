@@ -6,6 +6,13 @@ const scenarioFilePath = path.resolve(path.dirname(fileURLToPath(import.meta.url
 
 test.describe('E2E: PLATFORM-012 Production Voice Pipeline Integration Suite', () => {
 
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      (window as any).__AUTH_OWNER_ID__ = 'e2e-validation-driver';
+      (window as any).__AUTH_SESSION_ID__ = 'e2e-validation-session';
+    });
+  });
+
   async function setupApp(page: any) {
     const appUrl = process.env.APP_URL || 'http://localhost:3000';
     await page.goto(appUrl);
