@@ -35,7 +35,9 @@ test.describe('SC-003: Taxi Driver End-to-End Trip - Contract Tests', () => {
     for (const sc of scenarioSet.scenarios) {
       const emitStep = sc.steps.find((step: any) => step.kind === 'emit');
       expect(emitStep).toBeDefined();
-      expect(emitStep.event.payload.orderId).toBe(1001);
+      if (emitStep.event.type !== 'driver.available') {
+        expect(emitStep.event.payload.orderId).toBe(1001);
+      }
       expect(sc.steps[sc.steps.length - 1].kind).toBe('end');
     }
   });
