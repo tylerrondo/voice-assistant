@@ -693,7 +693,10 @@ export class VoiceChannel {
                   message: candidateResolution.message
                 };
               }
-              if (candidateResolution.status === 'NO_MATCH') {
+              if (
+                candidateResolution.status === 'NO_MATCH' &&
+                Object.keys(extracted.slots).some(slotName => slotName !== 'confirmation')
+              ) {
                 return { status: 'NO_MATCH' };
               }
 
