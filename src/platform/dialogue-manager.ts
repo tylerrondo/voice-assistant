@@ -86,7 +86,7 @@ export type RoutingResult =
 
 export type MutationResult<T> =
   | { success: true; data: T; version: number }
-  | { success: false; error: 'CONTEXT_VERSION_CONFLICT' | 'TERMINAL_STATE' | 'CONTEXT_NOT_FOUND' | 'ACCESS_DENIED' | 'CONTEXT_ACCESS_DENIED' | 'SYSTEM_EVENT_NOT_HANDLED' | 'MUTATION_REJECTED'; message: string };
+  | { success: false; error: 'CONTEXT_VERSION_CONFLICT' | 'TERMINAL_STATE' | 'CONTEXT_NOT_FOUND' | 'ACCESS_DENIED' | 'SYSTEM_EVENT_NOT_HANDLED' | 'MUTATION_REJECTED'; message: string };
 
 export interface SystemEventDescriptor {
   type: string;
@@ -159,7 +159,7 @@ export class DialogueStateManager {
     this.validateIdentity(identity);
     if (!this.activeContextId) return null;
     const ctx = this.contexts.get(this.activeContextId);
-    if (!ctx || ctx.ownerId !== identity.ownerId || ctx.sessionId !== identity.sessionId || ['COMPLETED', 'CANCELLED', 'EXPIRED'].includes(ctx.status)) {
+    if (!ctx || ctx.ownerId !== identity.ownerId || ctx.sessionId !== identity.sessionId) {
       return null;
     }
     return {
@@ -238,7 +238,7 @@ export class DialogueStateManager {
       }
 
       if (ctx.ownerId !== identity.ownerId || ctx.sessionId !== identity.sessionId) {
-        return { success: false as const, error: 'CONTEXT_ACCESS_DENIED' as const, message: 'Cross-session context mutation is prohibited' };
+        return { success: false as const, error: 'ACCESS_DENIED' as const, message: 'Cross-session context mutation is prohibited' };
       }
 
       // Optimistic CAS version check

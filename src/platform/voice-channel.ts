@@ -689,6 +689,9 @@ export class VoiceChannel {
                   message: candidateResolution.message
                 };
               }
+              if (candidateResolution.status === 'NO_MATCH') {
+                return { status: 'NO_MATCH' };
+              }
 
               if (candidateResolution.status === 'RESOLVED' && candidateResolution.targetId) {
                 const fillRes = await this.dialogueManager.fillSlot(targetSlot, candidateResolution.targetId, activeCtx.contextId, identity);
