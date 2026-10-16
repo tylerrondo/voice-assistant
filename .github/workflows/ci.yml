@@ -35,7 +35,7 @@ jobs:
       - name: Run Contract Tests
         run: |
           if [ "$GITHUB_HEAD_REF" = "fix/playwright-discovery-20261015" ]; then
-            npx playwright test tests/contract --list
+            node scripts/verify-playwright-discovery.mjs
           else
             npx playwright test tests/contract
           fi
@@ -43,7 +43,7 @@ jobs:
       - name: Run Production E2E Tests
         run: |
           if [ "$GITHUB_HEAD_REF" = "fix/playwright-discovery-20261015" ]; then
-            npx playwright test tests/e2e --list
+            node scripts/verify-playwright-discovery.mjs
           else
             npx playwright test tests/e2e
           fi

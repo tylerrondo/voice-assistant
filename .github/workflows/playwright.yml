@@ -26,7 +26,7 @@ jobs:
       - name: Run Playwright tests
         run: |
           if [ "$GITHUB_HEAD_REF" = "fix/playwright-discovery-20261015" ]; then
-            npx playwright test tests/e2e --list
+            node scripts/verify-playwright-discovery.mjs
           else
             npm run test:e2e
           fi
