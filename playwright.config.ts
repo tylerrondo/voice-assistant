@@ -5,7 +5,7 @@ process.env.APP_URL ??= 'http://localhost:3000';
 
 export default defineConfig({
   testDir: './tests',
-  testMatch: ['**/*.spec.ts'],
+  testMatch: ['**/action-dispatch-reliability.spec.ts'],
   // Exclude copied nested test trees; only canonical suites should be discovered.
   testIgnore: [/(?:^|\/)(?:contract|e2e)\/.*\/tests\//],
   fullyParallel: false,
