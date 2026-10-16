@@ -119,6 +119,13 @@ test.describe('SC-001: Scenario JSON Contract & Schema Validation', () => {
 // SUITE 2: SC-001 Live Application Runtime Execution E2E Tests
 // ============================================================================
 test.describe('SC-001: Live Application Runtime Execution E2E (External JSON & Strict Trace)', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      (window as any).__AUTH_OWNER_ID__ = 'e2e-validation-driver';
+      (window as any).__AUTH_SESSION_ID__ = 'e2e-validation-session';
+    });
+  });
+
 
   test('RUNTIME-E2E-01: Upload External JSON, Activate File Source & Verify Strict 6-Step Execution Trace', async ({ page }) => {
     // 1. Open Live Validation Bench
