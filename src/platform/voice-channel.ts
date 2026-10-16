@@ -778,7 +778,12 @@ export class VoiceChannel {
         };
       }
       if (slotCandidates.length > 0) {
-        return { status: 'AMBIGUOUS_CONTEXT', candidateContextIds: activeWaiting.map(c => c.contextId) };
+        const labels = activeWaiting.map(c => String(c.slots.orderId ?? c.slots.offerId ?? c.contextId));
+        return {
+          status: 'AMBIGUOUS_CONTEXT',
+          candidateContextIds: activeWaiting.map(c => c.contextId),
+          clarificationPrompt: `Уточните контекст: ${labels.join(', ')}`
+        };
       }
     }
 
