@@ -549,12 +549,17 @@ export class VoiceChannel {
 
       if (isPureCancel) {
         if (activeWaiting.length === 1) {
-          return this.dialogueManager.cancelContext(activeWaiting[0].contextId, identity);
+          const contextId = activeWaiting[0].contextId;
+          const cancelled = await this.dialogueManager.cancelContext(contextId, identity);
+          return cancelled.success ? { status: 'CANCELLED', contextId } : { status: 'NO_MATCH' };
         }
         if (activeWaiting.length > 1) {
+          const candidateContextIds = activeWaiting.map(c => c.contextId);
+          const labels = activeWaiting.map(c => String(c.slots.orderId ?? c.slots.offerId ?? c.contextId));
           return {
             status: 'AMBIGUOUS_CONTEXT',
-            candidateContextIds: activeWaiting.map(c => c.contextId)
+            candidateContextIds,
+            clarificationPrompt: `Уточните, какой контекст отменить: ${labels.join(', ')}`
           };
         }
         return { status: 'NO_MATCH' };
@@ -562,7 +567,12 @@ export class VoiceChannel {
 
       const routeResult = this.dialogueManager.resolveRouting(text, [], identity);
       if (routeResult.status === 'RESOLVED') {
-        return this.dialogueManager.cancelContext(routeResult.contextId, identity);
+        const cancelled = await this.dialogueManager.cancelContext(routeResult.contextId, identity);
+        return cancelled.success ? { status: 'CANCELLED', contextId: routeResult.contextId } : { status: 'NO_MATCH' };
+      }
+      if (routeResult.status === 'CONTEXT_ACCESS_DENIED') return { status: 'CONTEXT_ACCESS_DENIED' };
+      if (routeResult.status === 'AMBIGUOUS_CONTEXT') {
+        return { status: 'AMBIGUOUS_CONTEXT', candidateContextIds: routeResult.candidateContextIds };
       }
       return { status: 'NO_MATCH' };
     }
@@ -640,6 +650,9 @@ export class VoiceChannel {
 
         if (slotRes.status === 'AMBIGUOUS_SLOT') {
           return slotRes;
+        }
+        if (slotRes.status === 'NO_MATCH') {
+          return { status: 'NO_MATCH' };
         }
 
         if (slotRes.status === 'RESOLVED' && Object.keys(slotRes.slots).length > 0) {
@@ -726,22 +739,46 @@ export class VoiceChannel {
             }
           }
 
+          if (updatedCtxState && updatedCtxState.missingSlots.length === 0 && !scenario.confirmation && !scenario.requiredSlots?.includes('confirmation')) {
+            const existingExecution = this.dialogueManager.getExecutionLogs(identity).find(execution => execution.contextId === activeCtx.contextId);
+            if (!existingExecution) {
+              const execution = this.dialogueManager.createExecution(updatedCtxState, identity);
+              const dispatchResult = await this.dialogueManager.dispatchAction(execution.executionId, execution.payload, identity);
+              return {
+                status: 'COMPLETED',
+                executionStatus: dispatchResult.status,
+                contextId: activeCtx.contextId,
+                executionId: execution.executionId,
+                attempt: dispatchResult.attempt,
+                context: this.dialogueManager.getContext(activeCtx.contextId, identity)
+              };
+            }
+          }
           return updatedCtxState || this.dialogueManager.getContext(activeCtx.contextId, identity);
         }
       }
     } else if (!isNewScenarioActivation && activeWaiting.length > 1) {
-      const anyScenario = this.scenarioRegistry.find(s => s.slotExtractors);
-      if (anyScenario?.slotExtractors) {
-        const testSlot = this.extractSlotsDeterministically(text, anyScenario.slotExtractors, anyScenario.id);
-        if (testSlot.status === 'RESOLVED') {
-          const hasCandidateSlot = Object.values(testSlot.slots).some(v => typeof v === 'number' || (typeof v === 'string' && v.includes('ambiguous')));
-          if (hasCandidateSlot) {
-            return {
-              status: 'AMBIGUOUS_CONTEXT',
-              candidateContextIds: activeWaiting.map(c => c.contextId)
-            };
-          }
+      const slotCandidates: Array<{ slotName: string; value: any; scenarioId: string }> = [];
+      for (const context of activeWaiting) {
+        const scenario = (context.scenarioId ? this.scenarioRegistry.find(s => s.id === context.scenarioId) : undefined)
+          || this.getDeterministicScenarioForIntent(context.intent);
+        if (!scenario?.slotExtractors) continue;
+        const slotResult = this.extractSlotsDeterministically(text, scenario.slotExtractors, scenario.id, scenario.ambiguityPrompt?.template);
+        if (slotResult.status !== 'RESOLVED') continue;
+        for (const [slotName, value] of Object.entries(slotResult.slots)) {
+          if (context.missingSlots.includes(slotName)) slotCandidates.push({ slotName, value, scenarioId: scenario.id });
         }
+      }
+      const matchedContexts = new Set(slotCandidates.map(candidate => candidate.scenarioId));
+      if (matchedContexts.size > 1) {
+        return {
+          status: 'AMBIGUOUS_SLOT',
+          candidates: slotCandidates,
+          clarificationPrompt: 'Уточните значение: фраза подходит нескольким ожидаемым полям.'
+        };
+      }
+      if (slotCandidates.length > 0) {
+        return { status: 'AMBIGUOUS_CONTEXT', candidateContextIds: activeWaiting.map(c => c.contextId) };
       }
     }
 

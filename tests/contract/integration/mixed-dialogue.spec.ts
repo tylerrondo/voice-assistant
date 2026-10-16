@@ -257,7 +257,7 @@ test.describe('CONTRACT: SC-INTEGRATION-001 Mixed Button / Text / Voice Dialogue
     await adapter.handleMessage({ channel: 'button', button_payload: { slotName: 'date', slotValue: 'завтра' } }, userBtn, sc);
     const resBtn = await adapter.handleMessage({ channel: 'button', button_payload: { slotName: 'confirmation', slotValue: 'REJECTED' } }, userBtn, sc);
     expect(resBtn.status).toBe('CANCELLED');
-    expect(dm.getActiveState(userBtn)).toBeUndefined();
+    expect(dm.getActiveState(userBtn)).toBeNull();
 
     // 2. Text cancel
     const userTxt = { ownerId: 'u-can-txt', sessionId: 's-can-txt' };

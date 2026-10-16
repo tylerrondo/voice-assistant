@@ -85,7 +85,9 @@ export class TelegramDialogueAdapter {
       raw_input: input.raw_input || null,
       transcript: input.transcript || null,
       intent: activeCtxAfter?.intent || activeScenario?.intent || null,
-      extracted_slots: {},
+      extracted_slots: Object.fromEntries(
+        Object.entries(newState).filter(([key, value]) => !Object.prototype.hasOwnProperty.call(prevState, key) || !Object.is(prevState[key], value))
+      ),
       previous_state: prevState,
       new_state: newState,
       next_question: res.nextQuestion || null,
