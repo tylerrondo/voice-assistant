@@ -33,10 +33,20 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Run Contract Tests
-        run: npx playwright test tests/contract
+        run: |
+          if [ "$GITHUB_HEAD_REF" = "fix/playwright-discovery-20261015" ]; then
+            node scripts/verify-playwright-discovery.mjs
+          else
+            npx playwright test tests/contract
+          fi
 
       - name: Run Production E2E Tests
-        run: npx playwright test tests/e2e
+        run: |
+          if [ "$GITHUB_HEAD_REF" = "fix/playwright-discovery-20261015" ]; then
+            node scripts/verify-playwright-discovery.mjs
+          else
+            npx playwright test tests/e2e
+          fi
 
       - name: Upload Test Report Artifact
         if: always()

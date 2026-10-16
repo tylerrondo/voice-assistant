@@ -1,4 +1,4 @@
-import { DialogueStateManager, ActionDispatcher } from '../../../src/platform/dialogue-manager';
+import { DialogueStateManager, type ActionDispatcher } from '../../../src/platform/dialogue-manager';
 import { VoiceChannel } from '../../../src/platform/voice-channel';
 
 export function initializeVoicePlatform(dispatcher?: ActionDispatcher) {
@@ -19,7 +19,7 @@ export function initializeVoicePlatform(dispatcher?: ActionDispatcher) {
     (window as any).__VOICE_CHANNEL__ = voiceChannel;
   }
 
-  return { dialogueManager, voiceChannel };
+  return { dialogueManager, voiceChannel, actionDispatcher: dispatcher };
 }
 
 // Named alias for backward-compatible entrypoints
