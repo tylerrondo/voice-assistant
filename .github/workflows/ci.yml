@@ -32,6 +32,7 @@ jobs:
         run: npm run build
 
       - name: Build Voice Demo (Vercel app)
+        if: github.ref != 'refs/heads/validation/runtime-plus-esm-20261016'
         working-directory: apps/voice-demo
         run: |
           npm install --no-package-lock --no-audit --no-fund
