@@ -540,8 +540,8 @@ export class VoiceChannel {
 
           if (activeCtx.offers && activeCtx.offers.length > 0) {
             const targetSlot = scenario.candidateBinding?.targetSlot
-              || activeCtx.missingSlots.find(s => s !== 'confirmation') 
-              || activeCtx.requiredSlots?.find(s => s !== 'confirmation');
+              || activeCtx.missingSlots.find(s => s !== 'confirmation')
+              || scenario.requiredSlots?.find(s => s !== 'confirmation');
 
             if (targetSlot) {
               const candidateResolution = this.resolveCandidate(
