@@ -176,6 +176,7 @@ export class VoiceChannel {
   public resolveIntent(phrase: string): IntentResolutionResult {
     const text = phrase.trim().toLowerCase();
     const matchingScenarios: ScenarioDefinition[] = [];
+    const strongMatchingScenarios: ScenarioDefinition[] = [];
 
     for (const sc of this.scenarioRegistry) {
       const triggers: string[] = [];
@@ -183,14 +184,27 @@ export class VoiceChannel {
       if (Array.isArray(sc.triggerPhrases)) triggers.push(...sc.triggerPhrases);
       if (Array.isArray(sc.aliases)) triggers.push(...sc.aliases);
 
-      const matches = triggers.some(trig => {
+      const isStrongMatch = triggers.some(trig => {
         const clean = trig.replace(/^voice\./, '').replace(/[-_]/g, ' ').toLowerCase().trim();
         return text === clean || text.startsWith(clean) || clean.split(/\s+/).every(w => text.includes(w));
       });
+      const isPrefixOnlyMatch = triggers.some(trig => {
+        const clean = trig.replace(/^voice\./, '').replace(/[-_]/g, ' ').toLowerCase().trim();
+        return clean.startsWith(`${text} `);
+      });
 
-      if (matches) {
+      if (isStrongMatch) {
+        matchingScenarios.push(sc);
+        strongMatchingScenarios.push(sc);
+      } else if (isPrefixOnlyMatch) {
         matchingScenarios.push(sc);
       }
+    }
+
+    // Prefer explicit/full trigger matches over scenarios matched only because the input
+    // is a prefix of a longer phrase (e.g. "второй" vs "второй это комфорт").
+    if (strongMatchingScenarios.length > 0) {
+      matchingScenarios.splice(0, matchingScenarios.length, ...strongMatchingScenarios);
     }
 
     if (matchingScenarios.length === 0) {
@@ -238,7 +252,15 @@ export class VoiceChannel {
     for (const [slotKey, extractor] of Object.entries(extractors)) {
       if (extractor.rules && Array.isArray(extractor.rules)) {
         for (const rule of extractor.rules) {
-          if (new RegExp(rule.pattern, 'i').test(text)) {
+          // JavaScript word boundaries do not treat Cyrillic letters as word characters.
+          // Convert each boundary in alternations to Unicode-aware letter/number boundaries.
+          const unicodePattern = rule.pattern.replace(/\\b/g, (_boundary, offset, pattern) => {
+            const previous = pattern[offset - 1];
+            return previous === undefined || previous === '|' || previous === '('
+              ? '(?<![\\p{L}\\p{N}_])'
+              : '(?=$|[^\\p{L}\\p{N}_])';
+          });
+          if (new RegExp(unicodePattern, 'iu').test(text)) {
             resolvedSlots[slotKey] = rule.value;
             break;
           }
@@ -497,6 +519,18 @@ export class VoiceChannel {
 
     // 2. Intent Resolution (Evaluation / Comparison Queries)
     const intentRes = this.resolveIntent(text);
+    const isNewScenarioActivation = intentRes.status === 'RESOLVED' && (() => {
+      const sc = intentRes.scenario;
+      const activationTriggers = [
+        sc.activation?.value,
+        ...(Array.isArray(sc.aliases) ? sc.aliases : [])
+      ].filter((trigger): trigger is string => Boolean(trigger));
+      return activationTriggers.some(trigger => {
+        const clean = trigger.replace(/^voice\./, '').replace(/[-_]/g, ' ').toLowerCase().trim();
+        return text === clean || text.startsWith(clean) || clean.startsWith(`${text} `)
+          || clean.split(/\s+/).every(word => text.includes(word));
+      });
+    })();
 
     if (intentRes.status === 'RESOLVED') {
       const sc = intentRes.scenario;
@@ -541,7 +575,7 @@ export class VoiceChannel {
     // 3. Declarative Active Context Processing
     const activeWaiting = this.dialogueManager.listContexts(identity).filter(c => c.status === 'WAITING_FOR_SLOT');
 
-    if (activeWaiting.length === 1) {
+    if (!isNewScenarioActivation && activeWaiting.length === 1) {
       const activeCtx = activeWaiting[0];
       const scenario = (activeCtx.scenarioId ? this.scenarioRegistry.find(s => s.id === activeCtx.scenarioId) : undefined)
         || this.getDeterministicScenarioForIntent(activeCtx.intent);
@@ -645,7 +679,7 @@ export class VoiceChannel {
           return updatedCtxState || this.dialogueManager.getContext(activeCtx.contextId, identity);
         }
       }
-    } else if (activeWaiting.length > 1) {
+    } else if (!isNewScenarioActivation && activeWaiting.length > 1) {
       const anyScenario = this.scenarioRegistry.find(s => s.slotExtractors);
       if (anyScenario?.slotExtractors) {
         const testSlot = this.extractSlotsDeterministically(text, anyScenario.slotExtractors, anyScenario.id);
