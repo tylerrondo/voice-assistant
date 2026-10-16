@@ -35,14 +35,14 @@ test.describe('CONTRACT: PLATFORM-012 Production Pipeline Suite', () => {
     await channel.handleIncomingVoice('Картой', sessionUser);
 
     expect(dispatchedEvents.length).toBe(1);
-    expect(dispatchedEvents[0].event.type).toBe('driver.order.accepted', {}, sessionUser);
+    expect(dispatchedEvents[0].event.type).toBe('driver.order.accepted');
     expect(dispatchedEvents[0].event.payload).toEqual({ orderId: 1001, payment: 'card' });
   });
 
   test('CONTRACT-03: Auto-Expiry Scheduler automatically transitions context to EXPIRED after TTL without manual calls', async () => {
     // 50ms TTL for fast contract verification
     const dm = new DialogueStateManager({ defaultTtlMs: 50, enableAutoExpiryScheduler: true });
-    const ctx = dm.createContext('ACCEPT_ORDER', { orderId: 1001 }, ['orderId', 'payment'], 'driver.order.accepted');
+    const ctx = dm.createContext('ACCEPT_ORDER', { orderId: 1001 }, ['orderId', 'payment'], 'driver.order.accepted', {}, sessionUser);
 
     expect(ctx.status).toBe('WAITING_FOR_SLOT');
 
@@ -55,10 +55,10 @@ test.describe('CONTRACT: PLATFORM-012 Production Pipeline Suite', () => {
 
   test('CONTRACT-04: Strict capacity policy rejects new context when maxActiveContexts is exceeded', async () => {
     const dm = new DialogueStateManager({ maxActiveContexts: 1 });
-    dm.createContext('ACCEPT_ORDER', { orderId: 1001 }, ['orderId', 'payment'], 'driver.order.accepted');
+    dm.createContext('ACCEPT_ORDER', { orderId: 1001 }, ['orderId', 'payment'], 'driver.order.accepted', {}, sessionUser);
 
     expect(() => {
-      dm.createContext('ACCEPT_ORDER', { orderId: 1002 }, ['orderId', 'payment'], 'driver.order.accepted');
+      dm.createContext('ACCEPT_ORDER', { orderId: 1002 }, ['orderId', 'payment'], 'driver.order.accepted', {}, sessionUser);
     }).toThrow(/REJECT_NEW_CONTEXT/);
   });
 
@@ -67,7 +67,7 @@ test.describe('CONTRACT: PLATFORM-012 Production Pipeline Suite', () => {
     const channel = new VoiceChannel(dm);
     channel.registerScenarioSet(scenarioSet);
 
-    await channel.handleIncomingVoice('Прими заказ 1001');
+    await channel.handleIncomingVoice('Прими заказ 1001', sessionUser);
     const cancelRes = await channel.handleIncomingVoice('Отмена', sessionUser);
 
     expect(cancelRes).toBe(true);
@@ -81,10 +81,10 @@ test.describe('CONTRACT: PLATFORM-012 Production Pipeline Suite', () => {
     const channel = new VoiceChannel(dm);
     channel.registerScenarioSet(scenarioSet);
 
-    await channel.handleIncomingVoice('Прими заказ 1001');
-    await channel.handleIncomingVoice('Прими заказ 1002');
+    await channel.handleIncomingVoice('Прими заказ 1001', sessionUser);
+    await channel.handleIncomingVoice('Прими заказ 1002', sessionUser);
 
-    const ambResult = await channel.handleIncomingVoice('Картой');
+    const ambResult = await channel.handleIncomingVoice('Картой', sessionUser);
     expect(ambResult.status).toBe('AMBIGUOUS_CONTEXT');
     expect(ambResult.clarificationPrompt).toContain('1001');
     expect(ambResult.clarificationPrompt).toContain('1002');
