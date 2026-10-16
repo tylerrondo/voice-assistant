@@ -1,8 +1,10 @@
 import { test, expect } from '@playwright/test';
 import { fileURLToPath } from 'node:url';
+import * as fs from 'node:fs';
 import * as path from 'path';
 
 const scenarioFilePath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../scenario-platform-011-ambiguous-context.json');
+const scenarioSet = JSON.parse(fs.readFileSync(scenarioFilePath, 'utf8'));
 
 test.describe('E2E: PLATFORM-011 Ambiguous Input & Context Selection Suite', () => {
 
@@ -15,11 +17,15 @@ test.describe('E2E: PLATFORM-011 Ambiguous Input & Context Selection Suite', () 
 
   async function setupApp(page: any) {
     const appUrl = process.env.APP_URL || 'http://localhost:3000';
-    await page.goto(appUrl);
+    await page.goto(appUrl, { waitUntil: 'domcontentloaded' });
     await expect(page.locator('body')).toBeVisible();
 
-    const fileInput = page.locator('input[type="file"]').first();
-    await fileInput.setInputFiles(scenarioFilePath);
+    await page.evaluate((set: any) => {
+      const channel = (window as any).__VOICE_CHANNEL__;
+      if (!channel) throw new Error('VoiceChannel runtime is not initialized');
+      channel.registerScenarioSet(set);
+      (window as any).__SCENARIO_ENGINE__ = channel;
+    }, scenarioSet);
 
     const activeSetId = await page.evaluate(() => {
       return (window as any).__SCENARIO_ENGINE__.getActiveScenarioSetId();
