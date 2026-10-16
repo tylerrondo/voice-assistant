@@ -695,7 +695,7 @@ export class VoiceChannel {
               }
               if (
                 candidateResolution.status === 'NO_MATCH' &&
-                Object.keys(extracted.slots).some(slotName => slotName !== 'confirmation')
+                Object.keys(extracted).some(slotName => slotName !== 'confirmation')
               ) {
                 return { status: 'NO_MATCH' };
               }
