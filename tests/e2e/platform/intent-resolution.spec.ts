@@ -1,9 +1,17 @@
 import { test, expect } from '@playwright/test';
+import { fileURLToPath } from 'node:url';
 import * as path from 'path';
 
-const scenarioFilePath = path.resolve(__dirname, '../../../scenario-platform-014-intent-slot-resolution.json');
+const scenarioFilePath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../scenario-platform-014-intent-slot-resolution.json');
 
 test.describe('E2E: PLATFORM-014 Intent Resolution & Slot Ambiguity Suite', () => {
+
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      (window as any).__AUTH_OWNER_ID__ = 'e2e-validation-driver';
+      (window as any).__AUTH_SESSION_ID__ = 'e2e-validation-session';
+    });
+  });
 
   const sessionA = { ownerId: 'driver-001', sessionId: 'session-A' };
   const sessionB = { ownerId: 'driver-002', sessionId: 'session-B' };
