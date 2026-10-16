@@ -240,7 +240,7 @@ export class VoiceChannel {
         for (const rule of extractor.rules) {
           // JavaScript's built-in \b treats Cyrillic letters as non-word characters.
           // Convert outer word boundaries to Unicode-aware letter/number boundaries.
-          const unicodePattern = rule.pattern.replace(/\\b/g, (boundary, offset, pattern) => {
+          const unicodePattern = rule.pattern.replace(/\\b/g, (_boundary, offset, pattern) => {
             const previous = pattern[offset - 1];
             return previous === undefined || previous === '|' || previous === '('
               ? '(?<![\\p{L}\\p{N}_])'
