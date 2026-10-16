@@ -1,4 +1,9 @@
 import { test, expect } from '@playwright/test';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import * as path from 'node:path';
+
+const scenarioSet = JSON.parse(readFileSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../scenario-platform-015-action-dispatch-reliability.json'), 'utf8'));
 
 test.describe('E2E: PLATFORM-015 Production Action Dispatch Reliability Suite', () => {
 
@@ -14,6 +19,7 @@ test.describe('E2E: PLATFORM-015 Production Action Dispatch Reliability Suite', 
 
     await page.goto('http://localhost:3000');
     await page.waitForSelector('#voice-app-ready', { timeout: 10000 });
+    await page.evaluate((set: unknown) => (window as any).__VOICE_CHANNEL__.registerScenarioSet(set), scenarioSet);
 
     const result = await page.evaluate(async () => {
       const vc = (window as any).__VOICE_CHANNEL__;
