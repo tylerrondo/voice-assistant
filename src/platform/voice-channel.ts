@@ -128,6 +128,7 @@ export class VoiceChannel {
     }
 
     const seenIds = new Set<string>();
+    const seenTriggers = new Map<string, string>();
 
     for (const sc of scenarioSet.scenarios) {
       if (!sc.id || typeof sc.id !== 'string') {
@@ -140,6 +141,24 @@ export class VoiceChannel {
 
       if (!sc.intent || typeof sc.intent !== 'string') {
         throw new Error(`CONTRACT_VIOLATION: Scenario "${sc.id}" missing intent`);
+      }
+      if (sc.priority !== undefined && !Number.isFinite(sc.priority)) {
+        throw new Error(`CONTRACT_VIOLATION: invalid priority for scenario "${sc.id}"`);
+      }
+
+      const triggers = [
+        sc.activation?.value,
+        ...(Array.isArray(sc.triggerPhrases) ? sc.triggerPhrases : []),
+        ...(Array.isArray(sc.aliases) ? sc.aliases : [])
+      ].filter((trigger): trigger is string => typeof trigger === 'string' && trigger.trim().length > 0);
+
+      for (const trigger of triggers) {
+        const normalized = trigger.replace(/^voice\\./, '').replace(/[-_]/g, ' ').toLowerCase().trim().replace(/\\s+/g, ' ');
+        const previousScenario = seenTriggers.get(normalized);
+        if (previousScenario && previousScenario !== sc.id) {
+          throw new Error(`CONTRACT_VIOLATION: Trigger or alias collision "${normalized}" between scenarios "${previousScenario}" and "${sc.id}"`);
+        }
+        seenTriggers.set(normalized, sc.id);
       }
     }
 
@@ -176,7 +195,6 @@ export class VoiceChannel {
   public resolveIntent(phrase: string): IntentResolutionResult {
     const text = phrase.trim().toLowerCase();
     const matchingScenarios: ScenarioDefinition[] = [];
-    const strongMatchingScenarios: ScenarioDefinition[] = [];
 
     for (const sc of this.scenarioRegistry) {
       const triggers: string[] = [];
@@ -195,16 +213,9 @@ export class VoiceChannel {
 
       if (isStrongMatch) {
         matchingScenarios.push(sc);
-        strongMatchingScenarios.push(sc);
       } else if (isPrefixOnlyMatch) {
         matchingScenarios.push(sc);
       }
-    }
-
-    // Prefer explicit/full trigger matches over scenarios matched only because the input
-    // is a prefix of a longer phrase (e.g. "второй" vs "второй это комфорт").
-    if (strongMatchingScenarios.length > 0) {
-      matchingScenarios.splice(0, matchingScenarios.length, ...strongMatchingScenarios);
     }
 
     if (matchingScenarios.length === 0) {
@@ -248,6 +259,7 @@ export class VoiceChannel {
     }
 
     const resolvedSlots: Record<string, any> = {};
+    const matchedTextBySlot: Record<string, string> = {};
 
     for (const [slotKey, extractor] of Object.entries(extractors)) {
       if (extractor.rules && Array.isArray(extractor.rules)) {
@@ -260,8 +272,10 @@ export class VoiceChannel {
               ? '(?<![\\p{L}\\p{N}_])'
               : '(?=$|[^\\p{L}\\p{N}_])';
           });
-          if (new RegExp(unicodePattern, 'iu').test(text)) {
+          const match = text.match(new RegExp(unicodePattern, 'iu'));
+          if (match) {
             resolvedSlots[slotKey] = rule.value;
+            matchedTextBySlot[slotKey] = match[0].toLowerCase();
             break;
           }
         }
@@ -271,6 +285,7 @@ export class VoiceChannel {
             const match = text.match(new RegExp(pat, 'i'));
             if (match) {
               resolvedSlots[slotKey] = 'CONFIRMED';
+              matchedTextBySlot[slotKey] = match[0].toLowerCase();
               break;
             }
           }
@@ -303,17 +318,51 @@ export class VoiceChannel {
             }
 
             resolvedSlots[slotKey] = bestMatches[0].value;
+            matchedTextBySlot[slotKey] = bestMatches[0].synonym.toLowerCase();
           }
         }
       } else if (extractor.type === 'integer' && extractor.pattern) {
         const match = text.match(new RegExp(extractor.pattern, 'i'));
         if (match) {
           resolvedSlots[slotKey] = parseInt(match[0], 10);
+          matchedTextBySlot[slotKey] = match[0].toLowerCase();
         }
       } else if (extractor.type === 'string' && extractor.pattern) {
         const match = text.match(new RegExp(extractor.pattern, 'i'));
         if (match) {
           resolvedSlots[slotKey] = match[0];
+          matchedTextBySlot[slotKey] = match[0].toLowerCase();
+        }
+      }
+    }
+
+    const matchingSlotsByText = new Map<string, string[]>();
+    for (const [slotKey, matchedText] of Object.entries(matchedTextBySlot)) {
+      const normalized = matchedText.trim().toLowerCase();
+      const keys = matchingSlotsByText.get(normalized) || [];
+      keys.push(slotKey);
+      matchingSlotsByText.set(normalized, keys);
+    }
+
+    for (const slotKeys of matchingSlotsByText.values()) {
+      if (slotKeys.length < 2) continue;
+      const maxPriority = Math.max(...slotKeys.map(key => extractors[key]?.priority ?? 0));
+      const highestPrioritySlots = slotKeys.filter(key => (extractors[key]?.priority ?? 0) === maxPriority);
+      if (highestPrioritySlots.length > 1) {
+        return {
+          status: 'AMBIGUOUS_SLOT',
+          candidates: highestPrioritySlots.map(slotName => ({
+            slotName,
+            value: resolvedSlots[slotName],
+            scenarioId
+          })),
+          clarificationPrompt: ambiguityPromptTemplate
+        };
+      }
+      for (const slotKey of slotKeys) {
+        if (slotKey !== highestPrioritySlots[0]) {
+          delete resolvedSlots[slotKey];
+          delete matchedTextBySlot[slotKey];
         }
       }
     }
