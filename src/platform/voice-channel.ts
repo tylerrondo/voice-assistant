@@ -185,7 +185,7 @@ export class VoiceChannel {
 
       const matches = triggers.some(trig => {
         const clean = trig.replace(/^voice\./, '').replace(/[-_]/g, ' ').toLowerCase().trim();
-        return text === clean || text.startsWith(clean) || clean.split(/\s+/).every(w => text.includes(w));
+        return text === clean || text.startsWith(clean) || clean.startsWith(`${text} `) || clean.split(/\s+/).every(w => text.includes(w));
       });
 
       if (matches) {
@@ -238,7 +238,12 @@ export class VoiceChannel {
     for (const [slotKey, extractor] of Object.entries(extractors)) {
       if (extractor.rules && Array.isArray(extractor.rules)) {
         for (const rule of extractor.rules) {
-          if (new RegExp(rule.pattern, 'i').test(text)) {
+          // JavaScript's built-in \\b treats Cyrillic letters as non-word characters.
+          // Convert outer word boundaries to Unicode-aware letter/number boundaries.
+          const unicodePattern = rule.pattern
+            .replace(/^\\\\b/, '(?<![\\\\p{L}\\\\p{N}_])')
+            .replace(/\\\\b$/, '(?=$|[^\\\\p{L}\\\\p{N}_])');
+          if (new RegExp(unicodePattern, 'iu').test(text)) {
             resolvedSlots[slotKey] = rule.value;
             break;
           }
@@ -253,11 +258,34 @@ export class VoiceChannel {
             }
           }
         } else if (extractor.mapping) {
-          for (const [enumValue, synonyms] of Object.entries(extractor.mapping)) {
-            if (synonyms.some(synonym => text.includes(synonym.toLowerCase()))) {
-              resolvedSlots[slotKey] = enumValue;
-              break;
+          const enumMatches = Object.entries(extractor.mapping)
+            .map(([enumValue, synonyms]) => {
+              const synonym = synonyms
+                .filter(item => text.includes(item.toLowerCase()))
+                .sort((a, b) => b.length - a.length)[0];
+              return synonym ? { value: enumValue, synonym } : undefined;
+            })
+            .filter((item): item is { value: string; synonym: string } => Boolean(item));
+
+          if (enumMatches.length > 0) {
+            const longestLength = Math.max(...enumMatches.map(item => item.synonym.length));
+            const bestMatches = enumMatches.filter(item => item.synonym.length === longestLength);
+            const samePhraseConflict = bestMatches.length > 1
+              && bestMatches.every(item => item.synonym.toLowerCase() === bestMatches[0].synonym.toLowerCase());
+
+            if (samePhraseConflict) {
+              return {
+                status: 'AMBIGUOUS_SLOT',
+                candidates: bestMatches.map(item => ({
+                  slotName: slotKey,
+                  value: item.value,
+                  scenarioId
+                })),
+                clarificationPrompt: ambiguityPromptTemplate
+              };
             }
+
+            resolvedSlots[slotKey] = bestMatches[0].value;
           }
         }
       } else if (extractor.type === 'integer' && extractor.pattern) {
@@ -453,7 +481,7 @@ export class VoiceChannel {
       const activeWaiting = this.dialogueManager.listContexts(identity).filter(c => c.status === 'WAITING_FOR_SLOT');
 
       if (isPureCancel) {
-        if (activeWaiting.length === 1) {
+        if (!isNewScenarioActivation && activeWaiting.length === 1) {
           return this.dialogueManager.cancelContext(activeWaiting[0].contextId, identity);
         }
         if (activeWaiting.length > 1) {
@@ -474,6 +502,18 @@ export class VoiceChannel {
 
     // 2. Intent Resolution (Evaluation / Comparison Queries)
     const intentRes = this.resolveIntent(text);
+    const isNewScenarioActivation = intentRes.status === 'RESOLVED' && (() => {
+      const sc = intentRes.scenario;
+      const activationTriggers = [
+        sc.activation?.value,
+        ...(Array.isArray(sc.aliases) ? sc.aliases : [])
+      ].filter((trigger): trigger is string => Boolean(trigger));
+      return activationTriggers.some(trigger => {
+        const clean = trigger.replace(/^voice\./, '').replace(/[-_]/g, ' ').toLowerCase().trim();
+        return text === clean || text.startsWith(clean) || clean.startsWith(`${text} `)
+          || clean.split(/\s+/).every(word => text.includes(word));
+      });
+    })();
 
     if (intentRes.status === 'RESOLVED') {
       const sc = intentRes.scenario;
@@ -540,8 +580,8 @@ export class VoiceChannel {
 
           if (activeCtx.offers && activeCtx.offers.length > 0) {
             const targetSlot = scenario.candidateBinding?.targetSlot
-              || activeCtx.missingSlots.find(s => s !== 'confirmation') 
-              || activeCtx.requiredSlots?.find(s => s !== 'confirmation');
+              || activeCtx.missingSlots.find(s => s !== 'confirmation')
+              || scenario.requiredSlots?.find(s => s !== 'confirmation');
 
             if (targetSlot) {
               const candidateResolution = this.resolveCandidate(
@@ -581,7 +621,7 @@ export class VoiceChannel {
 
           let updatedCtxState: any = null;
           for (const [slotKey, slotVal] of Object.entries(extracted)) {
-            if (slotKey !== 'confirmation' && (activeCtx.requiredSlots?.includes(slotKey) || activeCtx.slots[slotKey] !== undefined)) {
+            if (slotKey !== 'confirmation' && (activeCtx.missingSlots.includes(slotKey) || activeCtx.slots[slotKey] !== undefined)) {
               const fillRes = await this.dialogueManager.fillSlot(slotKey, slotVal, activeCtx.contextId, identity);
               if (fillRes.success) {
                 updatedCtxState = fillRes.data;
@@ -622,7 +662,7 @@ export class VoiceChannel {
           return updatedCtxState || this.dialogueManager.getContext(activeCtx.contextId, identity);
         }
       }
-    } else if (activeWaiting.length > 1) {
+    } else if (!isNewScenarioActivation && activeWaiting.length > 1) {
       const anyScenario = this.scenarioRegistry.find(s => s.slotExtractors);
       if (anyScenario?.slotExtractors) {
         const testSlot = this.extractSlotsDeterministically(text, anyScenario.slotExtractors, anyScenario.id);

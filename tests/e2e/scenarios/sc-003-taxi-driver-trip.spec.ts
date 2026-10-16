@@ -1,13 +1,21 @@
 import { test, expect } from '@playwright/test';
+import { fileURLToPath } from 'node:url';
 import * as path from 'path';
 
-const scenarioFilePath = path.resolve(__dirname, '../../../scenario-sc-003-taxi-driver-trip.json');
+const scenarioFilePath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../scenario-sc-003-taxi-driver-trip.json');
 
 test.describe('SC-003: Taxi Driver End-to-End Voice Channel, Strict FSM Transitions & Negative Suite', () => {
 
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      (window as any).__AUTH_OWNER_ID__ = 'e2e-validation-driver';
+      (window as any).__AUTH_SESSION_ID__ = 'e2e-validation-session';
+    });
+  });
+
   // Helper function to initialize, load scenario and simulate voice input
   async function setupAppWithScenario(page: any) {
-    const appUrl = process.env.APP_URL || 'https://voice-assistant-two-olive.vercel.app';
+    const appUrl = process.env.APP_URL || 'http://localhost:3000';
     await page.goto(appUrl);
     await expect(page.locator('body')).toBeVisible();
 
