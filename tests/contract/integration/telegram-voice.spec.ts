@@ -143,7 +143,7 @@ test.describe('CONTRACT: SC-INTEGRATION-002 Real Telegram Voice Input + STT Inte
 
     const res = await sendVoiceAudio('да, подтверждаю');
 
-    expect(res.status).toBe('ORDER_CONFIRMED');
+    expect(res.status).toBe('CONFIRMED');
     expect(dispatcherCalls).toBe(1);
     expect(dm.getExecutionLogs(sessionUser).length).toBe(1);
   });
@@ -156,7 +156,7 @@ test.describe('CONTRACT: SC-INTEGRATION-002 Real Telegram Voice Input + STT Inte
     const res = await sendVoiceAudio('отменяю');
 
     expect(res.status).toBe('CANCELLED');
-    expect(dm.getActiveState(sessionUser)).toBeUndefined();
+    expect(dm.getActiveState(sessionUser)?.status).toBe('CANCELLED');
   });
 
   test('TV-07: STT failure keeps context intact and allows continuation', async () => {
@@ -298,7 +298,7 @@ test.describe('CONTRACT: SC-INTEGRATION-002 Real Telegram Voice Input + STT Inte
     const finalResult = await adapter.handleMessage(transportRes.normalizedInput!, sessionUser, sc);
 
     // 5. Verify full business outcome: Execution created and Action dispatched!
-    expect(finalResult.status).toBe('ORDER_CONFIRMED');
+    expect(finalResult.status).toBe('CONFIRMED');
     expect(dispatcherCalls).toBe(1);
     expect(dm.getExecutionLogs(sessionUser).length).toBe(1);
   });

@@ -242,7 +242,7 @@ test.describe('CONTRACT: SC-INTEGRATION-004 Generic Dialogue Channel Contract Su
 
     expect(res.status).toBe('CANCELLED');
     expect(res.presentation.text).toBe(sc.confirmation?.cancelledMessage);
-    expect(dm.getActiveState(sessionUser)).toBeUndefined();
+    expect(dm.getActiveState(sessionUser)?.status).toBe('CANCELLED');
   });
 
   test('GC-08: Execution — ActionDispatcher called exactly once on confirmation', async () => {
