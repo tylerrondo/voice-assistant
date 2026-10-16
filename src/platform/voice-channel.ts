@@ -176,6 +176,7 @@ export class VoiceChannel {
   public resolveIntent(phrase: string): IntentResolutionResult {
     const text = phrase.trim().toLowerCase();
     const matchingScenarios: ScenarioDefinition[] = [];
+    const strongMatchingScenarios: ScenarioDefinition[] = [];
 
     for (const sc of this.scenarioRegistry) {
       const triggers: string[] = [];
@@ -183,14 +184,27 @@ export class VoiceChannel {
       if (Array.isArray(sc.triggerPhrases)) triggers.push(...sc.triggerPhrases);
       if (Array.isArray(sc.aliases)) triggers.push(...sc.aliases);
 
-      const matches = triggers.some(trig => {
+      const isStrongMatch = triggers.some(trig => {
         const clean = trig.replace(/^voice\./, '').replace(/[-_]/g, ' ').toLowerCase().trim();
-        return text === clean || text.startsWith(clean) || clean.startsWith(`${text} `) || clean.split(/\s+/).every(w => text.includes(w));
+        return text === clean || text.startsWith(clean) || clean.split(/\s+/).every(w => text.includes(w));
+      });
+      const isPrefixOnlyMatch = triggers.some(trig => {
+        const clean = trig.replace(/^voice\./, '').replace(/[-_]/g, ' ').toLowerCase().trim();
+        return clean.startsWith(`${text} `);
       });
 
-      if (matches) {
+      if (isStrongMatch) {
+        matchingScenarios.push(sc);
+        strongMatchingScenarios.push(sc);
+      } else if (isPrefixOnlyMatch) {
         matchingScenarios.push(sc);
       }
+    }
+
+    // Prefer explicit/full trigger matches over scenarios matched only because the input
+    // is a prefix of a longer phrase (e.g. "второй" vs "второй это комфорт").
+    if (strongMatchingScenarios.length > 0) {
+      matchingScenarios.splice(0, matchingScenarios.length, ...strongMatchingScenarios);
     }
 
     if (matchingScenarios.length === 0) {
