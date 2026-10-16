@@ -185,7 +185,7 @@ export class VoiceChannel {
 
       const matches = triggers.some(trig => {
         const clean = trig.replace(/^voice\./, '').replace(/[-_]/g, ' ').toLowerCase().trim();
-        return text === clean || text.startsWith(clean) || clean.split(/\s+/).every(w => text.includes(w));
+        return text === clean || text.startsWith(clean) || clean.startsWith(`${text} `) || clean.split(/\s+/).every(w => text.includes(w));
       });
 
       if (matches) {
