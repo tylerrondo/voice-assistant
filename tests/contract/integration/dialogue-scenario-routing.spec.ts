@@ -120,7 +120,7 @@ test.describe('CONTRACT: SC-INTEGRATION-005 Generic Dialogue Scenario Routing & 
     }, freshUser);
 
     expect(res.status).toBe('SCENARIO_NOT_FOUND');
-    expect(dm.getActiveState(freshUser)).toBeUndefined();
+    expect(dm.getActiveState(freshUser)).toBeNull();
   });
 
   test('SR-06: Independent Service Scenario routes correctly without nanny terminology', async () => {
@@ -166,7 +166,7 @@ test.describe('CONTRACT: SC-INTEGRATION-005 Generic Dialogue Scenario Routing & 
           id: 'sc-amb-2',
           intent: 'INTENT_2',
           priority: 10,
-          triggerPhrases: ['помощь'],
+          triggerPhrases: ['нужна помощь'],
           ambiguityPrompt: { template: 'Уточните, какая помощь нужна' }
         }
       ]
@@ -174,10 +174,10 @@ test.describe('CONTRACT: SC-INTEGRATION-005 Generic Dialogue Scenario Routing & 
     vc.registerScenarioSet(ambiguousSet);
 
     const userAmb = { ownerId: 'u-amb', sessionId: 's-amb' };
-    const res = await engine.processInput({ modality: 'text', raw_input: 'помощь' }, userAmb);
+    const res = await engine.processInput({ modality: 'text', raw_input: 'нужна помощь' }, userAmb);
 
     expect(res.status).toBe('SCENARIO_AMBIGUOUS');
-    expect(dm.getActiveState(userAmb)).toBeUndefined();
+    expect(dm.getActiveState(userAmb)).toBeNull();
   });
 
   test('SR-08: Priority Resolution selects scenario with highest priority via VoiceChannel.resolveIntent', async () => {
@@ -213,7 +213,7 @@ test.describe('CONTRACT: SC-INTEGRATION-005 Generic Dialogue Scenario Routing & 
     const res = await engine.processInput({ modality: 'text', raw_input: 'расскажи анекдот' }, userNo);
 
     expect(res.status).toBe('SCENARIO_NOT_FOUND');
-    expect(dm.getActiveState(userNo)).toBeUndefined();
+    expect(dm.getActiveState(userNo)).toBeNull();
   });
 
   test('SR-10: Telegram Adapter handleUpdate does not receive Scenario parameter', async () => {

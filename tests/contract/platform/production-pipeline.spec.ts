@@ -11,6 +11,8 @@ const scenarioSet: ScenarioSet = JSON.parse(rawContent);
 
 test.describe('CONTRACT: PLATFORM-012 Production Pipeline Suite', () => {
 
+  const sessionUser = { ownerId: 'platform-012-user', sessionId: 'platform-012-session' };
+
   test('CONTRACT-01: VoiceChannel registers ScenarioSet and exposes activeScenarioSetId', async () => {
     const dm = new DialogueStateManager();
     const channel = new VoiceChannel(dm);
@@ -29,11 +31,11 @@ test.describe('CONTRACT: PLATFORM-012 Production Pipeline Suite', () => {
     const channel = new VoiceChannel(dm);
     channel.registerScenarioSet(scenarioSet);
 
-    await channel.handleIncomingVoice('Прими заказ 1001');
-    await channel.handleIncomingVoice('Картой');
+    await channel.handleIncomingVoice('Прими заказ 1001', sessionUser);
+    await channel.handleIncomingVoice('Картой', sessionUser);
 
     expect(dispatchedEvents.length).toBe(1);
-    expect(dispatchedEvents[0].event.type).toBe('driver.order.accepted');
+    expect(dispatchedEvents[0].event.type).toBe('driver.order.accepted', {}, sessionUser);
     expect(dispatchedEvents[0].event.payload).toEqual({ orderId: 1001, payment: 'card' });
   });
 
@@ -47,7 +49,7 @@ test.describe('CONTRACT: PLATFORM-012 Production Pipeline Suite', () => {
     // Wait for auto-expiry timer
     await new Promise(resolve => setTimeout(resolve, 80));
 
-    const expiredCtx = dm.getContext(ctx.contextId);
+    const expiredCtx = dm.getContext(ctx.contextId, sessionUser);
     expect(expiredCtx?.status).toBe('EXPIRED');
   });
 
@@ -66,12 +68,12 @@ test.describe('CONTRACT: PLATFORM-012 Production Pipeline Suite', () => {
     channel.registerScenarioSet(scenarioSet);
 
     await channel.handleIncomingVoice('Прими заказ 1001');
-    const cancelRes = await channel.handleIncomingVoice('Отмена');
+    const cancelRes = await channel.handleIncomingVoice('Отмена', sessionUser);
 
     expect(cancelRes).toBe(true);
-    const ctx = dm.listContexts()[0];
+    const ctx = dm.listContexts(sessionUser)[0];
     expect(ctx.status).toBe('CANCELLED');
-    expect(dm.getExecutionLogs().length).toBe(0);
+    expect(dm.getExecutionLogs(sessionUser).length).toBe(0);
   });
 
   test('CONTRACT-06: Strict Ambiguity prompt template enforcement without fallback values', async () => {
