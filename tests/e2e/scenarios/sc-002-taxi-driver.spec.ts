@@ -7,6 +7,13 @@ const scenarioFilePath = path.resolve(path.dirname(fileURLToPath(import.meta.url
 test.describe('SC-002: Taxi Driver Standard Trip - Runtime E2E Suite', () => {
 
   test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      (window as any).__AUTH_OWNER_ID__ = 'e2e-validation-driver';
+      (window as any).__AUTH_SESSION_ID__ = 'e2e-validation-session';
+    });
+  });
+
+  test.beforeEach(async ({ page }) => {
     const appUrl = process.env.APP_URL || 'https://voice-assistant-two-olive.vercel.app';
     await page.goto(appUrl);
     await expect(page.locator('body')).toBeVisible();
