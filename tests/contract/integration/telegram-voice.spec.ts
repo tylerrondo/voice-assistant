@@ -6,10 +6,8 @@ import { DialogueStateManager } from '../../../src/platform/dialogue-manager';
 import { VoiceChannel, type ScenarioSet } from '../../../src/platform/voice-channel';
 import { TelegramDialogueAdapter } from '../../../src/platform/telegram-dialogue-adapter';
 import { MockSTTProvider } from '../../../src/platform/stt-provider';
-import {
-  TelegramVoiceTransport,
-  type TelegramVoiceMessage,
-} from '../../../src/platform/telegram-voice-transport';
+import { TelegramVoiceTransport, type TelegramVoiceMessage } from '../../../src/platform/telegram-voice-transport';
+import { MockTelegramFileProvider } from './telegram-voice-test-helpers';
 
 test.describe('CONTRACT: SC-INTEGRATION-002 Real Telegram Voice Input + STT Integration Suite', () => {
 
@@ -120,10 +118,10 @@ test.describe('CONTRACT: SC-INTEGRATION-002 Real Telegram Voice Input + STT Inte
 
     await adapter.handleMessage({ channel: 'text', raw_input: 'завтра' }, sessionUser, sc);
     const ctx = dm.getActiveState(sessionUser)!;
-    ctx.offers = [
+    dm.setOffersForContext(ctx.contextId, [
       { id: 'xyz-17', name: 'Ирина', index: 1, status: 'AVAILABLE' },
       { id: 'xyz-42', name: 'Ольга', index: 2, status: 'AVAILABLE' }
-    ] as any;
+    ] as any, sessionUser);
 
     await sendVoiceAudio('выбираю вторую');
 
@@ -158,7 +156,7 @@ test.describe('CONTRACT: SC-INTEGRATION-002 Real Telegram Voice Input + STT Inte
     const res = await sendVoiceAudio('отменяю');
 
     expect(res.status).toBe('CANCELLED');
-    expect(dm.getActiveState(sessionUser)).toBeUndefined();
+    expect(dm.getActiveState(sessionUser)).toBeNull();
   });
 
   test('TV-07: STT failure keeps context intact and allows continuation', async () => {
