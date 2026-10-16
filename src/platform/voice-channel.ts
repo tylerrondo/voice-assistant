@@ -482,6 +482,18 @@ export class VoiceChannel {
 
     // 2. Intent Resolution (Evaluation / Comparison Queries)
     const intentRes = this.resolveIntent(text);
+    const isNewScenarioActivation = intentRes.status === 'RESOLVED' && (() => {
+      const sc = intentRes.scenario;
+      const activationTriggers = [
+        sc.activation?.value,
+        ...(Array.isArray(sc.aliases) ? sc.aliases : [])
+      ].filter((trigger): trigger is string => Boolean(trigger));
+      return activationTriggers.some(trigger => {
+        const clean = trigger.replace(/^voice\./, '').replace(/[-_]/g, ' ').toLowerCase().trim();
+        return text === clean || text.startsWith(clean) || clean.startsWith(`${text} `)
+          || clean.split(/\s+/).every(word => text.includes(word));
+      });
+    })();
 
     if (intentRes.status === 'RESOLVED') {
       const sc = intentRes.scenario;
@@ -526,7 +538,7 @@ export class VoiceChannel {
     // 3. Declarative Active Context Processing
     const activeWaiting = this.dialogueManager.listContexts(identity).filter(c => c.status === 'WAITING_FOR_SLOT');
 
-    if (activeWaiting.length === 1) {
+    if (!isNewScenarioActivation && activeWaiting.length === 1) {
       const activeCtx = activeWaiting[0];
       const scenario = (activeCtx.scenarioId ? this.scenarioRegistry.find(s => s.id === activeCtx.scenarioId) : undefined)
         || this.getDeterministicScenarioForIntent(activeCtx.intent);
@@ -630,7 +642,7 @@ export class VoiceChannel {
           return updatedCtxState || this.dialogueManager.getContext(activeCtx.contextId, identity);
         }
       }
-    } else if (activeWaiting.length > 1) {
+    } else if (!isNewScenarioActivation && activeWaiting.length > 1) {
       const anyScenario = this.scenarioRegistry.find(s => s.slotExtractors);
       if (anyScenario?.slotExtractors) {
         const testSlot = this.extractSlotsDeterministically(text, anyScenario.slotExtractors, anyScenario.id);
