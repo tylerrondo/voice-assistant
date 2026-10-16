@@ -466,13 +466,14 @@ test.describe('CONTRACT: SC-INTEGRATION-003 Production Telegram Bot Voice Adapte
     expect(contexts[0].slots.start_time).toBe('15:00');
   });
 
-  test('AT-05: Button/Text/Voice all route through the same TelegramDialogueAdapter', async () => {
+  test('AT-05: Button/Text/Voice all route through the same DialogueEngine', async () => {
     const sc = getScenario();
-    let adapterCalls = 0;
-    const origHandle = dialogueAdapter.handleMessage.bind(dialogueAdapter);
-    dialogueAdapter.handleMessage = async (...args) => {
-      adapterCalls++;
-      return origHandle(...args);
+    const engine = dialogueAdapter.getDialogueEngine();
+    let engineCalls = 0;
+    const origProcess = engine.processInput.bind(engine);
+    engine.processInput = async (...args: Parameters<typeof engine.processInput>) => {
+      engineCalls++;
+      return origProcess(...args);
     };
 
     await botAdapter.handleUpdate({ message: { from: testUser, chat: testChat, text: 'завтра' } }, sc);
@@ -481,7 +482,7 @@ test.describe('CONTRACT: SC-INTEGRATION-003 Production Telegram Bot Voice Adapte
     mockSTT.setTranscript('до восьми');
     await botAdapter.handleUpdate({ message: { from: testUser, chat: testChat, voice: { file_id: 'v-at05' } } }, sc);
 
-    expect(adapterCalls).toBe(3);
+    expect(engineCalls).toBe(3);
   });
 
   test('AT-06: telegram-bot-adapter.ts does NOT contain selected_nanny, confirmation, ORDER_CONFIRMED, CANCELLED, nanny', () => {
