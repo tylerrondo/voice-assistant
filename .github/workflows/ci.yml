@@ -9,6 +9,8 @@ on:
 jobs:
   test-and-verify:
     name: Build, Contract & E2E Validation
+    env:
+      APP_URL: http://localhost:3000
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
