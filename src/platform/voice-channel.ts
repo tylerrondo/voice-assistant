@@ -146,9 +146,10 @@ export class VoiceChannel {
         throw new Error(`CONTRACT_VIOLATION: invalid priority for scenario "${sc.id}"`);
       }
 
+      // Activation keys and aliases must be unique; triggerPhrases may intentionally
+      // overlap to express ambiguity resolved by priority or clarification.
       const triggers = [
         sc.activation?.value,
-        ...(Array.isArray(sc.triggerPhrases) ? sc.triggerPhrases : []),
         ...(Array.isArray(sc.aliases) ? sc.aliases : [])
       ].filter((trigger): trigger is string => typeof trigger === 'string' && trigger.trim().length > 0);
 
