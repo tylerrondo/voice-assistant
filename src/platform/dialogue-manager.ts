@@ -45,6 +45,7 @@ export interface ActionExecution {
   intent: string;
   actionType: string;
   payload: Record<string, any>;
+  event: { type: string; payload: Record<string, any> };
   status: ExecutionStatus;
   attempt: number;
   createdAt: number;
@@ -72,6 +73,7 @@ export interface DialogueManagerConfig {
   maxActiveContexts?: number;
   defaultTtlMs?: number;
   actionDispatcher?: ActionDispatcher;
+  onActionDispatch?: (event: { type: string; payload: Record<string, any> }, context: DialogueContext) => void | Promise<void>;
   retryPolicy?: RetryPolicy;
   enableAutoExpiryScheduler?: boolean;
 }
@@ -115,7 +117,13 @@ export class DialogueStateManager {
     } else {
       this.maxActiveContexts = configOrTimeout.maxActiveContexts ?? 50;
       this.defaultTtlMs = configOrTimeout.defaultTtlMs ?? 300000;
-      this.actionDispatcher = configOrTimeout.actionDispatcher;
+      const onActionDispatch = configOrTimeout.onActionDispatch;
+      this.actionDispatcher = configOrTimeout.actionDispatcher ?? (onActionDispatch
+        ? async (event, context, execution) => {
+            await onActionDispatch(event, context);
+            return { status: 'SUCCEEDED' as const, executionId: execution.executionId, attempt: execution.attempt };
+          }
+        : undefined);
       this.retryPolicy = configOrTimeout.retryPolicy ?? { maxAttempts: 3, retryableErrors: ['TIMEOUT', 'NETWORK_ERROR', 'TEMPORARY_UNAVAILABLE'] };
       this.enableAutoExpiryScheduler = configOrTimeout.enableAutoExpiryScheduler ?? true;
     }
@@ -570,12 +578,16 @@ export class DialogueStateManager {
     providedExecutionId?: string
   ): ActionExecution {
     this.validateIdentity(identity);
-    if (ctx.ownerId !== identity.ownerId || ctx.sessionId !== identity.sessionId) {
+    const sourceContext = this.contexts.get(ctx.contextId);
+    if (!sourceContext) {
+      throw new Error(`CONTRACT_VIOLATION: Context "${ctx.contextId}" not found`);
+    }
+    if (sourceContext.ownerId !== identity.ownerId || sourceContext.sessionId !== identity.sessionId) {
       throw new Error('SECURITY_VIOLATION: Cannot create execution for foreign context');
     }
 
-    if (['COMPLETED', 'CANCELLED', 'EXPIRED'].includes(ctx.status)) {
-      throw new Error(`CONTRACT_VIOLATION: Cannot create execution for terminal context (${ctx.status})`);
+    if (['COMPLETED', 'CANCELLED', 'EXPIRED'].includes(sourceContext.status)) {
+      throw new Error(`CONTRACT_VIOLATION: Cannot create execution for terminal context (${sourceContext.status})`);
     }
 
     const executionId = providedExecutionId || `exec_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -585,7 +597,7 @@ export class DialogueStateManager {
       const sameOwner = existing.ownerId === identity.ownerId && existing.sessionId === identity.sessionId;
       const sameCtx = existing.contextId === ctx.contextId;
       const sameAction = existing.actionType === ctx.actionType;
-      const samePayload = JSON.stringify(existing.payload) === JSON.stringify(ctx.slots);
+      const samePayload = JSON.stringify(existing.payload) === JSON.stringify(sourceContext.slots);
 
       if (sameOwner && sameCtx && sameAction && samePayload) {
         return existing;
@@ -602,10 +614,11 @@ export class DialogueStateManager {
       ownerId: identity.ownerId,
       sessionId: identity.sessionId,
       contextId: ctx.contextId,
-      scenarioId: ctx.scenarioId || 'sc-default',
-      intent: ctx.intent,
-      actionType: ctx.actionType,
-      payload: { ...ctx.slots },
+      scenarioId: sourceContext.scenarioId || 'sc-default',
+      intent: sourceContext.intent,
+      actionType: sourceContext.actionType,
+      payload: { ...sourceContext.slots },
+      event: { type: sourceContext.actionType, payload: { ...sourceContext.slots } },
       status: 'PENDING',
       attempt: 0,
       createdAt: now,
@@ -656,6 +669,15 @@ export class DialogueStateManager {
     const prevPromise = this.contextMutationQueues.get(contextId) || Promise.resolve();
 
     const dispatchPromise = prevPromise.then(async () => {
+      if (execution.status === 'SUCCEEDED') {
+        return { status: 'SUCCEEDED' as const, executionId: execution.executionId, attempt: execution.attempt };
+      }
+      if (execution.status === 'FAILED') {
+        throw new Error(`CONTRACT_VIOLATION: Cannot dispatch terminal FAILED execution "${executionId}". A new executionId must be created.`);
+      }
+      if (execution.status === 'UNKNOWN') {
+        return { status: 'UNKNOWN' as const, executionId: execution.executionId, errorCode: execution.errorCode || 'UNKNOWN', attempt: execution.attempt };
+      }
       const ctx = this.contexts.get(contextId);
       if (!ctx) {
         throw new Error(`CONTRACT_VIOLATION: Context "${contextId}" not found`);
@@ -832,6 +854,6 @@ export class DialogueStateManager {
     this.validateIdentity(identity);
     return Array.from(this.executions.values())
       .filter(l => l.ownerId === identity.ownerId && l.sessionId === identity.sessionId)
-      .map(l => ({ ...l, payload: { ...l.payload } }));
+      .map(l => ({ ...l, payload: { ...l.payload }, event: { type: l.event.type, payload: { ...l.event.payload } } }));
   }
 }
