@@ -481,7 +481,7 @@ export class VoiceChannel {
       const activeWaiting = this.dialogueManager.listContexts(identity).filter(c => c.status === 'WAITING_FOR_SLOT');
 
       if (isPureCancel) {
-        if (!isNewScenarioActivation && activeWaiting.length === 1) {
+        if (activeWaiting.length === 1) {
           return this.dialogueManager.cancelContext(activeWaiting[0].contextId, identity);
         }
         if (activeWaiting.length > 1) {
@@ -558,7 +558,7 @@ export class VoiceChannel {
     // 3. Declarative Active Context Processing
     const activeWaiting = this.dialogueManager.listContexts(identity).filter(c => c.status === 'WAITING_FOR_SLOT');
 
-    if (activeWaiting.length === 1) {
+    if (!isNewScenarioActivation && activeWaiting.length === 1) {
       const activeCtx = activeWaiting[0];
       const scenario = (activeCtx.scenarioId ? this.scenarioRegistry.find(s => s.id === activeCtx.scenarioId) : undefined)
         || this.getDeterministicScenarioForIntent(activeCtx.intent);
