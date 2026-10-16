@@ -1,6 +1,6 @@
 import {
   DialogueStateManager,
-  ActionDispatcher,
+  type ActionDispatcher,
   type SessionIdentity,
   type OfferDefinition,
   type DialogueContext,
