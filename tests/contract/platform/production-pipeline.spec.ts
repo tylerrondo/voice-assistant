@@ -24,8 +24,9 @@ test.describe('CONTRACT: PLATFORM-012 Production Pipeline Suite', () => {
   test('CONTRACT-02: Action Dispatch boundary invokes real onActionDispatch callback upon context completion', async () => {
     const dispatchedEvents: any[] = [];
     const dm = new DialogueStateManager({
-      onActionDispatch: (event, ctx) => {
+      actionDispatcher: async (event, ctx, execution) => {
         dispatchedEvents.push({ event, contextId: ctx.contextId });
+        return { status: 'SUCCEEDED', executionId: execution.executionId, attempt: execution.attempt };
       }
     });
     const channel = new VoiceChannel(dm);
@@ -70,7 +71,7 @@ test.describe('CONTRACT: PLATFORM-012 Production Pipeline Suite', () => {
     await channel.handleIncomingVoice('Прими заказ 1001', sessionUser);
     const cancelRes = await channel.handleIncomingVoice('Отмена', sessionUser);
 
-    expect(cancelRes).toBe(true);
+    expect(cancelRes).toMatchObject({ success: true, data: true });
     const ctx = dm.listContexts(sessionUser)[0];
     expect(ctx.status).toBe('CANCELLED');
     expect(dm.getExecutionLogs(sessionUser).length).toBe(0);
