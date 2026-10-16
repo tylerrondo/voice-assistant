@@ -196,6 +196,7 @@ export class VoiceChannel {
   public resolveIntent(phrase: string): IntentResolutionResult {
     const text = phrase.trim().toLowerCase();
     const matchingScenarios: ScenarioDefinition[] = [];
+    const strongMatchingScenarios: ScenarioDefinition[] = [];
 
     for (const sc of this.scenarioRegistry) {
       const triggers: string[] = [];
@@ -214,6 +215,7 @@ export class VoiceChannel {
 
       if (isStrongMatch) {
         matchingScenarios.push(sc);
+        strongMatchingScenarios.push(sc);
       } else if (isPrefixOnlyMatch) {
         matchingScenarios.push(sc);
       }
@@ -231,7 +233,9 @@ export class VoiceChannel {
     const maxPriority = Math.max(...matchingScenarios.map(s => s.priority ?? 0));
     const highestCandidates = matchingScenarios.filter(s => (s.priority ?? 0) === maxPriority);
 
-    const infoCandidate = highestCandidates.find(s => s.evaluation?.kind === 'query_attribute');
+    const infoCandidate = highestCandidates.find(
+      s => s.evaluation?.kind === 'query_attribute' && strongMatchingScenarios.includes(s)
+    );
     if (infoCandidate) {
       return { status: 'RESOLVED', scenarioId: infoCandidate.id, intent: infoCandidate.intent, scenario: infoCandidate };
     }
