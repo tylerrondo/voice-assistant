@@ -44,6 +44,10 @@ export interface DialogueEngineResult {
   nextQuestion?: string | null;
   offers?: unknown[];
   dispatchStatus?: string;
+  candidates?: Array<{ slotName: string; value: unknown; scenarioId: string }>;
+  clarificationPrompt?: string;
+  targetId?: string;
+  message?: string;
   presentation: DialoguePresentation;
 }
 
@@ -151,6 +155,18 @@ export class DialogueEngine {
         extractedSlots[input.payload.slotName] = input.payload.slotValue;
       } else if (rawText) {
         const extracted = this.vc.extractSlotsDeterministically(rawText, activeScenario.slotExtractors, activeScenario.id);
+        if (extracted.status === 'AMBIGUOUS_SLOT') {
+          return {
+            status: 'AMBIGUOUS_SLOT',
+            contextId: ctx?.contextId,
+            slots: ctx?.slots,
+            missingSlots: ctx?.missingSlots,
+            candidates: extracted.candidates,
+            clarificationPrompt: extracted.clarificationPrompt,
+            nextQuestion: extracted.clarificationPrompt || null,
+            presentation: { text: extracted.clarificationPrompt || 'Please clarify the selection.' }
+          };
+        }
         if (extracted.status === 'RESOLVED') {
           extractedSlots = extracted.slots;
         }
@@ -158,6 +174,18 @@ export class DialogueEngine {
     } else {
       if (rawText) {
         const extracted = this.vc.extractSlotsDeterministically(rawText, activeScenario.slotExtractors, activeScenario.id);
+        if (extracted.status === 'AMBIGUOUS_SLOT') {
+          return {
+            status: 'AMBIGUOUS_SLOT',
+            contextId: ctx?.contextId,
+            slots: ctx?.slots,
+            missingSlots: ctx?.missingSlots,
+            candidates: extracted.candidates,
+            clarificationPrompt: extracted.clarificationPrompt,
+            nextQuestion: extracted.clarificationPrompt || null,
+            presentation: { text: extracted.clarificationPrompt || 'Please clarify the selection.' }
+          };
+        }
         if (extracted.status === 'RESOLVED') {
           extractedSlots = extracted.slots;
         }
@@ -168,7 +196,7 @@ export class DialogueEngine {
     if (!ctx) {
       ctx = this.dm.createContext(
         activeScenario.intent,
-        {},
+        extractedSlots,
         activeScenario.requiredSlots || [],
         activeScenario.steps?.[0]?.event?.type || `${activeScenario.intent.toLowerCase()}.action`,
         activeScenario.clarificationPrompts || {},
@@ -185,7 +213,7 @@ export class DialogueEngine {
       const nonConfirmSlots = Object.keys(extractedSlots).filter(k => k !== confirmSlot);
 
       if (extractedSlots[confirmSlot] === rejectedVal && nonConfirmSlots.length === 0) {
-        this.dm.cancelContext(ctx.contextId, identity);
+        await this.dm.cancelContext(ctx.contextId, identity);
         return {
           status: 'CANCELLED',
           presentation: {
@@ -199,7 +227,7 @@ export class DialogueEngine {
     const targetSlot = activeScenario.candidateBinding?.targetSlot;
 
     // 6. Generic Candidate Resolution using existing SC-PLATFORM-003
-    if (targetSlot && ctx.offers && ctx.offers.length > 0 && extractedSlots[targetSlot] === undefined) {
+    if (targetSlot && ctx.offers && ctx.offers.length > 0) {
       const resolution = this.vc.resolveCandidate(
         extractedSlots,
         ctx.offers as any,
@@ -207,6 +235,29 @@ export class DialogueEngine {
         activeScenario.id,
         targetSlot
       );
+      if (resolution.status === 'AMBIGUOUS_SLOT') {
+        return {
+          status: 'AMBIGUOUS_SLOT',
+          contextId: ctx.contextId,
+          slots: ctx.slots,
+          missingSlots: ctx.missingSlots,
+          candidates: resolution.candidates,
+          clarificationPrompt: resolution.clarificationPrompt,
+          nextQuestion: resolution.clarificationPrompt || null,
+          presentation: { text: resolution.clarificationPrompt || 'Please choose a specific option.' }
+        };
+      }
+      if (resolution.status === 'CANDIDATE_UNAVAILABLE') {
+        return {
+          status: 'CANDIDATE_UNAVAILABLE',
+          contextId: ctx.contextId,
+          slots: ctx.slots,
+          missingSlots: ctx.missingSlots,
+          targetId: resolution.targetId,
+          message: resolution.message,
+          presentation: { text: resolution.message }
+        };
+      }
       if (resolution.status === 'RESOLVED') {
         extractedSlots[targetSlot] = resolution.targetId;
       }
@@ -237,7 +288,9 @@ export class DialogueEngine {
         const dispatchRes = await this.dm.dispatchAction(exec.executionId, ctx.slots, identity);
 
         return {
-          status: 'CONFIRMED',
+          status: dispatchRes.status === 'SUCCEEDED'
+            ? (confirmationConfig.confirmedStatus || 'CONFIRMED')
+            : dispatchRes.status,
           contextId: ctx.contextId,
           executionId: exec.executionId,
           dispatchStatus: dispatchRes.status,

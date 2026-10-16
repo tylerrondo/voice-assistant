@@ -1,6 +1,6 @@
 import {
   DialogueStateManager,
-  ActionDispatcher,
+  type ActionDispatcher,
   type SessionIdentity,
   type OfferDefinition,
   type DialogueContext,
@@ -52,6 +52,7 @@ export interface CandidateBindingDefinition {
 export interface ConfirmationDefinition {
   slot: string;
   confirmedValue: string;
+  confirmedStatus?: string;
   rejectedValue: string;
   confirmLabel?: string;
   rejectLabel?: string;
@@ -70,6 +71,7 @@ export interface ScenarioDefinition {
   aliases?: string[];
   priority?: number;
   intent: string;
+  expectedPhrase?: string;
   requiredSlots?: string[];
   slotExtractors?: Record<string, SlotExtractorDefinition>;
   candidateBinding?: CandidateBindingDefinition;
@@ -116,7 +118,9 @@ export type SlotExtractionResult =
 export class VoiceChannel {
   private dialogueManager: DialogueStateManager;
   private scenarioRegistry: ScenarioDefinition[] = [];
+  private activeScenarioIds: Set<string> = new Set();
   private activeScenarioSetId: string = '';
+  private selectedContextBySession: Map<string, string> = new Map();
 
   constructor(dialogueManager: DialogueStateManager) {
     this.dialogueManager = dialogueManager;
@@ -126,8 +130,40 @@ export class VoiceChannel {
     if (!scenarioSet || !Array.isArray(scenarioSet.scenarios)) {
       throw new Error('CONTRACT_VIOLATION: Invalid ScenarioSet structure');
     }
+    const inferredIntentByEvent: Record<string, string> = {
+      'driver.order.accepted': 'ACCEPT_ORDER', 'driver.arrived': 'DRIVER_ARRIVED',
+      'driver.trip.started': 'START_TRIP', 'driver.trip.finished': 'FINISH_TRIP',
+      'driver.available': 'DRIVER_AVAILABLE', 'order.accepted': 'ACCEPT_ORDER',
+      'order.dispatch.completed': 'ORDER_DISPATCH', 'order.payment.completed': 'ORDER_PAYMENT',
+      'order.standard.created': 'ORDER_STANDARD', 'order.express.created': 'ORDER_EXPRESS',
+      'nanny.order.confirmed': 'NANNY_ORDER_CONFIRMED', 'passenger.order.created': 'PASSENGER_ORDER_CREATED'
+    };
+    scenarioSet = { ...scenarioSet, scenarios: scenarioSet.scenarios.map((scenario: any) => {
+      const eventType = scenario.steps?.find((step: any) => step.kind === 'emit' && step.event?.type)?.event?.type;
+      const actionName = scenario.steps?.find((step: any) => step.kind === 'emit' && step.event?.payload?.action)?.event?.payload?.action;
+      const intent = scenario.intent || inferredIntentByEvent[eventType] || actionName;
+      if (!intent) throw new Error('CONTRACT_VIOLATION: Scenario "' + scenario.id + '" missing intent and no supported event can infer it');
+      return { ...scenario, intent };
+    }) };
 
     const seenIds = new Set<string>();
+    const triggerOwners = new Map<string, Array<{ scenarioId: string; priority: number }>>();
+    const normalizeTrigger = (value: string): string =>
+      value.replace(/^voice\./i, '').replace(/[-_]/g, ' ').trim().toLowerCase().replace(/\s+/g, ' ');
+
+    const validateTrigger = (value: string, scenarioId: string, priority = 0): void => {
+      const normalized = normalizeTrigger(value);
+      if (!normalized) return;
+      const owners = triggerOwners.get(normalized) || [];
+      const conflict = owners.find(owner => owner.scenarioId !== scenarioId && owner.priority === priority);
+      if (conflict) {
+        throw new Error(`CONTRACT_VIOLATION: Trigger or alias collision "${normalized}" between "${conflict.scenarioId}" and "${scenarioId}"`);
+      }
+      if (!owners.some(owner => owner.scenarioId === scenarioId)) {
+        owners.push({ scenarioId, priority });
+      }
+      triggerOwners.set(normalized, owners);
+    };
 
     for (const sc of scenarioSet.scenarios) {
       if (!sc.id || typeof sc.id !== 'string') {
@@ -141,16 +177,24 @@ export class VoiceChannel {
       if (!sc.intent || typeof sc.intent !== 'string') {
         throw new Error(`CONTRACT_VIOLATION: Scenario "${sc.id}" missing intent`);
       }
+      if (sc.priority !== undefined && !Number.isFinite(sc.priority)) {
+        throw new Error(`CONTRACT_VIOLATION: invalid priority for scenario "${sc.id}"`);
+      }
+
+      const triggers = [
+        ...(sc.activation?.value ? [sc.activation.value] : []),
+        ...(sc.triggerPhrases || []),
+        ...(sc.aliases || []),
+        ...(sc.expectedPhrase ? [sc.expectedPhrase] : [])
+      ];
+      for (const trigger of triggers) validateTrigger(trigger, sc.id, sc.priority ?? 0);
     }
 
-    for (const sc of scenarioSet.scenarios) {
-      const idx = this.scenarioRegistry.findIndex(s => s.id === sc.id);
-      if (idx >= 0) {
-        this.scenarioRegistry[idx] = sc;
-      } else {
-        this.scenarioRegistry.push(sc);
-      }
-    }
+    this.scenarioRegistry = [
+      ...this.scenarioRegistry.filter(existing => !scenarioSet.scenarios.some(incoming => incoming.id === existing.id)),
+      ...scenarioSet.scenarios
+    ];
+    this.activeScenarioIds = new Set(scenarioSet.scenarios.map(scenario => scenario.id));
     this.activeScenarioSetId = scenarioSet.id;
   }
 
@@ -175,17 +219,27 @@ export class VoiceChannel {
 
   public resolveIntent(phrase: string): IntentResolutionResult {
     const text = phrase.trim().toLowerCase();
+    const textWords = new Set(text.replace(/[-_]/g, ' ').split(/[^\p{L}\p{N}]+/u).filter(Boolean));
     const matchingScenarios: ScenarioDefinition[] = [];
 
-    for (const sc of this.scenarioRegistry) {
+    for (const sc of this.scenarioRegistry.filter(candidate => this.activeScenarioIds.has(candidate.id))) {
       const triggers: string[] = [];
       if (sc.activation?.value) triggers.push(sc.activation.value);
       if (Array.isArray(sc.triggerPhrases)) triggers.push(...sc.triggerPhrases);
       if (Array.isArray(sc.aliases)) triggers.push(...sc.aliases);
+      if (sc.expectedPhrase) triggers.push(sc.expectedPhrase);
 
       const matches = triggers.some(trig => {
         const clean = trig.replace(/^voice\./, '').replace(/[-_]/g, ' ').toLowerCase().trim();
-        return text === clean || text.startsWith(clean) || clean.startsWith(`${text} `) || clean.split(/\s+/).every(w => text.includes(w));
+        const phraseWords = text.replace(/[-_]/g, ' ').toLocaleLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+        const triggerWords = clean.split(/\s+/).filter(Boolean);
+        const containsTrigger = triggerWords.some((_, start) =>
+          triggerWords.every((word, offset) => phraseWords[start + offset] === word)
+        );
+        const phraseIsTriggerPrefix = phraseWords.length > 0
+          && phraseWords.length < triggerWords.length
+          && phraseWords.every((word, index) => triggerWords[index] === word);
+        return containsTrigger || phraseIsTriggerPrefix;
       });
 
       if (matches) {
@@ -234,16 +288,15 @@ export class VoiceChannel {
     }
 
     const resolvedSlots: Record<string, any> = {};
+    const patternMatches: Array<{ slotName: string; value: string; priority: number; matchedText: string }> = [];
+    const unicodeWordBoundary = '(?:(?<![\\p{L}\\p{N}_])(?=[\\p{L}\\p{N}_])|(?<=[\\p{L}\\p{N}_])(?![\\p{L}\\p{N}_]))';
+    const compilePattern = (pattern: string): RegExp =>
+      new RegExp(pattern.replace(/\\b/g, unicodeWordBoundary), 'iu');
 
     for (const [slotKey, extractor] of Object.entries(extractors)) {
       if (extractor.rules && Array.isArray(extractor.rules)) {
         for (const rule of extractor.rules) {
-          // JavaScript's built-in \\b treats Cyrillic letters as non-word characters.
-          // Convert outer word boundaries to Unicode-aware letter/number boundaries.
-          const unicodePattern = rule.pattern
-            .replace(/^\\\\b/, '(?<![\\\\p{L}\\\\p{N}_])')
-            .replace(/\\\\b$/, '(?=$|[^\\\\p{L}\\\\p{N}_])');
-          if (new RegExp(unicodePattern, 'iu').test(text)) {
+          if (compilePattern(rule.pattern).test(text)) {
             resolvedSlots[slotKey] = rule.value;
             break;
           }
@@ -251,54 +304,68 @@ export class VoiceChannel {
       } else if (extractor.type === 'enum') {
         if (extractor.patterns && Array.isArray(extractor.patterns)) {
           for (const pat of extractor.patterns) {
-            const match = text.match(new RegExp(pat, 'i'));
+            const match = text.match(compilePattern(pat));
             if (match) {
               resolvedSlots[slotKey] = 'CONFIRMED';
               break;
             }
           }
         } else if (extractor.mapping) {
-          const enumMatches = Object.entries(extractor.mapping)
-            .map(([enumValue, synonyms]) => {
-              const synonym = synonyms
-                .filter(item => text.includes(item.toLowerCase()))
-                .sort((a, b) => b.length - a.length)[0];
-              return synonym ? { value: enumValue, synonym } : undefined;
-            })
-            .filter((item): item is { value: string; synonym: string } => Boolean(item));
+          const matchingValues = Object.entries(extractor.mapping)
+            .filter(([, synonyms]) => synonyms.some(synonym => text.includes(synonym.toLowerCase())))
+            .map(([enumValue]) => enumValue);
 
-          if (enumMatches.length > 0) {
-            const longestLength = Math.max(...enumMatches.map(item => item.synonym.length));
-            const bestMatches = enumMatches.filter(item => item.synonym.length === longestLength);
-            const samePhraseConflict = bestMatches.length > 1
-              && bestMatches.every(item => item.synonym.toLowerCase() === bestMatches[0].synonym.toLowerCase());
+          if (matchingValues.length > 1) {
+            return {
+              status: 'AMBIGUOUS_SLOT',
+              candidates: matchingValues.map(value => ({ slotName: slotKey, value, scenarioId })),
+              clarificationPrompt: ambiguityPromptTemplate
+            };
+          }
 
-            if (samePhraseConflict) {
-              return {
-                status: 'AMBIGUOUS_SLOT',
-                candidates: bestMatches.map(item => ({
-                  slotName: slotKey,
-                  value: item.value,
-                  scenarioId
-                })),
-                clarificationPrompt: ambiguityPromptTemplate
-              };
-            }
-
-            resolvedSlots[slotKey] = bestMatches[0].value;
+          if (matchingValues.length === 1) {
+            resolvedSlots[slotKey] = matchingValues[0];
           }
         }
       } else if (extractor.type === 'integer' && extractor.pattern) {
-        const match = text.match(new RegExp(extractor.pattern, 'i'));
+        const match = text.match(compilePattern(extractor.pattern));
         if (match) {
           resolvedSlots[slotKey] = parseInt(match[0], 10);
         }
       } else if (extractor.type === 'string' && extractor.pattern) {
-        const match = text.match(new RegExp(extractor.pattern, 'i'));
+        const match = text.match(compilePattern(extractor.pattern));
         if (match) {
-          resolvedSlots[slotKey] = match[0];
+          patternMatches.push({
+            slotName: slotKey,
+            value: match[0],
+            matchedText: match[0].toLowerCase(),
+            priority: Number.isFinite(extractor.priority) ? extractor.priority as number : 0
+          });
         }
       }
+    }
+
+    const matchesByText = new Map<string, typeof patternMatches>();
+    for (const match of patternMatches) {
+      const group = matchesByText.get(match.matchedText) || [];
+      group.push(match);
+      matchesByText.set(match.matchedText, group);
+    }
+    for (const group of matchesByText.values()) {
+      const maxPriority = Math.max(...group.map(match => match.priority));
+      const highest = group.filter(match => match.priority === maxPriority);
+      if (highest.length > 1) {
+        return {
+          status: 'AMBIGUOUS_SLOT',
+          candidates: highest.map(match => ({
+            slotName: match.slotName,
+            value: match.value,
+            scenarioId
+          })),
+          clarificationPrompt: ambiguityPromptTemplate
+        };
+      }
+      resolvedSlots[highest[0].slotName] = highest[0].value;
     }
 
     if (Object.keys(resolvedSlots).length === 0) {
@@ -466,6 +533,76 @@ export class VoiceChannel {
     };
   }
 
+  private buildInitialScenarioSlots(
+    scenario: ScenarioDefinition,
+    extractedSlots: Record<string, any>
+  ): Record<string, any> {
+    const emitPayload = scenario.steps?.find(step => step.kind === 'emit')?.event?.payload || {};
+    const requiredSlots = new Set(scenario.requiredSlots || []);
+    const defaults: Record<string, any> = {};
+
+    for (const [key, rawValue] of Object.entries(emitPayload)) {
+      if (requiredSlots.has(key) && extractedSlots[key] === undefined) continue;
+
+      if (typeof rawValue !== 'string') {
+        defaults[key] = rawValue;
+        continue;
+      }
+
+      const exactSlot = rawValue.match(/^\{\{\s*slots\.([\w]+)\s*\}\}$/);
+      if (exactSlot) {
+        if (extractedSlots[exactSlot[1]] !== undefined) defaults[key] = extractedSlots[exactSlot[1]];
+        continue;
+      }
+
+      let unresolved = false;
+      const resolved = rawValue.replace(/\{\{\s*slots\.([\w]+)\s*\}\}/g, (_match, slotName: string) => {
+        if (extractedSlots[slotName] === undefined) {
+          unresolved = true;
+          return '';
+        }
+        return String(extractedSlots[slotName]);
+      });
+      if (!unresolved && !resolved.includes('{{')) defaults[key] = resolved;
+    }
+
+    return { ...defaults, ...extractedSlots };
+  }
+
+  private isActivationOnlyPhrase(scenario: ScenarioDefinition, phrase: string): boolean {
+    const normalize = (value: string): string => value
+      .replace(/^voice\./i, '')
+      .replace(/[-_]/g, ' ')
+      .toLowerCase()
+      .trim()
+      .replace(/\s+/g, ' ');
+    const normalizedPhrase = normalize(phrase);
+    const triggers = [
+      ...(scenario.activation?.value ? [scenario.activation.value] : []),
+      ...(scenario.triggerPhrases || []),
+      ...(scenario.aliases || []),
+      ...(scenario.expectedPhrase ? [scenario.expectedPhrase] : [])
+    ];
+    return triggers.some(trigger => normalize(trigger) === normalizedPhrase);
+  }
+
+  private findCompletedDuplicateContext(
+    scenario: ScenarioDefinition,
+    slots: Record<string, any>,
+    identity: SessionIdentity
+  ): DialogueContext | undefined {
+    const requiredSlots = scenario.requiredSlots || [];
+    if (requiredSlots.length === 0 || !requiredSlots.every(key => slots[key] !== undefined)) {
+      return undefined;
+    }
+    return this.dialogueManager.listContexts(identity).find(context =>
+      context.scenarioId === scenario.id &&
+      context.intent === scenario.intent &&
+      context.status === 'COMPLETED' &&
+      requiredSlots.every(key => Object.is(context.slots[key], slots[key]))
+    );
+  }
+
   public async handleIncomingVoice(phrase: string, identity: SessionIdentity): Promise<any> {
     if (!identity || !identity.ownerId || !identity.sessionId) {
       throw new Error('CONTRACT_VIOLATION: SessionIdentity is strictly required for handleIncomingVoice');
@@ -473,6 +610,7 @@ export class VoiceChannel {
 
     const text = phrase.trim().toLowerCase();
     const tokens = text.split(/\s+/);
+    const selectionKey = identity.ownerId + ':' + identity.sessionId;
 
     // 1. Cancellation Flow
     const isCancelToken = tokens.includes('отмена') || tokens.includes('отменить') || tokens.includes('cancel');
@@ -481,7 +619,14 @@ export class VoiceChannel {
       const activeWaiting = this.dialogueManager.listContexts(identity).filter(c => c.status === 'WAITING_FOR_SLOT');
 
       if (isPureCancel) {
+        const selectedContextId = this.selectedContextBySession.get(selectionKey);
+        const selectedContext = activeWaiting.find(context => context.contextId === selectedContextId);
+        if (selectedContext) {
+          this.selectedContextBySession.delete(selectionKey);
+          return this.dialogueManager.cancelContext(selectedContext.contextId, identity);
+        }
         if (activeWaiting.length === 1) {
+          this.selectedContextBySession.delete(selectionKey);
           return this.dialogueManager.cancelContext(activeWaiting[0].contextId, identity);
         }
         if (activeWaiting.length > 1) {
@@ -490,35 +635,76 @@ export class VoiceChannel {
             candidateContextIds: activeWaiting.map(c => c.contextId)
           };
         }
+        this.selectedContextBySession.delete(selectionKey);
         return { status: 'NO_MATCH' };
       }
 
       const routeResult = this.dialogueManager.resolveRouting(text, [], identity);
       if (routeResult.status === 'RESOLVED') {
+        this.selectedContextBySession.delete(selectionKey);
         return this.dialogueManager.cancelContext(routeResult.contextId, identity);
       }
+      if (routeResult.status === 'CONTEXT_ACCESS_DENIED') return routeResult;
       return { status: 'NO_MATCH' };
     }
 
-    // 2. Intent Resolution (Evaluation / Comparison Queries)
+    // Resolve intent before ownership routing so a new, explicitly activated order
+    // can use an order number that also exists in another session.
     const intentRes = this.resolveIntent(text);
-    const isNewScenarioActivation = intentRes.status === 'RESOLVED' && (() => {
-      const sc = intentRes.scenario;
-      const activationTriggers = [
-        sc.activation?.value,
-        ...(Array.isArray(sc.aliases) ? sc.aliases : [])
-      ].filter((trigger): trigger is string => Boolean(trigger));
-      return activationTriggers.some(trigger => {
-        const clean = trigger.replace(/^voice\./, '').replace(/[-_]/g, ' ').toLowerCase().trim();
-        return text === clean || text.startsWith(clean) || clean.startsWith(`${text} `)
-          || clean.split(/\s+/).every(word => text.includes(word));
+    const explicitIntentWithRequiredEntity = (() => {
+      if (intentRes.status !== 'RESOLVED') return false;
+      const scenario = intentRes.scenario;
+      if (!scenario.slotExtractors) return false;
+      const triggers = [
+        ...(scenario.activation?.value ? [scenario.activation.value] : []),
+        ...(scenario.triggerPhrases || []),
+        ...(scenario.aliases || []),
+        ...(scenario.expectedPhrase ? [scenario.expectedPhrase] : [])
+      ];
+      const phraseWords = text.replace(/[-_]/g, ' ').toLocaleLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+      const hasExplicitTrigger = triggers.some(trigger => {
+        const triggerWords = trigger.replace(/^voice\./i, '').replace(/[-_]/g, ' ')
+          .toLowerCase().trim().split(/\s+/).filter(Boolean);
+        return triggerWords.length > 0 && phraseWords.some((_, start) =>
+          triggerWords.every((word, offset) => phraseWords[start + offset] === word)
+        );
       });
+      if (!hasExplicitTrigger) return false;
+      const extracted = this.extractSlotsDeterministically(
+        text, scenario.slotExtractors, scenario.id, scenario.ambiguityPrompt?.template
+      );
+      return extracted.status === 'RESOLVED'
+        && Object.keys(extracted.slots).some(key => (scenario.requiredSlots || []).includes(key));
     })();
+
+    // A foreign entity is blocked for routing, but not when the utterance
+    // explicitly starts a new scenario and supplies one of that scenario's required entity slots.
+    const ownershipRoute = this.dialogueManager.resolveRouting(text, [], identity);
+    if (ownershipRoute.status === 'CONTEXT_ACCESS_DENIED' && !explicitIntentWithRequiredEntity) {
+      return ownershipRoute;
+    }
+
+    // 2. Intent Resolution (Evaluation / Comparison Queries)
 
     if (intentRes.status === 'RESOLVED') {
       const sc = intentRes.scenario;
 
-      if (sc.query || sc.evaluation) {
+      const phraseWords = text.split(/[^\p{L}\p{N}_-]+/u).filter(Boolean);
+      const queryTriggers = [
+        ...(sc.activation?.value ? [sc.activation.value] : []),
+        ...(sc.triggerPhrases || []),
+        ...(sc.aliases || []),
+        ...(sc.expectedPhrase ? [sc.expectedPhrase] : [])
+      ];
+      const isExplicitQuery = queryTriggers.some(trigger => {
+        const clean = trigger.replace(/^voice\./i, '').replace(/[-_]/g, ' ').toLowerCase().trim();
+        const triggerWords = clean.split(/\s+/).filter(Boolean);
+        return triggerWords.length > 0 && triggerWords.some((_, start) =>
+          triggerWords.every((word, offset) => phraseWords[start + offset] === word)
+        );
+      });
+
+      if ((sc.query || sc.evaluation) && isExplicitQuery) {
         const activeWaiting = this.dialogueManager.listContexts(identity).filter(c => c.status === 'WAITING_FOR_SLOT');
 
         if (activeWaiting.length === 0) {
@@ -555,10 +741,184 @@ export class VoiceChannel {
       }
     }
 
-    // 3. Declarative Active Context Processing
-    const activeWaiting = this.dialogueManager.listContexts(identity).filter(c => c.status === 'WAITING_FOR_SLOT');
+    if (intentRes.status === 'AMBIGUOUS_INTENT') {
+      return intentRes;
+    }
 
-    if (!isNewScenarioActivation && activeWaiting.length === 1) {
+    if (intentRes.status === 'RESOLVED') {
+      const waiting = this.dialogueManager.listContexts(identity).filter(c => c.status === 'WAITING_FOR_SLOT');
+      if (waiting.length > 0 && !waiting.some(c => c.intent === intentRes.intent) && !waiting.some(c => c.offers && c.offers.length > 0)) {
+        const sc = intentRes.scenario;
+        const slotRes = this.extractSlotsDeterministically(text, sc.slotExtractors, sc.id, sc.ambiguityPrompt?.template);
+        if (slotRes.status === 'AMBIGUOUS_SLOT') return slotRes;
+
+        let contextToInterrupt: DialogueContext | undefined;
+        if (intentRes.intent === 'DRIVER_ARRIVED') {
+          const taxiContexts = waiting.filter(context => context.intent === 'ACCEPT_ORDER');
+          const selectedContextId = this.selectedContextBySession.get(selectionKey);
+          contextToInterrupt = taxiContexts.find(context => context.contextId === selectedContextId)
+            || (taxiContexts.length === 1 ? taxiContexts[0] : undefined);
+          if (taxiContexts.length > 1 && !contextToInterrupt) {
+            return { status: 'AMBIGUOUS_CONTEXT', candidateContextIds: taxiContexts.map(context => context.contextId) };
+          }
+          if (contextToInterrupt) {
+            await this.dialogueManager.cancelContext(contextToInterrupt.contextId, identity);
+            this.selectedContextBySession.delete(selectionKey);
+          }
+        }
+
+        const extractedSlots = slotRes.status === 'RESOLVED' ? slotRes.slots : {};
+        const inheritedOrderId = contextToInterrupt?.slots.orderId;
+        const slots = {
+          ...(inheritedOrderId !== undefined ? { orderId: inheritedOrderId } : {}),
+          ...extractedSlots
+        };
+        const firstEmit = sc.steps?.find(step => step.kind === 'emit');
+        const ctx = this.dialogueManager.createContext(sc.intent, this.buildInitialScenarioSlots(sc, slots), sc.requiredSlots || [], firstEmit?.event?.type || (sc.intent.toLowerCase() + '.action'), sc.clarificationPrompts || {}, identity, sc.id);
+        if (ctx.missingSlots.length === 0) {
+          const execution = this.dialogueManager.createExecution(ctx, identity);
+          const result = await this.dialogueManager.dispatchAction(execution.executionId, ctx.slots, identity);
+          return { status: result.status === 'SUCCEEDED' ? 'COMPLETED' : result.status, intent: ctx.intent, contextId: ctx.contextId, executionId: execution.executionId, attempt: result.attempt, slots: ctx.slots, context: this.dialogueManager.getContext(ctx.contextId, identity) };
+        }
+        return ctx;
+      }
+    }
+
+    // A repeated explicit order command with a different entity starts a separate context.
+    // Do not overwrite the orderId in an already-open order when the user names another order.
+    if (intentRes.status === 'RESOLVED' && !intentRes.scenario.query && !intentRes.scenario.evaluation) {
+      const sc = intentRes.scenario;
+      const slotRes = this.extractSlotsDeterministically(text, sc.slotExtractors, sc.id, sc.ambiguityPrompt?.template);
+      const initialSlots = slotRes.status === 'RESOLVED' ? slotRes.slots : {};
+      const candidateSlots = this.buildInitialScenarioSlots(sc, initialSlots);
+      const completedDuplicate = this.findCompletedDuplicateContext(sc, candidateSlots, identity);
+      if (completedDuplicate) return completedDuplicate;
+
+      const activeForScenario = this.dialogueManager.listContexts(identity).filter(
+        c => c.status === 'WAITING_FOR_SLOT' && c.scenarioId === sc.id
+      );
+      const isCandidateSelection = !!sc.candidateBinding?.targetSlot
+        && initialSlots[sc.candidateBinding.targetSlot] !== undefined;
+      const startsDistinctInstance = !isCandidateSelection && activeForScenario.some(ctx =>
+        Object.entries(initialSlots).some(([key, value]) =>
+          ctx.slots[key] !== undefined && ctx.slots[key] !== value
+        )
+      );
+      if (startsDistinctInstance) {
+        const emitStep = sc.steps?.find(st => st.kind === 'emit');
+        const context = this.dialogueManager.createContext(
+          sc.intent,
+          this.buildInitialScenarioSlots(sc, initialSlots),
+          sc.requiredSlots || [],
+          emitStep?.event?.type || `${sc.intent.toLowerCase()}.action`,
+          sc.clarificationPrompts || {},
+          identity,
+          sc.id
+        );
+        // Without a declarative ambiguity policy, the explicit order command
+        // selects the new context for subsequent slot values. Scenarios that
+        // define an ambiguity prompt must still require explicit disambiguation.
+        if (!sc.ambiguityPrompt?.template) {
+          this.selectedContextBySession.set(selectionKey, context.contextId);
+        }
+        return context;
+      }
+    }
+
+    // 3. Declarative Active Context Processing
+    let activeWaiting = this.dialogueManager.listContexts(identity).filter(c => c.status === 'WAITING_FOR_SLOT');
+
+    if (activeWaiting.length > 1) {
+      const explicitRoute = this.dialogueManager.resolveRouting(text, [], identity);
+      if (explicitRoute.status === 'RESOLVED') {
+        activeWaiting = activeWaiting.filter(ctx => ctx.contextId === explicitRoute.contextId);
+        this.selectedContextBySession.set(selectionKey, explicitRoute.contextId);
+      } else {
+        // Resolve entity routing against extracted slot values as well as text matching.
+        // This avoids stale selection winning when the utterance names a concrete order.
+        const entityMatches = activeWaiting.filter(ctx => {
+          const scenario = (ctx.scenarioId ? this.scenarioRegistry.find(s => s.id === ctx.scenarioId) : undefined)
+            || this.getDeterministicScenarioForIntent(ctx.intent);
+          if (!scenario?.slotExtractors) return false;
+          const extracted = this.extractSlotsDeterministically(
+            text, scenario.slotExtractors, scenario.id, scenario.ambiguityPrompt?.template
+          );
+          if (extracted.status !== 'RESOLVED') return false;
+          return Object.entries(extracted.slots).some(([key, value]) =>
+            ctx.slots[key] !== undefined && Object.is(ctx.slots[key], value)
+          );
+        });
+        if (entityMatches.length === 1) {
+          activeWaiting = entityMatches;
+          this.selectedContextBySession.set(selectionKey, entityMatches[0].contextId);
+        } else if (entityMatches.length > 1) {
+          return {
+            status: 'AMBIGUOUS_CONTEXT',
+            candidateContextIds: entityMatches.map(ctx => ctx.contextId)
+          };
+        } else {
+          const selectedId = this.selectedContextBySession.get(selectionKey);
+          const selected = activeWaiting.find(ctx => ctx.contextId === selectedId);
+          // Only a context selected by an explicit entity route may bypass ambiguity.
+          if (selected) {
+            activeWaiting = [selected];
+          } else {
+            this.selectedContextBySession.delete(selectionKey);
+          }
+        }
+      }
+
+      const matchingContexts = activeWaiting.map(ctx => {
+        const scenario = (ctx.scenarioId ? this.scenarioRegistry.find(s => s.id === ctx.scenarioId) : undefined)
+          || this.getDeterministicScenarioForIntent(ctx.intent);
+        if (!scenario?.slotExtractors) return null;
+        const extracted = this.extractSlotsDeterministically(
+          text,
+          scenario.slotExtractors,
+          scenario.id,
+          scenario.ambiguityPrompt?.template
+        );
+        if (extracted.status !== 'RESOLVED') return null;
+        const relevantSlots = Object.entries(extracted.slots).filter(([key]) =>
+          ctx.missingSlots.includes(key) || ctx.slots[key] !== undefined
+        );
+        return relevantSlots.length > 0 ? { ctx, scenario, slots: relevantSlots } : null;
+      }).filter((item): item is { ctx: DialogueContext; scenario: ScenarioDefinition; slots: [string, any][] } => item !== null);
+
+      if (matchingContexts.length > 1) {
+        const slotNames = matchingContexts.flatMap(item => item.slots.map(([key]) => key));
+        const uniqueSlotNames = new Set(slotNames);
+        if (uniqueSlotNames.size > 1) {
+          return {
+            status: 'AMBIGUOUS_SLOT',
+            candidates: matchingContexts.flatMap(item => item.slots.map(([slotName, value]) => ({
+              slotName,
+              value,
+              scenarioId: item.scenario.id
+            }))),
+            clarificationPrompt: matchingContexts.find(item => item.scenario.ambiguityPrompt?.template)?.scenario.ambiguityPrompt?.template
+          };
+        }
+        const promptScenario = matchingContexts.find(item => item.scenario.ambiguityPrompt?.template)?.scenario;
+        const candidateEntities = matchingContexts
+          .map(item => Object.values(item.ctx.slots).filter(value => value !== undefined && value !== null).join(' '))
+          .filter(Boolean)
+          .join(', ');
+        const clarificationPrompt = promptScenario?.ambiguityPrompt?.template
+          ?.replaceAll('{candidateEntities}', candidateEntities);
+        return {
+          status: 'AMBIGUOUS_CONTEXT',
+          candidateContextIds: matchingContexts.map(item => item.ctx.contextId),
+          clarificationPrompt
+        };
+      }
+
+      if (matchingContexts.length === 1) {
+        activeWaiting = [matchingContexts[0].ctx];
+      }
+    }
+
+    if (activeWaiting.length === 1) {
       const activeCtx = activeWaiting[0];
       const scenario = (activeCtx.scenarioId ? this.scenarioRegistry.find(s => s.id === activeCtx.scenarioId) : undefined)
         || this.getDeterministicScenarioForIntent(activeCtx.intent);
@@ -580,8 +940,8 @@ export class VoiceChannel {
 
           if (activeCtx.offers && activeCtx.offers.length > 0) {
             const targetSlot = scenario.candidateBinding?.targetSlot
-              || activeCtx.missingSlots.find(s => s !== 'confirmation')
-              || scenario.requiredSlots?.find(s => s !== 'confirmation');
+              || activeCtx.missingSlots.find(s => s !== 'confirmation') 
+              || activeCtx.requiredSlots?.find(s => s !== 'confirmation');
 
             if (targetSlot) {
               const candidateResolution = this.resolveCandidate(
@@ -638,6 +998,29 @@ export class VoiceChannel {
             };
           }
 
+          const latestCtx = this.dialogueManager.getContext(activeCtx.contextId, identity) || activeCtx;
+          if (['COMPLETED', 'CANCELLED', 'EXPIRED'].includes(latestCtx.status)) return latestCtx;
+          if (latestCtx.missingSlots.length === 0 && !scenario.confirmation) {
+            let exec: any;
+            try {
+              exec = this.dialogueManager.createExecution(latestCtx, identity);
+            } catch (error) {
+              const current = this.dialogueManager.getContext(latestCtx.contextId, identity);
+              if (current && ['COMPLETED', 'CANCELLED', 'EXPIRED'].includes(current.status)) return current;
+              throw error;
+            }
+            const dispatchRes = await this.dialogueManager.dispatchAction(exec.executionId, latestCtx.slots, identity);
+            return {
+              status: dispatchRes.status === 'SUCCEEDED' ? 'COMPLETED' : dispatchRes.status,
+              intent: latestCtx.intent,
+              contextId: latestCtx.contextId,
+              executionId: exec.executionId,
+              attempt: dispatchRes.attempt,
+              slots: latestCtx.slots,
+              context: this.dialogueManager.getContext(latestCtx.contextId, identity)
+            };
+          }
+
           if (extracted.confirmation === 'CONFIRMED') {
             const currentCtx = this.dialogueManager.getContext(activeCtx.contextId, identity) || activeCtx;
             const remainingNonConfirm = currentCtx.missingSlots.filter(s => s !== 'confirmation');
@@ -649,31 +1032,21 @@ export class VoiceChannel {
                 const exec = this.dialogueManager.createExecution(updated, identity);
                 const dispatchRes = await this.dialogueManager.dispatchAction(exec.executionId, updated.slots, identity);
                 return {
-                  status: dispatchRes.status,
+                  status: dispatchRes.status === 'SUCCEEDED' ? 'COMPLETED' : dispatchRes.status,
+                  intent: updated.intent,
                   contextId: updated.contextId,
                   executionId: exec.executionId,
                   attempt: dispatchRes.attempt,
+                  slots: updated.slots,
                   context: this.dialogueManager.getContext(updated.contextId, identity)
                 };
               }
             }
           }
 
-          return updatedCtxState || this.dialogueManager.getContext(activeCtx.contextId, identity);
-        }
-      }
-    } else if (!isNewScenarioActivation && activeWaiting.length > 1) {
-      const anyScenario = this.scenarioRegistry.find(s => s.slotExtractors);
-      if (anyScenario?.slotExtractors) {
-        const testSlot = this.extractSlotsDeterministically(text, anyScenario.slotExtractors, anyScenario.id);
-        if (testSlot.status === 'RESOLVED') {
-          const hasCandidateSlot = Object.values(testSlot.slots).some(v => typeof v === 'number' || (typeof v === 'string' && v.includes('ambiguous')));
-          if (hasCandidateSlot) {
-            return {
-              status: 'AMBIGUOUS_CONTEXT',
-              candidateContextIds: activeWaiting.map(c => c.contextId)
-            };
-          }
+          const refreshed = this.dialogueManager.getContext(activeCtx.contextId, identity) || activeCtx;
+          if (['COMPLETED', 'CANCELLED', 'EXPIRED'].includes(refreshed.status)) return refreshed;
+          return updatedCtxState || refreshed;
         }
       }
     }
@@ -692,11 +1065,17 @@ export class VoiceChannel {
         return slotRes;
       }
 
-      const initialSlots = slotRes.status === 'RESOLVED' ? slotRes.slots : {};
+      const initialSlots = slotRes.status === 'RESOLVED' ? { ...slotRes.slots } : {};
+      if (initialSlots.confirmation === 'CONFIRMED' && this.isActivationOnlyPhrase(sc, phrase)) {
+        delete initialSlots.confirmation;
+      }
+      const candidateSlots = this.buildInitialScenarioSlots(sc, initialSlots);
+      const completedDuplicate = this.findCompletedDuplicateContext(sc, candidateSlots, identity);
+      if (completedDuplicate) return completedDuplicate;
 
       const ctx = this.dialogueManager.createContext(
         sc.intent,
-        initialSlots,
+        candidateSlots,
         requiredSlots,
         actionType,
         prompts,
@@ -708,7 +1087,8 @@ export class VoiceChannel {
         const exec = this.dialogueManager.createExecution(ctx, identity);
         const dispatchRes = await this.dialogueManager.dispatchAction(exec.executionId, ctx.slots, identity);
         return {
-          status: dispatchRes.status,
+          status: dispatchRes.status === 'SUCCEEDED' ? 'COMPLETED' : dispatchRes.status,
+          intent: ctx.intent,
           contextId: ctx.contextId,
           executionId: exec.executionId,
           attempt: dispatchRes.attempt,
@@ -722,6 +1102,8 @@ if (intentRes.status === 'AMBIGUOUS_INTENT') {
       return intentRes;
     }
 
+    const routingResult = this.dialogueManager.resolveRouting(text, [], identity);
+    if (routingResult.status === 'CONTEXT_ACCESS_DENIED') return routingResult;
     return { status: 'NO_MATCH' };
   }
 

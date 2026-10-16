@@ -12,6 +12,7 @@
         "value": "voice.accept-order"
       },
       "intent": "ACCEPT_ORDER",
+      "triggerPhrases": ["прими заказ", "принять заказ"],
       "requiredSlots": ["orderId", "payment"],
       "slotExtractors": {
         "orderId": {
@@ -56,6 +57,7 @@
         "type": "voice",
         "value": "voice.arrived"
       },
+      "triggerPhrases": ["я приехал", "я приехала", "я на месте", "на месте"],
       "intent": "DRIVER_ARRIVED",
       "requiredSlots": [],
       "steps": [
