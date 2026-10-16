@@ -36,8 +36,7 @@ jobs:
       - name: Build Voice Demo (Vercel app)
         working-directory: apps/voice-demo
         run: |
-          npm install --no-package-lock --no-audit --no-fund
-          npm run build
+          ../../node_modules/.bin/vite build
 
       - name: Install Playwright Browsers & Dependencies
         run: npx playwright install --with-deps chromium
