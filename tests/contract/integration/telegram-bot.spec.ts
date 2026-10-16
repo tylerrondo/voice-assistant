@@ -7,7 +7,7 @@ import { VoiceChannel, type ScenarioSet } from '../../../src/platform/voice-chan
 import { TelegramDialogueAdapter } from '../../../src/platform/telegram-dialogue-adapter';
 import { MockSTTProvider } from '../../../src/platform/stt-provider';
 import { TelegramVoiceTransport } from '../../../src/platform/telegram-voice-transport';
-import { MockTelegramFileProvider } from './helpers/telegram-helpers';
+import { MockTelegramFileProvider } from './telegram-voice-test-helpers';
 import {
   TelegramBotAdapter,
   MockTelegramClient,
@@ -247,7 +247,7 @@ test.describe('CONTRACT: SC-INTEGRATION-003 Production Telegram Bot Voice Adapte
       callback_query: { id: 'c-cancel', from: testUser, message: { chat: testChat }, data: botAdapter.encodeCallbackData('confirmation', 'REJECTED') }
     }, sc);
 
-    expect(dm.getActiveState(sessionUser)).toBeNull();
+    expect(dm.getActiveState(sessionUser)).toBeUndefined();
     expect(dispatcherCalls).toBe(0);
     expect(telegramClient.getLastMessage()?.text).toBe('Диалог отменён.');
   });
@@ -257,10 +257,10 @@ test.describe('CONTRACT: SC-INTEGRATION-003 Production Telegram Bot Voice Adapte
 
     await botAdapter.handleUpdate({ message: { from: testUser, chat: testChat, text: 'завтра' } }, sc);
     const ctx = dm.getActiveState(sessionUser)!;
-    expect(dm.setOffersForContext(ctx.contextId, [
+    ctx.offers = [
       { id: 'xyz-17', name: 'Ирина', index: 1, status: 'AVAILABLE' },
       { id: 'xyz-42', name: 'Ольга', index: 2, status: 'AVAILABLE' }
-    ] as any, sessionUser)).toBe(true);
+    ] as any;
 
     await botAdapter.handleUpdate({ message: { from: testUser, chat: testChat, text: 'с трех' } }, sc);
 

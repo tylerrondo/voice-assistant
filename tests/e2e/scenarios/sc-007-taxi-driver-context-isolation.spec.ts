@@ -7,31 +7,12 @@ const scenarioFilePath = path.resolve(path.dirname(fileURLToPath(import.meta.url
 test.describe('E2E: SC-007 Context Isolation & Cross-Contamination Protection Suite (ТЗ-VOICE-SC-007)', () => {
 
   async function setupApp(page: any) {
-    const appUrl = process.env.APP_URL || 'http://localhost:3000';
+    const appUrl = process.env.APP_URL || 'https://voice-assistant-two-olive.vercel.app';
     await page.goto(appUrl);
     await expect(page.locator('body')).toBeVisible();
 
     const fileInput = page.locator('input[type="file"]').first();
     await fileInput.setInputFiles(scenarioFilePath);
-    // These suites test context routing, not the single-active-order taxi FSM.
-    // Keep the first legal order on the real boundary; accept subsequent order
-    // events in the test dispatcher so concurrent context isolation is observable.
-    await page.evaluate(() => {
-      const app = (window as any).__VOICE_DEMO_APP__;
-      const dm = (window as any).__DIALOGUE_MANAGER__;
-      const boundary = app.runtime.platformExecutionBoundary;
-      dm.setActionDispatcher(async (event: any, context: any, execution: any) => {
-        const driverStatus = boundary.getDriverStatus();
-        if (
-          event.type === 'driver.order.accepted' &&
-          driverStatus !== 'AVAILABLE' &&
-          driverStatus !== 'TRIP_FINISHED'
-        ) {
-          return { status: 'SUCCEEDED', executionId: execution.executionId, attempt: execution.attempt };
-        }
-        return boundary.execute(event, execution);
-      });
-    });
   }
 
   async function emitVoicePhrase(page: any, phrase: string) {
@@ -49,14 +30,14 @@ test.describe('E2E: SC-007 Context Isolation & Cross-Contamination Protection Su
     await emitVoicePhrase(page, 'Прими заказ');
     await emitVoicePhrase(page, '1001');
 
-    const state = await page.evaluate(() => ((window as any).__DIALOGUE_MANAGER__.listContexts((window as any).__VOICE_DEMO_APP__.getIdentity()).slice(-1)[0] || (window as any).__DIALOGUE_MANAGER__.getActiveState((window as any).__VOICE_DEMO_APP__.getIdentity())));
+    const state = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getActiveState());
     expect(state.status).toBe('WAITING_FOR_SLOT');
     expect(state.intent).toBe('ACCEPT_ORDER');
     expect(state.slots.orderId).toBe(1001);
     expect(state.missingSlots).toEqual(['payment']);
 
     const matching1001 = await page.evaluate(() => {
-      const logs = (window as any).__DIALOGUE_MANAGER__.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity()).filter((entry: any) => entry.status === 'SUCCEEDED');
+      const logs = (window as any).__DIALOGUE_MANAGER__.getExecutionLogs();
       return logs.filter((l: any) => l.intent === 'ACCEPT_ORDER' && l.payload?.orderId === 1001);
     });
     expect(matching1001.length).toBe(0);
@@ -72,21 +53,20 @@ test.describe('E2E: SC-007 Context Isolation & Cross-Contamination Protection Su
 
     // 2. Switch to order 1002 without completing 1001
     await emitVoicePhrase(page, 'Прими заказ 1002');
-    await emitVoicePhrase(page, 'Заказ 1002'); // Explicitly route the following slot to this context.
-    let state = await page.evaluate(() => ((window as any).__DIALOGUE_MANAGER__.listContexts((window as any).__VOICE_DEMO_APP__.getIdentity()).slice(-1)[0] || (window as any).__DIALOGUE_MANAGER__.getActiveState((window as any).__VOICE_DEMO_APP__.getIdentity())));
+    let state = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getActiveState());
     expect(state.status).toBe('WAITING_FOR_SLOT');
     expect(state.slots.orderId).toBe(1002);
     expect(state.missingSlots).toEqual(['payment']);
 
     // 3. Fill payment for order 1002
     await emitVoicePhrase(page, 'Картой');
-    state = await page.evaluate(() => ((window as any).__DIALOGUE_MANAGER__.listContexts((window as any).__VOICE_DEMO_APP__.getIdentity()).slice(-1)[0] || (window as any).__DIALOGUE_MANAGER__.getActiveState((window as any).__VOICE_DEMO_APP__.getIdentity())));
+    state = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getActiveState());
     expect(state.status).toBe('COMPLETED');
     expect(state.slots).toEqual({ orderId: 1002, payment: 'card' });
 
     // Validate strictly 1 execution for 1002 + card
     const executions1002 = await page.evaluate(() => {
-      const logs = (window as any).__DIALOGUE_MANAGER__.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity()).filter((entry: any) => entry.status === 'SUCCEEDED');
+      const logs = (window as any).__DIALOGUE_MANAGER__.getExecutionLogs();
       return logs.filter((l: any) => l.intent === 'ACCEPT_ORDER' && l.payload?.orderId === 1002 && l.payload?.payment === 'card');
     });
     expect(executions1002.length).toBe(1);
@@ -94,7 +74,7 @@ test.describe('E2E: SC-007 Context Isolation & Cross-Contamination Protection Su
 
     // Validate strictly 0 executions for 1001 + card
     const executions1001 = await page.evaluate(() => {
-      const logs = (window as any).__DIALOGUE_MANAGER__.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity()).filter((entry: any) => entry.status === 'SUCCEEDED');
+      const logs = (window as any).__DIALOGUE_MANAGER__.getExecutionLogs();
       return logs.filter((l: any) => l.intent === 'ACCEPT_ORDER' && l.payload?.orderId === 1001);
     });
     expect(executions1001.length).toBe(0);
@@ -109,10 +89,9 @@ test.describe('E2E: SC-007 Context Isolation & Cross-Contamination Protection Su
     await emitVoicePhrase(page, 'Прими заказ');
     await emitVoicePhrase(page, '1001');
     await emitVoicePhrase(page, 'Прими заказ 1002');
-    await emitVoicePhrase(page, 'Заказ 1002'); // Explicitly route the following slot to this context.
     await emitVoicePhrase(page, 'Картой');
 
-    const logs = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity()).filter((entry: any) => entry.status === 'SUCCEEDED'));
+    const logs = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getExecutionLogs());
 
     // Disallowed combinations
     const contaminated1001Card = logs.filter((l: any) => l.payload?.orderId === 1001 && l.payload?.payment === 'card');
@@ -130,15 +109,14 @@ test.describe('E2E: SC-007 Context Isolation & Cross-Contamination Protection Su
     await emitVoicePhrase(page, 'Прими заказ');
     await emitVoicePhrase(page, '1001');
     await emitVoicePhrase(page, 'Прими заказ 1002');
-    await emitVoicePhrase(page, 'Заказ 1002'); // Explicitly route the following slot to this context.
     await emitVoicePhrase(page, 'Картой');
 
     const total1002 = await page.evaluate(() => {
-      const logs = (window as any).__DIALOGUE_MANAGER__.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity()).filter((entry: any) => entry.status === 'SUCCEEDED');
+      const logs = (window as any).__DIALOGUE_MANAGER__.getExecutionLogs();
       return logs.filter((l: any) => l.payload?.orderId === 1002 && l.payload?.payment === 'card').length;
     });
     const total1001 = await page.evaluate(() => {
-      const logs = (window as any).__DIALOGUE_MANAGER__.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity()).filter((entry: any) => entry.status === 'SUCCEEDED');
+      const logs = (window as any).__DIALOGUE_MANAGER__.getExecutionLogs();
       return logs.filter((l: any) => l.payload?.orderId === 1001).length;
     });
 
@@ -152,15 +130,14 @@ test.describe('E2E: SC-007 Context Isolation & Cross-Contamination Protection Su
     await emitVoicePhrase(page, 'Прими заказ');
     await emitVoicePhrase(page, '1001');
     await emitVoicePhrase(page, 'Прими заказ 1002');
-    await emitVoicePhrase(page, 'Заказ 1002'); // Explicitly route the following slot to this context.
     await emitVoicePhrase(page, 'Наличными');
 
     const matching1002 = await page.evaluate(() => {
-      const logs = (window as any).__DIALOGUE_MANAGER__.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity()).filter((entry: any) => entry.status === 'SUCCEEDED');
+      const logs = (window as any).__DIALOGUE_MANAGER__.getExecutionLogs();
       return logs.filter((l: any) => l.payload?.orderId === 1002 && l.payload?.payment === 'cash').length;
     });
     const matching1001 = await page.evaluate(() => {
-      const logs = (window as any).__DIALOGUE_MANAGER__.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity()).filter((entry: any) => entry.status === 'SUCCEEDED');
+      const logs = (window as any).__DIALOGUE_MANAGER__.getExecutionLogs();
       return logs.filter((l: any) => l.payload?.orderId === 1001).length;
     });
 
@@ -177,7 +154,7 @@ test.describe('E2E: SC-007 Context Isolation & Cross-Contamination Protection Su
     await emitVoicePhrase(page, 'Картой');
 
     const executions1001 = await page.evaluate(() => {
-      const logs = (window as any).__DIALOGUE_MANAGER__.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity()).filter((entry: any) => entry.status === 'SUCCEEDED');
+      const logs = (window as any).__DIALOGUE_MANAGER__.getExecutionLogs();
       return logs.filter((l: any) => l.intent === 'ACCEPT_ORDER' && l.payload?.orderId === 1001).length;
     });
 
@@ -190,20 +167,19 @@ test.describe('E2E: SC-007 Context Isolation & Cross-Contamination Protection Su
     await emitVoicePhrase(page, 'Прими заказ');
     await emitVoicePhrase(page, '1001');
     await emitVoicePhrase(page, 'Прими заказ 1002');
-    await emitVoicePhrase(page, 'Заказ 1002'); // Explicitly route the following slot to this context.
     await emitVoicePhrase(page, 'Не знаю');
     await emitVoicePhrase(page, 'Картой');
 
-    const state = await page.evaluate(() => ((window as any).__DIALOGUE_MANAGER__.listContexts((window as any).__VOICE_DEMO_APP__.getIdentity()).slice(-1)[0] || (window as any).__DIALOGUE_MANAGER__.getActiveState((window as any).__VOICE_DEMO_APP__.getIdentity())));
+    const state = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getActiveState());
     expect(state.status).toBe('COMPLETED');
     expect(state.slots).toEqual({ orderId: 1002, payment: 'card' });
 
     const executions1002 = await page.evaluate(() => {
-      const logs = (window as any).__DIALOGUE_MANAGER__.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity()).filter((entry: any) => entry.status === 'SUCCEEDED');
+      const logs = (window as any).__DIALOGUE_MANAGER__.getExecutionLogs();
       return logs.filter((l: any) => l.payload?.orderId === 1002 && l.payload?.payment === 'card').length;
     });
     const executions1001 = await page.evaluate(() => {
-      const logs = (window as any).__DIALOGUE_MANAGER__.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity()).filter((entry: any) => entry.status === 'SUCCEEDED');
+      const logs = (window as any).__DIALOGUE_MANAGER__.getExecutionLogs();
       return logs.filter((l: any) => l.payload?.orderId === 1001).length;
     });
 
@@ -217,7 +193,6 @@ test.describe('E2E: SC-007 Context Isolation & Cross-Contamination Protection Su
     await emitVoicePhrase(page, 'Прими заказ');
     await emitVoicePhrase(page, '1001');
     await emitVoicePhrase(page, 'Прими заказ 1002');
-    await emitVoicePhrase(page, 'Заказ 1002'); // Explicitly route the following slot to this context.
     await emitVoicePhrase(page, 'Картой');
 
     // Duplicate utterances
@@ -226,7 +201,7 @@ test.describe('E2E: SC-007 Context Isolation & Cross-Contamination Protection Su
     await emitVoicePhrase(page, 'Прими заказ 1002 с оплатой картой');
 
     const count1002 = await page.evaluate(() => {
-      const logs = (window as any).__DIALOGUE_MANAGER__.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity()).filter((entry: any) => entry.status === 'SUCCEEDED');
+      const logs = (window as any).__DIALOGUE_MANAGER__.getExecutionLogs();
       return logs.filter((l: any) => l.intent === 'ACCEPT_ORDER' && l.payload?.orderId === 1002 && l.payload?.payment === 'card').length;
     });
 

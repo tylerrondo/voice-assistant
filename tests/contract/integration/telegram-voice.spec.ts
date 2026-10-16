@@ -1,16 +1,13 @@
 import { test, expect } from '@playwright/test';
+import { fileURLToPath } from 'node:url';
 import * as fs from 'fs';
 import * as path from 'path';
-import { fileURLToPath } from 'url';
 import { DialogueStateManager } from '../../../src/platform/dialogue-manager';
 import { VoiceChannel, type ScenarioSet } from '../../../src/platform/voice-channel';
 import { TelegramDialogueAdapter } from '../../../src/platform/telegram-dialogue-adapter';
 import { MockSTTProvider } from '../../../src/platform/stt-provider';
-import { TelegramVoiceTransport } from '../../../src/platform/telegram-voice-transport';
-import { MockTelegramFileProvider } from './helpers/telegram-helpers';
-
-// ES Modules: path.dirname(fileURLToPath(import.meta.url)) does not exist, so we compute the folder of this file.
-const testDir = path.dirname(fileURLToPath(import.meta.url));
+import { TelegramVoiceTransport, type TelegramVoiceMessage } from '../../../src/platform/telegram-voice-transport';
+import { MockTelegramFileProvider } from './telegram-voice-test-helpers';
 
 test.describe('CONTRACT: SC-INTEGRATION-002 Real Telegram Voice Input + STT Integration Suite', () => {
 
@@ -35,7 +32,7 @@ test.describe('CONTRACT: SC-INTEGRATION-002 Real Telegram Voice Input + STT Inte
     });
     vc = new VoiceChannel(dm);
 
-    const scenarioRaw = fs.readFileSync(path.resolve(testDir, '../../../scenario-nanny-order.json'), 'utf8');
+    const scenarioRaw = fs.readFileSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../scenario-nanny-order.json'), 'utf8');
     nannyScenarioSet = JSON.parse(scenarioRaw);
     vc.registerScenarioSet(nannyScenarioSet);
 
@@ -121,10 +118,10 @@ test.describe('CONTRACT: SC-INTEGRATION-002 Real Telegram Voice Input + STT Inte
 
     await adapter.handleMessage({ channel: 'text', raw_input: 'завтра' }, sessionUser, sc);
     const ctx = dm.getActiveState(sessionUser)!;
-    expect(dm.setOffersForContext(ctx.contextId, [
+    ctx.offers = [
       { id: 'xyz-17', name: 'Ирина', index: 1, status: 'AVAILABLE' },
       { id: 'xyz-42', name: 'Ольга', index: 2, status: 'AVAILABLE' }
-    ] as any, sessionUser)).toBe(true);
+    ] as any;
 
     await sendVoiceAudio('выбираю вторую');
 
@@ -159,7 +156,7 @@ test.describe('CONTRACT: SC-INTEGRATION-002 Real Telegram Voice Input + STT Inte
     const res = await sendVoiceAudio('отменяю');
 
     expect(res.status).toBe('CANCELLED');
-    expect(dm.getActiveState(sessionUser)).toBeNull();
+    expect(dm.getActiveState(sessionUser)).toBeUndefined();
   });
 
   test('TV-07: STT failure keeps context intact and allows continuation', async () => {
@@ -308,7 +305,7 @@ test.describe('CONTRACT: SC-INTEGRATION-002 Real Telegram Voice Input + STT Inte
 
   // Architectural Static Checks
   test('AT-01: TelegramVoiceTransport does NOT import DialogueStateManager, VoiceChannel, ScenarioDefinition, DomainNannyService', () => {
-    const transportPath = path.resolve(testDir, '../../../src/platform/telegram-voice-transport.ts');
+    const transportPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../src/platform/telegram-voice-transport.ts');
     const content = fs.readFileSync(transportPath, 'utf8');
 
     expect(content).not.toContain('DialogueStateManager');
@@ -318,7 +315,7 @@ test.describe('CONTRACT: SC-INTEGRATION-002 Real Telegram Voice Input + STT Inte
   });
 
   test('AT-02: STT provider contains no domain business logic (nanny, order, confirmation, candidate)', () => {
-    const sttPath = path.resolve(testDir, '../../../src/platform/stt-provider.ts');
+    const sttPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../src/platform/stt-provider.ts');
     const content = fs.readFileSync(sttPath, 'utf8');
 
     expect(content.toLowerCase()).not.toContain('nanny');
@@ -328,7 +325,7 @@ test.describe('CONTRACT: SC-INTEGRATION-002 Real Telegram Voice Input + STT Inte
   });
 
   test('AT-03: TelegramDialogueAdapter does NOT contain direct STT calls', () => {
-    const adapterPath = path.resolve(testDir, '../../../src/platform/telegram-dialogue-adapter.ts');
+    const adapterPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../src/platform/telegram-dialogue-adapter.ts');
     const content = fs.readFileSync(adapterPath, 'utf8');
 
     expect(content).not.toContain('sttProvider');

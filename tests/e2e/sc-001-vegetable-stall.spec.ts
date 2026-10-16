@@ -84,24 +84,24 @@ test.describe('SC-001: Scenario JSON Contract & Schema Validation', () => {
   });
 
   test('CONTRACT-06: Step 5 Schema - CREATE_NEW_CATALOG_ITEM', async () => {
-    const stepInput = scenarioSet.scenarios[0].steps[12];
+    const stepInput = scenarioSet.scenarios[0].steps[11];
     expect(stepInput.kind).toBe('emit');
     expect(stepInput.event.type).toBe('VOICE_INPUT_RECEIVED');
     expect(stepInput.event.payload.action).toBe('CREATE_NEW_CATALOG_ITEM');
 
-    const stepOutput = scenarioSet.scenarios[0].steps[13];
+    const stepOutput = scenarioSet.scenarios[0].steps[12];
     expect(stepOutput.kind).toBe('emit');
     expect(stepOutput.event.type).toBe('CATALOG_ITEM_CREATED');
     expect(stepOutput.event.payload.itemName).toBe('Клубника');
   });
 
   test('CONTRACT-07: Step 6 Schema - SET_INVENTORY_STOCK_LEVEL', async () => {
-    const stepInput = scenarioSet.scenarios[0].steps[15];
+    const stepInput = scenarioSet.scenarios[0].steps[13];
     expect(stepInput.kind).toBe('emit');
     expect(stepInput.event.type).toBe('VOICE_INPUT_RECEIVED');
     expect(stepInput.event.payload.action).toBe('SET_INVENTORY_STOCK_LEVEL');
 
-    const stepOutput = scenarioSet.scenarios[0].steps[16];
+    const stepOutput = scenarioSet.scenarios[0].steps[14];
     expect(stepOutput.kind).toBe('emit');
     expect(stepOutput.event.type).toBe('INVENTORY_STOCK_UPDATED');
     expect(stepOutput.event.payload.quantity).toBe(10.0);
@@ -122,13 +122,18 @@ test.describe('SC-001: Live Application Runtime Execution E2E (External JSON & S
 
   test('RUNTIME-E2E-01: Upload External JSON, Activate File Source & Verify Strict 6-Step Execution Trace', async ({ page }) => {
     // 1. Open Live Validation Bench
-    const appUrl = process.env.APP_URL || 'http://localhost:3000';
+    const appUrl = process.env.APP_URL || 'https://voice-assistant-two-olive.vercel.app';
     await page.goto(appUrl);
     await expect(page.locator('body')).toBeVisible();
 
-    // The production runtime exposes one direct JSON file input; it has no
-    // separate source-selection radio or Validation Bench wrapper.
-    const fileInput = page.locator('input[type="file"]').first();
+    // 2. Select External JSON Source via UI
+    const fileSourceRadio = page.locator('[data-testid="scenario-source-file"]').or(page.getByLabel(/загрузить json|файл json|upload json/i)).or(page.locator('input[type="file"]').locator('..'));
+    if (await fileSourceRadio.isVisible()) {
+      await fileSourceRadio.click();
+    }
+
+    // 3. Upload the exact external scenario JSON file
+    const fileInput = page.locator('[data-testid="scenario-file-input"]').or(page.locator('input[type="file"]')).first();
     await fileInput.setInputFiles(scenarioFilePath);
 
     // 4. Verify External File is active and confirmed in UI

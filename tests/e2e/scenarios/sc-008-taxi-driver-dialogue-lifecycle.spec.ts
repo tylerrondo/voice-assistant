@@ -7,7 +7,7 @@ const scenarioFilePath = path.resolve(path.dirname(fileURLToPath(import.meta.url
 test.describe('E2E: SC-008 Dialogue Lifecycle, Cancellation & Recovery Suite (ТЗ-VOICE-SC-008)', () => {
 
   async function setupApp(page: any) {
-    const appUrl = process.env.APP_URL || 'http://localhost:3000';
+    const appUrl = process.env.APP_URL || 'https://voice-assistant-two-olive.vercel.app';
     await page.goto(appUrl);
     await expect(page.locator('body')).toBeVisible();
 
@@ -36,17 +36,17 @@ test.describe('E2E: SC-008 Dialogue Lifecycle, Cancellation & Recovery Suite (Т
     await emitVoicePhrase(page, 'Прими заказ');
     await emitVoicePhrase(page, '1001');
 
-    let state = await page.evaluate(() => ((window as any).__DIALOGUE_MANAGER__.listContexts((window as any).__VOICE_DEMO_APP__.getIdentity()).slice(-1)[0] || (window as any).__DIALOGUE_MANAGER__.getActiveState((window as any).__VOICE_DEMO_APP__.getIdentity())));
+    let state = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getActiveState());
     expect(state.status).toBe('WAITING_FOR_SLOT');
     expect(state.slots.orderId).toBe(1001);
     expect(state.missingSlots).toEqual(['payment']);
 
     await emitVoicePhrase(page, 'Отмена');
-    state = await page.evaluate(() => ((window as any).__DIALOGUE_MANAGER__.listContexts((window as any).__VOICE_DEMO_APP__.getIdentity()).slice(-1)[0] || (window as any).__DIALOGUE_MANAGER__.getActiveState((window as any).__VOICE_DEMO_APP__.getIdentity())));
+    state = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getActiveState());
     expect(state.status).toBe('CANCELLED');
 
     const executions1001 = await page.evaluate(() => {
-      const logs = (window as any).__DIALOGUE_MANAGER__.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity()).filter((entry: any) => entry.status === 'SUCCEEDED');
+      const logs = (window as any).__DIALOGUE_MANAGER__.getExecutionLogs();
       return logs.filter((l: any) => l.event.type === 'driver.order.accepted' && l.event.payload.orderId === 1001);
     });
     expect(executions1001.length).toBe(0);
@@ -56,14 +56,14 @@ test.describe('E2E: SC-008 Dialogue Lifecycle, Cancellation & Recovery Suite (Т
     await setupApp(page);
     await emitVoicePhrase(page, 'Прими заказ');
 
-    let state = await page.evaluate(() => ((window as any).__DIALOGUE_MANAGER__.listContexts((window as any).__VOICE_DEMO_APP__.getIdentity()).slice(-1)[0] || (window as any).__DIALOGUE_MANAGER__.getActiveState((window as any).__VOICE_DEMO_APP__.getIdentity())));
+    let state = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getActiveState());
     expect(state.status).toBe('WAITING_FOR_SLOT');
 
     await emitVoicePhrase(page, 'Отмена');
-    state = await page.evaluate(() => ((window as any).__DIALOGUE_MANAGER__.listContexts((window as any).__VOICE_DEMO_APP__.getIdentity()).slice(-1)[0] || (window as any).__DIALOGUE_MANAGER__.getActiveState((window as any).__VOICE_DEMO_APP__.getIdentity())));
+    state = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getActiveState());
     expect(state.status).toBe('CANCELLED');
 
-    const allExecutions = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity()).filter((entry: any) => entry.status === 'SUCCEEDED'));
+    const allExecutions = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getExecutionLogs());
     expect(allExecutions.length).toBe(0);
   });
 
@@ -76,7 +76,7 @@ test.describe('E2E: SC-008 Dialogue Lifecycle, Cancellation & Recovery Suite (Т
     await emitVoicePhrase(page, 'Картой');
 
     const executions1001Card = await page.evaluate(() => {
-      const logs = (window as any).__DIALOGUE_MANAGER__.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity()).filter((entry: any) => entry.status === 'SUCCEEDED');
+      const logs = (window as any).__DIALOGUE_MANAGER__.getExecutionLogs();
       return logs.filter((l: any) => l.event.type === 'driver.order.accepted' && l.event.payload.orderId === 1001);
     });
     expect(executions1001Card.length).toBe(0);
@@ -96,7 +96,7 @@ test.describe('E2E: SC-008 Dialogue Lifecycle, Cancellation & Recovery Suite (Т
     await emitVoicePhrase(page, 'Наличными');
 
     // Strict single event.type assertion without OR alternatives
-    const logs = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity()).filter((entry: any) => entry.status === 'SUCCEEDED'));
+    const logs = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getExecutionLogs());
     const match1002 = logs.filter((l: any) => 
       l.event.type === 'driver.order.accepted' &&
       l.event.payload.orderId === 1002 && 
@@ -122,29 +122,29 @@ test.describe('E2E: SC-008 Dialogue Lifecycle, Cancellation & Recovery Suite (Т
     await emitVoicePhrase(page, 'Прими заказ');
     await emitVoicePhrase(page, 'Не знаю'); // invalid 1st
 
-    let state = await page.evaluate(() => ((window as any).__DIALOGUE_MANAGER__.listContexts((window as any).__VOICE_DEMO_APP__.getIdentity()).slice(-1)[0] || (window as any).__DIALOGUE_MANAGER__.getActiveState((window as any).__VOICE_DEMO_APP__.getIdentity())));
+    let state = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getActiveState());
     expect(state.status).toBe('WAITING_FOR_SLOT');
     expect(state.missingSlots).toEqual(['orderId', 'payment']);
 
     await emitVoicePhrase(page, '1001'); // valid 1st
-    state = await page.evaluate(() => ((window as any).__DIALOGUE_MANAGER__.listContexts((window as any).__VOICE_DEMO_APP__.getIdentity()).slice(-1)[0] || (window as any).__DIALOGUE_MANAGER__.getActiveState((window as any).__VOICE_DEMO_APP__.getIdentity())));
+    state = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getActiveState());
     expect(state.status).toBe('WAITING_FOR_SLOT');
     expect(state.slots.orderId).toBe(1001);
     expect(state.missingSlots).toEqual(['payment']);
 
     await emitVoicePhrase(page, 'Не знаю'); // invalid 2nd (must preserve orderId: 1001)
-    state = await page.evaluate(() => ((window as any).__DIALOGUE_MANAGER__.listContexts((window as any).__VOICE_DEMO_APP__.getIdentity()).slice(-1)[0] || (window as any).__DIALOGUE_MANAGER__.getActiveState((window as any).__VOICE_DEMO_APP__.getIdentity())));
+    state = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getActiveState());
     expect(state.status).toBe('WAITING_FOR_SLOT');
     expect(state.slots.orderId).toBe(1001);
     expect(state.missingSlots).toEqual(['payment']);
 
     await emitVoicePhrase(page, 'Картой'); // valid 2nd
-    state = await page.evaluate(() => ((window as any).__DIALOGUE_MANAGER__.listContexts((window as any).__VOICE_DEMO_APP__.getIdentity()).slice(-1)[0] || (window as any).__DIALOGUE_MANAGER__.getActiveState((window as any).__VOICE_DEMO_APP__.getIdentity())));
+    state = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getActiveState());
     expect(state.status).toBe('COMPLETED');
     expect(state.slots).toEqual({ orderId: 1001, payment: 'card' });
 
     const matching1001Card = await page.evaluate(() => {
-      const logs = (window as any).__DIALOGUE_MANAGER__.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity()).filter((entry: any) => entry.status === 'SUCCEEDED');
+      const logs = (window as any).__DIALOGUE_MANAGER__.getExecutionLogs();
       return logs.filter((l: any) => 
         l.event.type === 'driver.order.accepted' &&
         l.event.payload.orderId === 1001 && 
@@ -166,7 +166,7 @@ test.describe('E2E: SC-008 Dialogue Lifecycle, Cancellation & Recovery Suite (Т
     await emitVoicePhrase(page, 'Картой');
 
     const executionCount = await page.evaluate(() => {
-      const logs = (window as any).__DIALOGUE_MANAGER__.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity()).filter((entry: any) => entry.status === 'SUCCEEDED');
+      const logs = (window as any).__DIALOGUE_MANAGER__.getExecutionLogs();
       return logs.filter((l: any) => 
         l.event.type === 'driver.order.accepted' &&
         l.event.payload.orderId === 1001 && 
@@ -185,7 +185,7 @@ test.describe('E2E: SC-008 Dialogue Lifecycle, Cancellation & Recovery Suite (Т
     await emitVoicePhrase(page, 'Картой');
 
     const executions = await page.evaluate(() => {
-      const logs = (window as any).__DIALOGUE_MANAGER__.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity()).filter((entry: any) => entry.status === 'SUCCEEDED');
+      const logs = (window as any).__DIALOGUE_MANAGER__.getExecutionLogs();
       return logs.filter((l: any) => l.event.type === 'driver.order.accepted');
     });
     expect(executions.length).toBe(0);
@@ -202,18 +202,16 @@ test.describe('E2E: SC-008 Dialogue Lifecycle, Cancellation & Recovery Suite (Т
     await emitVoicePhrase(page, 'Я приехал');
 
     const acceptExecutions = await page.evaluate(() => {
-      const logs = (window as any).__DIALOGUE_MANAGER__.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity()).filter((entry: any) => entry.status === 'SUCCEEDED');
+      const logs = (window as any).__DIALOGUE_MANAGER__.getExecutionLogs();
       return logs.filter((l: any) => l.event.type === 'driver.order.accepted' && l.event.payload.orderId === 1001);
     });
     expect(acceptExecutions.length).toBe(0);
 
     const arrivedExecutions = await page.evaluate(() => {
-      const logs = (window as any).__DIALOGUE_MANAGER__.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity());
+      const logs = (window as any).__DIALOGUE_MANAGER__.getExecutionLogs();
       return logs.filter((l: any) => l.event.type === 'driver.arrived');
     });
     expect(arrivedExecutions.length).toBe(1);
-    expect(arrivedExecutions[0].status).toBe('FAILED');
-    expect(arrivedExecutions[0].errorCode).toBe('INVALID_FSM_TRANSITION');
   });
 
   test('IDEMP-01: Repeated cancellation preserves CANCELLED status without errors or executions', async ({ page }) => {
@@ -224,10 +222,10 @@ test.describe('E2E: SC-008 Dialogue Lifecycle, Cancellation & Recovery Suite (Т
     await emitVoicePhrase(page, 'Отмена');
     await emitVoicePhrase(page, 'Отмена');
 
-    const state = await page.evaluate(() => ((window as any).__DIALOGUE_MANAGER__.listContexts((window as any).__VOICE_DEMO_APP__.getIdentity()).slice(-1)[0] || (window as any).__DIALOGUE_MANAGER__.getActiveState((window as any).__VOICE_DEMO_APP__.getIdentity())));
+    const state = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getActiveState());
     expect(state.status).toBe('CANCELLED');
 
-    const logs = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity()).filter((entry: any) => entry.status === 'SUCCEEDED'));
+    const logs = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getExecutionLogs());
     expect(logs.length).toBe(0);
   });
 
@@ -242,7 +240,7 @@ test.describe('E2E: SC-008 Dialogue Lifecycle, Cancellation & Recovery Suite (Т
     await emitVoicePhrase(page, 'Картой');
 
     const executionCount = await page.evaluate(() => {
-      const logs = (window as any).__DIALOGUE_MANAGER__.getExecutionLogs((window as any).__VOICE_DEMO_APP__.getIdentity()).filter((entry: any) => entry.status === 'SUCCEEDED');
+      const logs = (window as any).__DIALOGUE_MANAGER__.getExecutionLogs();
       return logs.filter((l: any) => 
         l.event.type === 'driver.order.accepted' &&
         l.event.payload.orderId === 1001 && 

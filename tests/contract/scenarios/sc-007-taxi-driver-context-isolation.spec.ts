@@ -30,8 +30,7 @@ test.describe('CONTRACT: SC-007 Context Isolation Suite (ТЗ-VOICE-SC-007)', ()
   });
 
   test('CONTRACT-04: Schema contains zero targetState hints', async () => {
-    const { description, ...structuralScenarioSet } = scenarioSet;
-    const jsonString = JSON.stringify(structuralScenarioSet);
+    const jsonString = JSON.stringify(scenarioSet);
     expect(jsonString).not.toContain('targetState');
   });
 
@@ -43,8 +42,7 @@ test.describe('CONTRACT: SC-007 Context Isolation Suite (ТЗ-VOICE-SC-007)', ()
   });
 
   test('CONTRACT-06: Zero hardcoded orderId (1001/1002) in specification structure', async () => {
-    const { description, ...structuralScenarioSet } = scenarioSet;
-    const jsonString = JSON.stringify(structuralScenarioSet);
+    const jsonString = JSON.stringify(scenarioSet);
     expect(jsonString).not.toContain('1001');
     expect(jsonString).not.toContain('1002');
   });

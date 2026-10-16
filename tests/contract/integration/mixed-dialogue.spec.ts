@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
+import { fileURLToPath } from 'node:url';
 import * as fs from 'fs';
 import * as path from 'path';
-import { fileURLToPath } from 'node:url';
 import { DialogueStateManager } from '../../../src/platform/dialogue-manager';
 import { VoiceChannel, type ScenarioSet } from '../../../src/platform/voice-channel';
 import {
@@ -43,7 +43,7 @@ test.describe('CONTRACT: SC-INTEGRATION-001 Mixed Button / Text / Voice Dialogue
   const attachCandidates = (userId: typeof sessionUser, candidates: any[]) => {
     const ctx = dm.getActiveState(userId);
     if (ctx) {
-      dm.setOffersForContext(ctx.contextId, candidates as any, userId);
+      ctx.offers = candidates as any;
     }
   };
 
@@ -257,21 +257,21 @@ test.describe('CONTRACT: SC-INTEGRATION-001 Mixed Button / Text / Voice Dialogue
     await adapter.handleMessage({ channel: 'button', button_payload: { slotName: 'date', slotValue: 'завтра' } }, userBtn, sc);
     const resBtn = await adapter.handleMessage({ channel: 'button', button_payload: { slotName: 'confirmation', slotValue: 'REJECTED' } }, userBtn, sc);
     expect(resBtn.status).toBe('CANCELLED');
-    expect(dm.getActiveState(userBtn)).toBeNull();
+    expect(dm.getActiveState(userBtn)).toBeUndefined();
 
     // 2. Text cancel
     const userTxt = { ownerId: 'u-can-txt', sessionId: 's-can-txt' };
     await adapter.handleMessage({ channel: 'text', raw_input: 'нужна няня' }, userTxt, sc);
     const resTxt = await adapter.handleMessage({ channel: 'text', raw_input: 'отмена' }, userTxt, sc);
     expect(resTxt.status).toBe('CANCELLED');
-    expect(dm.getActiveState(userTxt)).toBeNull();
+    expect(dm.getActiveState(userTxt)).toBeUndefined();
 
     // 3. Voice cancel
     const userVoice = { ownerId: 'u-can-voice', sessionId: 's-can-voice' };
     await adapter.handleMessage({ channel: 'voice', transcript: 'нужна няня' }, userVoice, sc);
     const resVoice = await adapter.handleMessage({ channel: 'voice', transcript: 'отменяю' }, userVoice, sc);
     expect(resVoice.status).toBe('CANCELLED');
-    expect(dm.getActiveState(userVoice)).toBeNull();
+    expect(dm.getActiveState(userVoice)).toBeUndefined();
   });
 
   test('Test K — Arbitrary channel switching: button -> voice -> button -> text -> voice -> button', async () => {
