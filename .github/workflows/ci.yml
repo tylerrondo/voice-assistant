@@ -8,25 +8,45 @@ on:
 
 jobs:
   test-and-verify:
-    name: Build & Scenario Contract Validation
+    name: Build, Contract & E2E Validation
+    env:
+      APP_URL: http://localhost:3000
     runs-on: ubuntu-latest
     timeout-minutes: 15
+
     steps:
       - name: Checkout Source Code
         uses: actions/checkout@v4
+
       - name: Setup Node.js Environment
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: 'npm'
+
+      - name: Validate all repository JSON files
+        run: node scripts/validate-json.mjs
+
       - name: Install Dependencies
         run: npm ci || npm install
+
       - name: Build Application
         run: npm run build
+
+      - name: Build Voice Demo (Vercel app)
+        working-directory: apps/voice-demo
+        run: |
+          ../../node_modules/.bin/vite build
+
       - name: Install Playwright Browsers & Dependencies
         run: npx playwright install --with-deps chromium
+
       - name: Run Contract Tests
         run: npx playwright test tests/contract
+
+      - name: Run Production E2E Tests
+        run: npx playwright test tests/e2e
+
       - name: Upload Test Report Artifact
         if: always()
         uses: actions/upload-artifact@v4
