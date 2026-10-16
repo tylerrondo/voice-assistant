@@ -14,7 +14,7 @@ test.describe('E2E: SC-004 Taxi Driver Multi-Turn Dialogue & Real FSM Suite (Ð¢Ð
   });
 
   async function setupApp(page: any) {
-    const appUrl = process.env.APP_URL || 'https://voice-assistant-two-olive.vercel.app';
+    const appUrl = process.env.APP_URL || 'http://localhost:3000';
     await page.goto(appUrl);
     await expect(page.locator('body')).toBeVisible();
 
