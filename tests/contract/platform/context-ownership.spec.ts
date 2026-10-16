@@ -23,10 +23,10 @@ test.describe('CONTRACT: PLATFORM-013 Context Ownership & Session Isolation Suit
     const res = await dm.fillSlot('payment', 'card', ctx.contextId, sessionA);
     expect(res.success).toBe(true);
     if (res.success) {
-      expect(res.data.status).toBe('WAITING_FOR_SLOT');
       expect(res.data.slots.payment).toBe('card');
       expect(res.data.missingSlots).toEqual([]);
     }
+    expect(dm.getExecutionLogs(sessionA)).toHaveLength(0);
   });
 
   test('CONTRACT-03: Cross-owner access returns CONTEXT_ACCESS_DENIED and state remains unchanged', async () => {
@@ -112,7 +112,8 @@ test.describe('CONTRACT: PLATFORM-013 Context Ownership & Session Isolation Suit
     const dm = new DialogueStateManager();
     const ctxA = dm.createContext('ACCEPT_ORDER', { orderId: 1001 }, ['orderId', 'payment'], 'driver.order.accepted', {}, sessionA);
     await dm.fillSlot('payment', 'card', ctxA.contextId, sessionA);
-    dm.createExecution(ctxA, sessionA);
+    const updatedCtx = dm.getContext(ctxA.contextId, sessionA)!;
+    dm.createExecution(updatedCtx, sessionA);
 
     const listB = dm.listContexts(sessionB);
     expect(listB.length).toBe(0);

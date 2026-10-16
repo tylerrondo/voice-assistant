@@ -1,20 +1,13 @@
 import { test, expect } from '@playwright/test';
+import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import * as path from 'path';
 
 const scenarioFilePath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../scenario-sc-002-taxi-driver.json');
 
 test.describe('SC-002: Taxi Driver Standard Trip - Runtime E2E Suite', () => {
 
   test.beforeEach(async ({ page }) => {
-    await page.addInitScript(() => {
-      (window as any).__AUTH_OWNER_ID__ = 'e2e-validation-driver';
-      (window as any).__AUTH_SESSION_ID__ = 'e2e-validation-session';
-    });
-  });
-
-  test.beforeEach(async ({ page }) => {
-    const appUrl = process.env.APP_URL || 'http://localhost:3000';
+    const appUrl = process.env.APP_URL || 'https://voice-assistant-two-olive.vercel.app';
     await page.goto(appUrl);
     await expect(page.locator('body')).toBeVisible();
 

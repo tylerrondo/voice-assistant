@@ -1,20 +1,15 @@
 import { test, expect } from '@playwright/test';
+import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import * as path from 'path';
 
-const scenarioFilePath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../scenario-sc-010-taxi-driver-multi-context-lifecycle.json');
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+const scenarioFilePath = path.resolve(__dirname, '../../../scenario-sc-010-taxi-driver-multi-context-lifecycle.json');
 
 test.describe('E2E: SC-010 Multi-Context Complete Lifecycle Suite (ТЗ-VOICE-SC-010)', () => {
 
-  test.beforeEach(async ({ page }) => {
-    await page.addInitScript(() => {
-      (window as any).__AUTH_OWNER_ID__ = 'e2e-validation-driver';
-      (window as any).__AUTH_SESSION_ID__ = 'e2e-validation-session';
-    });
-  });
-
   async function setupApp(page: any) {
-    const appUrl = process.env.APP_URL || 'http://localhost:3000';
+    const appUrl = process.env.APP_URL || 'https://voice-assistant-two-olive.vercel.app';
     await page.goto(appUrl);
     await expect(page.locator('body')).toBeVisible();
 

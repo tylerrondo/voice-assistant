@@ -11,7 +11,7 @@ const scenarioSet: ScenarioSet = JSON.parse(rawContent);
 
 test.describe('CONTRACT: PLATFORM-012 Production Pipeline Suite', () => {
 
-  const identity = { ownerId: 'platform-012-owner', sessionId: 'platform-012-session' };
+  const identity = { ownerId: 'platform-012-test', sessionId: 'platform-012-session' };
 
   test('CONTRACT-01: VoiceChannel registers ScenarioSet and exposes activeScenarioSetId', async () => {
     const dm = new DialogueStateManager();
@@ -24,8 +24,9 @@ test.describe('CONTRACT: PLATFORM-012 Production Pipeline Suite', () => {
   test('CONTRACT-02: Action Dispatch boundary invokes real onActionDispatch callback upon context completion', async () => {
     const dispatchedEvents: any[] = [];
     const dm = new DialogueStateManager({
-      onActionDispatch: (event, ctx) => {
+      actionDispatcher: async (event, ctx, execution) => {
         dispatchedEvents.push({ event, contextId: ctx.contextId });
+        return { status: 'SUCCEEDED', executionId: execution.executionId, attempt: execution.attempt };
       }
     });
     const channel = new VoiceChannel(dm);
@@ -35,7 +36,7 @@ test.describe('CONTRACT: PLATFORM-012 Production Pipeline Suite', () => {
     await channel.handleIncomingVoice('Картой', identity);
 
     expect(dispatchedEvents.length).toBe(1);
-    expect(dispatchedEvents[0].event.type).toBe('driver.order.accepted', {}, identity);
+    expect(dispatchedEvents[0].event.type).toBe('driver.order.accepted');
     expect(dispatchedEvents[0].event.payload).toEqual({ orderId: 1001, payment: 'card' });
   });
 
@@ -70,9 +71,9 @@ test.describe('CONTRACT: PLATFORM-012 Production Pipeline Suite', () => {
     await channel.handleIncomingVoice('Прими заказ 1001', identity);
     const cancelRes = await channel.handleIncomingVoice('Отмена', identity);
 
-    expect(cancelRes.status).toBe('CANCELLED');
-    const ctx = dm.getContext(cancelRes.contextId, identity);
-    expect(ctx?.status).toBe('CANCELLED');
+    expect(cancelRes).toMatchObject({ success: true, data: true });
+    const ctx = dm.listContexts(identity)[0];
+    expect(ctx.status).toBe('CANCELLED');
     expect(dm.getExecutionLogs(identity).length).toBe(0);
   });
 

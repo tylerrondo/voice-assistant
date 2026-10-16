@@ -15,31 +15,41 @@ test.describe('SC-003: Taxi Driver End-to-End Trip - Contract Tests', () => {
     expect(scenarioSet.id).toBe('scenario-set-sc-003-taxi-driver-trip');
     expect(scenarioSet.name).toBe('Taxi Driver End-to-End Trip Workflow');
     expect(Array.isArray(scenarioSet.scenarios)).toBe(true);
-    expect(scenarioSet.scenarios.length).toBe(5);
+    expect(scenarioSet.scenarios.map((sc: any) => sc.id)).toEqual([
+      'sc003-accept-order',
+      'sc003-arrived',
+      'sc003-start-trip',
+      'sc003-finish-trip',
+      'sc003-become-available'
+    ]);
   });
 
-  test('CONTRACT-SC003-02: End-to-End Sequential Steps & Uniform orderId 1001', async () => {
-    const expectedEvents = [
+  test('CONTRACT-SC003-02: All trip stages have correct events and terminal steps', async () => {
+    const scenarioIds = scenarioSet.scenarios.map((sc: any) => sc.id);
+    expect(scenarioIds).toEqual([
+      'sc003-accept-order',
+      'sc003-arrived',
+      'sc003-start-trip',
+      'sc003-finish-trip',
+      'sc003-become-available'
+    ]);
+
+    const emitEvents = scenarioSet.scenarios.flatMap((sc: any) =>
+      sc.steps.filter((step: any) => step.kind === 'emit').map((step: any) => step.event.type)
+    );
+    expect(emitEvents).toEqual([
       'driver.order.accepted',
       'driver.arrived',
       'driver.trip.started',
       'driver.trip.finished',
       'driver.available'
-    ];
-    const actualEvents = scenarioSet.scenarios.map((sc: any) =>
-      sc.steps.find((step: any) => step.kind === 'emit')?.event.type
-    );
-    expect(actualEvents).toEqual(expectedEvents);
+    ]);
 
-    // Each event belongs to its own independently activatable scenario.
     for (const sc of scenarioSet.scenarios) {
-      const emitStep = sc.steps.find((step: any) => step.kind === 'emit');
-      expect(emitStep).toBeDefined();
-      if (emitStep.event.type !== 'driver.available') {
-        expect(emitStep.event.payload.orderId).toBe(1001);
-      }
       expect(sc.steps[sc.steps.length - 1].kind).toBe('end');
     }
-  });
-
-});
+    for (const sc of scenarioSet.scenarios.slice(0, 4)) {
+      const orderEvent = sc.steps.find((step: any) => step.kind === 'emit' && step.event.payload.orderId !== undefined);
+      expect(orderEvent.event.payload.orderId).toBe(1001);
+    }
+  });});

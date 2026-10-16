@@ -3,7 +3,7 @@ import { DialogueStateManager } from '../../../src/platform/dialogue-manager';
 
 test.describe('CONTRACT: PLATFORM-010 Multi-Context Session Manager Suite', () => {
 
-  const identity = { ownerId: 'platform-010-owner', sessionId: 'platform-010-session' };
+  const identity = { ownerId: 'platform-010-test', sessionId: 'platform-010-session' };
 
   test('CONTRACT-01: Context has system-generated unique contextId', async () => {
     const dm = new DialogueStateManager();
@@ -61,6 +61,9 @@ test.describe('CONTRACT: PLATFORM-010 Multi-Context Session Manager Suite', () =
     const dm = new DialogueStateManager();
     const ctxA = dm.createContext('ACCEPT_ORDER', { orderId: 1001 }, ['orderId', 'payment'], 'driver.order.accepted', {}, identity);
     await dm.fillSlot('payment', 'card', ctxA.contextId, identity);
+    const completedA = dm.getContext(ctxA.contextId, identity)!;
+    const executionA = dm.createExecution(completedA, identity);
+    await dm.dispatchAction(executionA.executionId, completedA.slots, identity);
 
     const logs = dm.getExecutionLogs(identity);
     expect(logs.length).toBe(1);
@@ -76,8 +79,14 @@ test.describe('CONTRACT: PLATFORM-010 Multi-Context Session Manager Suite', () =
 
     await dm.fillSlot('payment', 'card', ctxA.contextId, identity);
     await dm.fillSlot('payment', 'card', ctxA.contextId, identity); // duplicate
+    const completedA = dm.getContext(ctxA.contextId, identity)!;
+    const executionA = dm.createExecution(completedA, identity);
+    await dm.dispatchAction(executionA.executionId, completedA.slots, identity);
 
     await dm.fillSlot('payment', 'cash', ctxB.contextId, identity);
+    const completedB = dm.getContext(ctxB.contextId, identity)!;
+    const executionB = dm.createExecution(completedB, identity);
+    await dm.dispatchAction(executionB.executionId, completedB.slots, identity);
 
     const logs = dm.getExecutionLogs(identity);
     const matchA = logs.filter(l => l.contextId === ctxA.contextId);

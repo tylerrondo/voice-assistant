@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
-import { fileURLToPath } from 'node:url';
 import * as fs from 'fs';
-import * as path from 'path';
+import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { DialogueStateManager } from '../../../src/platform/dialogue-manager';
 import { VoiceChannel, type ScenarioSet } from '../../../src/platform/voice-channel';
 import {
@@ -43,7 +43,8 @@ test.describe('CONTRACT: SC-INTEGRATION-001 Mixed Button / Text / Voice Dialogue
   const attachCandidates = (userId: typeof sessionUser, candidates: any[]) => {
     const ctx = dm.getActiveState(userId);
     if (ctx) {
-      ctx.offers = candidates as any;
+      // getActiveState returns a defensive copy; update the stored context via its API.
+      dm.setOffersForContext(ctx.contextId, candidates as any, userId);
     }
   };
 

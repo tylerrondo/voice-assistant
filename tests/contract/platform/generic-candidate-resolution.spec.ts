@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
-import { fileURLToPath } from 'node:url';
 import * as fs from 'fs';
 import * as path from 'path';
+import { fileURLToPath } from 'node:url';
 import { DialogueStateManager } from '../../../src/platform/dialogue-manager';
 import { VoiceChannel, type ScenarioSet } from '../../../src/platform/voice-channel';
 

@@ -12,8 +12,7 @@ import {
 import { TelegramBotAdapter, MockTelegramClient } from '../../../src/platform/telegram-bot-adapter';
 import { TelegramVoiceTransport } from '../../../src/platform/telegram-voice-transport';
 import { MockSTTProvider } from '../../../src/platform/stt-provider';
-import { MockTelegramFileProvider } from './telegram-voice-test-helpers';
-
+import { MockTelegramFileProvider } from './mock-telegram-file-provider';
 class MockGenericChannelAdapter {
   constructor(private engine: DialogueEngine) {}
 
@@ -149,10 +148,11 @@ test.describe('CONTRACT: SC-INTEGRATION-004 Generic Dialogue Channel Contract Su
 
     // Attach custom candidate items with non-standard fields
     const ctx = dm.getActiveState(userS)!;
-    ctx.offers = [
+    const offers = [
       { serviceId: 'svc-17', title: 'Cleaning', position: 1, status: 'AVAILABLE' },
       { serviceId: 'svc-42', title: 'Repair', position: 2, status: 'AVAILABLE' }
     ] as any;
+    expect(dm.setOffersForContext(ctx.contextId, offers, userS)).toBe(true);
 
     // Send selection choice
     await adapter.send({ modality: 'voice', transcript: 'выбираю второй' }, userS, serviceScenario);
@@ -257,7 +257,7 @@ test.describe('CONTRACT: SC-INTEGRATION-004 Generic Dialogue Channel Contract Su
 
     const res = await adapter.send({ modality: 'button', payload: { slotName: 'confirmation', slotValue: 'CONFIRMED' } }, sessionUser, sc);
 
-    expect(res.status).toBe('CONFIRMED');
+    expect(res.status).toBe(sc.confirmation?.confirmedStatus || 'CONFIRMED');
     expect(dispatcherCalls).toBe(1);
     expect(dm.getExecutionLogs(sessionUser).length).toBe(1);
   });

@@ -1,13 +1,51 @@
 import { test, expect } from '@playwright/test';
-import { fileURLToPath } from 'node:url';
 import * as fs from 'fs';
-import * as path from 'path';
+import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { DialogueStateManager } from '../../../src/platform/dialogue-manager';
 import { VoiceChannel, type ScenarioSet } from '../../../src/platform/voice-channel';
 import { TelegramDialogueAdapter } from '../../../src/platform/telegram-dialogue-adapter';
 import { MockSTTProvider } from '../../../src/platform/stt-provider';
-import { TelegramVoiceTransport, type TelegramVoiceMessage } from '../../../src/platform/telegram-voice-transport';
-import { MockTelegramFileProvider } from './telegram-voice-test-helpers';
+import {
+  TelegramVoiceTransport,
+  type TelegramVoiceMessage,
+  type TelegramFileProvider,
+  type TelegramFileMetadata
+} from '../../../src/platform/telegram-voice-transport';
+
+export class MockTelegramFileProvider implements TelegramFileProvider {
+  public files: Map<string, { meta: TelegramFileMetadata; buffer: Buffer }> = new Map();
+  public shouldFailDownload = false;
+  public downloadCalls = 0;
+
+  public registerFile(fileId: string, filePath: string, mimeType: string, buffer: Buffer) {
+    this.files.set(fileId, {
+      meta: { fileId, filePath, mimeType, fileSize: buffer.length },
+      buffer
+    });
+  }
+
+  async getFile(fileId: string): Promise<TelegramFileMetadata> {
+    const entry = this.files.get(fileId);
+    if (!entry) {
+      throw new Error(`TELEGRAM_FILE_NOT_FOUND: ${fileId}`);
+    }
+    return entry.meta;
+  }
+
+  async downloadFile(filePath: string): Promise<Buffer> {
+    this.downloadCalls++;
+    if (this.shouldFailDownload) {
+      throw new Error('TELEGRAM_FILE_DOWNLOAD_FAILED');
+    }
+    for (const entry of this.files.values()) {
+      if (entry.meta.filePath === filePath) {
+        return entry.buffer;
+      }
+    }
+    throw new Error(`TELEGRAM_FILE_NOT_FOUND_BY_PATH: ${filePath}`);
+  }
+}
 
 test.describe('CONTRACT: SC-INTEGRATION-002 Real Telegram Voice Input + STT Integration Suite', () => {
 
@@ -118,10 +156,10 @@ test.describe('CONTRACT: SC-INTEGRATION-002 Real Telegram Voice Input + STT Inte
 
     await adapter.handleMessage({ channel: 'text', raw_input: 'завтра' }, sessionUser, sc);
     const ctx = dm.getActiveState(sessionUser)!;
-    ctx.offers = [
+    dm.setOffersForContext(ctx.contextId, [
       { id: 'xyz-17', name: 'Ирина', index: 1, status: 'AVAILABLE' },
       { id: 'xyz-42', name: 'Ольга', index: 2, status: 'AVAILABLE' }
-    ] as any;
+    ] as any, sessionUser);
 
     await sendVoiceAudio('выбираю вторую');
 

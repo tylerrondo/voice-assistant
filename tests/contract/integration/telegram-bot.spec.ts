@@ -1,13 +1,14 @@
 import { test, expect } from '@playwright/test';
-import { fileURLToPath } from 'node:url';
 import * as fs from 'fs';
-import * as path from 'path';
+import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import { DialogueStateManager } from '../../../src/platform/dialogue-manager';
 import { VoiceChannel, type ScenarioSet } from '../../../src/platform/voice-channel';
 import { TelegramDialogueAdapter } from '../../../src/platform/telegram-dialogue-adapter';
 import { MockSTTProvider } from '../../../src/platform/stt-provider';
 import { TelegramVoiceTransport } from '../../../src/platform/telegram-voice-transport';
-import { MockTelegramFileProvider } from './telegram-voice-test-helpers';
+import { MockTelegramFileProvider } from './mock-telegram-file-provider';
 import {
   TelegramBotAdapter,
   MockTelegramClient,
@@ -257,10 +258,10 @@ test.describe('CONTRACT: SC-INTEGRATION-003 Production Telegram Bot Voice Adapte
 
     await botAdapter.handleUpdate({ message: { from: testUser, chat: testChat, text: 'завтра' } }, sc);
     const ctx = dm.getActiveState(sessionUser)!;
-    ctx.offers = [
+    dm.setOffersForContext(ctx.contextId, [
       { id: 'xyz-17', name: 'Ирина', index: 1, status: 'AVAILABLE' },
       { id: 'xyz-42', name: 'Ольга', index: 2, status: 'AVAILABLE' }
-    ] as any;
+    ] as any, sessionUser);
 
     await botAdapter.handleUpdate({ message: { from: testUser, chat: testChat, text: 'с трех' } }, sc);
 
@@ -466,14 +467,13 @@ test.describe('CONTRACT: SC-INTEGRATION-003 Production Telegram Bot Voice Adapte
     expect(contexts[0].slots.start_time).toBe('15:00');
   });
 
-  test('AT-05: Button/Text/Voice all route through the same DialogueEngine', async () => {
+  test('AT-05: Button/Text/Voice all route through the same TelegramDialogueAdapter', async () => {
     const sc = getScenario();
-    const engine = dialogueAdapter.getDialogueEngine();
-    let engineCalls = 0;
-    const origProcess = engine.processInput.bind(engine);
-    engine.processInput = async (...args: Parameters<typeof engine.processInput>) => {
-      engineCalls++;
-      return origProcess(...args);
+    let adapterCalls = 0;
+    const origHandle = dialogueAdapter.handleMessage.bind(dialogueAdapter);
+    dialogueAdapter.handleMessage = async (...args) => {
+      adapterCalls++;
+      return origHandle(...args);
     };
 
     await botAdapter.handleUpdate({ message: { from: testUser, chat: testChat, text: 'завтра' } }, sc);
@@ -482,7 +482,7 @@ test.describe('CONTRACT: SC-INTEGRATION-003 Production Telegram Bot Voice Adapte
     mockSTT.setTranscript('до восьми');
     await botAdapter.handleUpdate({ message: { from: testUser, chat: testChat, voice: { file_id: 'v-at05' } } }, sc);
 
-    expect(engineCalls).toBe(3);
+    expect(adapterCalls).toBe(3);
   });
 
   test('AT-06: telegram-bot-adapter.ts does NOT contain selected_nanny, confirmation, ORDER_CONFIRMED, CANCELLED, nanny', () => {

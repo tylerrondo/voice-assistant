@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
-import { fileURLToPath } from 'node:url';
 import * as fs from 'fs';
-import * as path from 'path';
+import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const scenarioFilePath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../scenario-sc-001-vegetable-stall.json');
 const rawContent = fs.readFileSync(scenarioFilePath, 'utf-8');
@@ -119,17 +119,10 @@ test.describe('SC-001: Scenario JSON Contract & Schema Validation', () => {
 // SUITE 2: SC-001 Live Application Runtime Execution E2E Tests
 // ============================================================================
 test.describe('SC-001: Live Application Runtime Execution E2E (External JSON & Strict Trace)', () => {
-  test.beforeEach(async ({ page }) => {
-    await page.addInitScript(() => {
-      (window as any).__AUTH_OWNER_ID__ = 'e2e-validation-driver';
-      (window as any).__AUTH_SESSION_ID__ = 'e2e-validation-session';
-    });
-  });
-
 
   test('RUNTIME-E2E-01: Upload External JSON, Activate File Source & Verify Strict 6-Step Execution Trace', async ({ page }) => {
     // 1. Open Live Validation Bench
-    const appUrl = process.env.APP_URL || 'http://localhost:3000';
+    const appUrl = process.env.APP_URL || 'https://voice-assistant-two-olive.vercel.app';
     await page.goto(appUrl);
     await expect(page.locator('body')).toBeVisible();
 

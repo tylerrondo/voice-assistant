@@ -3,7 +3,7 @@ import { DialogueStateManager } from '../../../src/platform/dialogue-manager';
 
 test.describe('CONTRACT: PLATFORM-011 Ambiguous Input Policy Suite', () => {
 
-  const identity = { ownerId: 'platform-011-owner', sessionId: 'platform-011-session' };
+  const identity = { ownerId: 'platform-011-test', sessionId: 'platform-011-session' };
 
   test('CONTRACT-01: Single candidate returns RESOLVED', async () => {
     const dm = new DialogueStateManager();
