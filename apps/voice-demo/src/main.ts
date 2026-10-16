@@ -8,6 +8,10 @@ export function getAuthenticatedSessionIdentity(): SessionIdentity {
   const sessionId = typeof window !== 'undefined' ? (window as any).__AUTH_SESSION_ID__ : undefined;
 
   if (!ownerId || !sessionId || typeof ownerId !== 'string' || typeof sessionId !== 'string') {
+    // The local E2E server opts in explicitly; production still requires an authenticated session.
+    if (import.meta.env.VITE_E2E_TEST === 'true') {
+      return { ownerId: 'e2e-owner', sessionId: 'e2e-session' };
+    }
     throw new Error('CONTRACT_VIOLATION: No authenticated session found. SessionIdentity must be established prior to application startup.');
   }
 
