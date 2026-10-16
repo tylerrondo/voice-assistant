@@ -322,9 +322,9 @@ test.describe('CONTRACT: PLATFORM-014 Intent Resolution & Slot Ambiguity Suite',
     await channel.handleIncomingVoice('order 2001', sessionB);
 
     const resA = await channel.handleIncomingVoice('картой', sessionA);
-    expect(resA.slots.orderId).toBe(1001);
-    expect(resA.missingSlots).toEqual([]);
     expect(resA.status).toBe('COMPLETED');
+    expect(resA.context.slots.orderId).toBe(1001);
+    expect(resA.context.missingSlots).toEqual([]);
   });
 
   test('CONTRACT-14: Invalid ScenarioSet registration leaves previous active ScenarioSet intact', async () => {
