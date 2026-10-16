@@ -153,7 +153,7 @@ export class VoiceChannel {
       ].filter((trigger): trigger is string => typeof trigger === 'string' && trigger.trim().length > 0);
 
       for (const trigger of triggers) {
-        const normalized = trigger.replace(/^voice\\./, '').replace(/[-_]/g, ' ').toLowerCase().trim().replace(/\\s+/g, ' ');
+        const normalized = trigger.replace(/^voice\./, '').replace(/[-_]/g, ' ').toLowerCase().trim().replace(/\s+/g, ' ');
         const previousScenario = seenTriggers.get(normalized);
         if (previousScenario && previousScenario !== sc.id) {
           throw new Error(`CONTRACT_VIOLATION: Trigger or alias collision "${normalized}" between scenarios "${previousScenario}" and "${sc.id}"`);
