@@ -8,9 +8,6 @@ const scenarioSet = JSON.parse(readFileSync(path.resolve(path.dirname(fileURLToP
 test.describe('E2E: PLATFORM-015 Production Action Dispatch Reliability Suite', () => {
 
   test('E2E-RELIABILITY-01: End-to-end Voice -> VoiceChannel -> DialogueManager -> FSM Execution Engine', async ({ page }) => {
-    page.on('pageerror', error => console.log('E2E_PAGEERROR', error.stack || error.message));
-    page.on('console', message => { if (message.type() === 'error') console.log('E2E_CONSOLE_ERROR', message.text()); });
-    page.on('requestfailed', request => console.log('E2E_REQUEST_FAILED', request.url(), request.failure()?.errorText));
     // Inject authenticated identity into browser session context before load
     await page.addInitScript(() => {
       (window as any).__AUTH_OWNER_ID__ = 'verified-driver-001';

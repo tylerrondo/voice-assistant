@@ -1,11 +1,8 @@
 import { defineConfig, devices } from '@playwright/test';
 
-// Use the local app in CI unless a target URL is explicitly provided.
-process.env.APP_URL ??= 'http://localhost:3000';
-
 export default defineConfig({
   testDir: './tests',
-  testMatch: ['**/action-dispatch-reliability.spec.ts'],
+  testMatch: ['**/*.spec.ts'],
   // Exclude copied nested test trees; only canonical suites should be discovered.
   testIgnore: [/(?:^|\/)(?:contract|e2e)\/.*\/tests\//],
   fullyParallel: false,
