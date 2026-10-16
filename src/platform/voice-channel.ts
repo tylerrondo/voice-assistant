@@ -238,7 +238,12 @@ export class VoiceChannel {
     for (const [slotKey, extractor] of Object.entries(extractors)) {
       if (extractor.rules && Array.isArray(extractor.rules)) {
         for (const rule of extractor.rules) {
-          if (new RegExp(rule.pattern, 'i').test(text)) {
+          // JavaScript's built-in \b treats Cyrillic letters as non-word characters.
+          // Convert outer word boundaries to Unicode-aware letter/number boundaries.
+          const unicodePattern = rule.pattern
+            .replace(/^\\b/, '(?<![\\p{L}\\p{N}_])')
+            .replace(/\\b$/, '(?=$|[^\\p{L}\\p{N}_])');
+          if (new RegExp(unicodePattern, 'iu').test(text)) {
             resolvedSlots[slotKey] = rule.value;
             break;
           }
