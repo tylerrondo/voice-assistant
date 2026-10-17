@@ -1,7 +1,8 @@
 import { test, expect } from '@playwright/test';
+import { fileURLToPath } from 'node:url';
 import * as path from 'path';
 
-const scenarioFilePath = path.resolve(__dirname, '../../../scenario-sc-003-taxi-driver-trip.json');
+const scenarioFilePath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../scenario-sc-003-taxi-driver-trip.json');
 
 test.describe('SC-003: Taxi Driver End-to-End Voice Channel, Strict FSM Transitions & Negative Suite', () => {
 
@@ -13,6 +14,7 @@ test.describe('SC-003: Taxi Driver End-to-End Voice Channel, Strict FSM Transiti
 
     const fileInput = page.locator('input[type="file"]').first();
     await fileInput.setInputFiles(scenarioFilePath);
+    await page.evaluate(async () => { await (window as any).__SCENARIO_LOAD_PROMISE__; });
     await expect(page.locator('body')).toContainText('Taxi Driver End-to-End Trip Workflow');
   }
 

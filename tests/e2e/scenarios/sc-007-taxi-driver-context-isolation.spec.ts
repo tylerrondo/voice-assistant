@@ -1,7 +1,8 @@
 import { test, expect } from '@playwright/test';
+import { fileURLToPath } from 'node:url';
 import * as path from 'path';
 
-const scenarioFilePath = path.resolve(__dirname, '../../../scenario-sc-007-taxi-driver-context-isolation.json');
+const scenarioFilePath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../scenario-sc-007-taxi-driver-context-isolation.json');
 
 test.describe('E2E: SC-007 Context Isolation & Cross-Contamination Protection Suite (ТЗ-VOICE-SC-007)', () => {
 
@@ -12,6 +13,7 @@ test.describe('E2E: SC-007 Context Isolation & Cross-Contamination Protection Su
 
     const fileInput = page.locator('input[type="file"]').first();
     await fileInput.setInputFiles(scenarioFilePath);
+    await page.evaluate(async () => { await (window as any).__SCENARIO_LOAD_PROMISE__; });
   }
 
   async function emitVoicePhrase(page: any, phrase: string) {
@@ -20,7 +22,7 @@ test.describe('E2E: SC-007 Context Isolation & Cross-Contamination Protection Su
       if (!channel) {
         throw new Error('VoiceChannel production instance is not initialized on window.__VOICE_CHANNEL__');
       }
-      return channel.handleIncomingVoice(text);
+      return channel.handleIncomingVoice(text, (window as any).__VOICE_DEMO_APP__.getIdentity());
     }, phrase);
   }
 
@@ -29,7 +31,7 @@ test.describe('E2E: SC-007 Context Isolation & Cross-Contamination Protection Su
     await emitVoicePhrase(page, 'Прими заказ');
     await emitVoicePhrase(page, '1001');
 
-    const state = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getActiveState());
+    const state = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getActiveState((window as any).__VOICE_DEMO_APP__.getIdentity()));
     expect(state.status).toBe('WAITING_FOR_SLOT');
     expect(state.intent).toBe('ACCEPT_ORDER');
     expect(state.slots.orderId).toBe(1001);
@@ -52,14 +54,14 @@ test.describe('E2E: SC-007 Context Isolation & Cross-Contamination Protection Su
 
     // 2. Switch to order 1002 without completing 1001
     await emitVoicePhrase(page, 'Прими заказ 1002');
-    let state = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getActiveState());
+    let state = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getActiveState((window as any).__VOICE_DEMO_APP__.getIdentity()));
     expect(state.status).toBe('WAITING_FOR_SLOT');
     expect(state.slots.orderId).toBe(1002);
     expect(state.missingSlots).toEqual(['payment']);
 
     // 3. Fill payment for order 1002
     await emitVoicePhrase(page, 'Картой');
-    state = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getActiveState());
+    state = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getActiveState((window as any).__VOICE_DEMO_APP__.getIdentity()));
     expect(state.status).toBe('COMPLETED');
     expect(state.slots).toEqual({ orderId: 1002, payment: 'card' });
 
@@ -169,7 +171,7 @@ test.describe('E2E: SC-007 Context Isolation & Cross-Contamination Protection Su
     await emitVoicePhrase(page, 'Не знаю');
     await emitVoicePhrase(page, 'Картой');
 
-    const state = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getActiveState());
+    const state = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getActiveState((window as any).__VOICE_DEMO_APP__.getIdentity()));
     expect(state.status).toBe('COMPLETED');
     expect(state.slots).toEqual({ orderId: 1002, payment: 'card' });
 

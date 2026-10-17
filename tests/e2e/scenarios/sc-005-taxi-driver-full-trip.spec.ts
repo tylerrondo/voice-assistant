@@ -1,7 +1,8 @@
 import { test, expect } from '@playwright/test';
+import { fileURLToPath } from 'node:url';
 import * as path from 'path';
 
-const scenarioFilePath = path.resolve(__dirname, '../../../scenario-sc-005-taxi-driver-full-trip.json');
+const scenarioFilePath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../scenario-sc-005-taxi-driver-full-trip.json');
 
 test.describe('E2E: SC-005 Taxi Driver Full Trip Workflow & Real FSM Suite (ТЗ-VOICE-SC-005)', () => {
 
@@ -12,6 +13,7 @@ test.describe('E2E: SC-005 Taxi Driver Full Trip Workflow & Real FSM Suite (ТЗ
 
     const fileInput = page.locator('input[type="file"]').first();
     await fileInput.setInputFiles(scenarioFilePath);
+    await page.evaluate(async () => { await (window as any).__SCENARIO_LOAD_PROMISE__; });
     await expect(page.locator('body')).toContainText('Taxi Driver Full Trip');
   }
 
@@ -21,7 +23,7 @@ test.describe('E2E: SC-005 Taxi Driver Full Trip Workflow & Real FSM Suite (ТЗ
       if (!channel) {
         throw new Error('VoiceChannel production instance is not initialized on window.__VOICE_CHANNEL__');
       }
-      return channel.handleIncomingVoice(text);
+      return channel.handleIncomingVoice(text, (window as any).__VOICE_DEMO_APP__.getIdentity());
     }, phrase);
   }
 
@@ -31,7 +33,7 @@ test.describe('E2E: SC-005 Taxi Driver Full Trip Workflow & Real FSM Suite (ТЗ
 
     // 1. Incomplete "Прими заказ" -> WAITING_FOR_SLOT
     await emitVoicePhrase(page, 'Прими заказ');
-    const state = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getActiveState());
+    const state = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getActiveState((window as any).__VOICE_DEMO_APP__.getIdentity()));
     expect(state.status).toBe('WAITING_FOR_SLOT');
     expect(state.clarificationPrompt).toBe('Какой заказ?');
 

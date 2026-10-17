@@ -1,7 +1,8 @@
 import { test, expect } from '@playwright/test';
+import { fileURLToPath } from 'node:url';
 import * as path from 'path';
 
-const scenarioFilePath = path.resolve(__dirname, '../../../scenario-platform-010-multi-context.json');
+const scenarioFilePath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../scenario-platform-010-multi-context.json');
 
 test.describe('E2E: PLATFORM-010 Multi-Context Session Manager Runtime Suite', () => {
 
@@ -13,6 +14,7 @@ test.describe('E2E: PLATFORM-010 Multi-Context Session Manager Runtime Suite', (
     // 1. Load own PLATFORM-010 scenario
     const fileInput = page.locator('input[type="file"]').first();
     await fileInput.setInputFiles(scenarioFilePath);
+    await page.evaluate(async () => { await (window as any).__SCENARIO_LOAD_PROMISE__; });
 
     const activeSetId = await page.evaluate(() => {
       return (window as any).__SCENARIO_ENGINE__.getActiveScenarioSetId();
@@ -26,7 +28,7 @@ test.describe('E2E: PLATFORM-010 Multi-Context Session Manager Runtime Suite', (
       if (!channel) {
         throw new Error('VoiceChannel production instance is not initialized on window.__VOICE_CHANNEL__');
       }
-      return channel.handleIncomingVoice(text);
+      return channel.handleIncomingVoice(text, (window as any).__VOICE_DEMO_APP__.getIdentity());
     }, phrase);
   }
 
@@ -38,7 +40,7 @@ test.describe('E2E: PLATFORM-010 Multi-Context Session Manager Runtime Suite', (
 
     const contexts = await page.evaluate(() => {
       const dm = (window as any).__DIALOGUE_MANAGER__;
-      return dm?.listContexts() || [];
+      return dm?.listContexts((window as any).__VOICE_DEMO_APP__.getIdentity()) || [];
     });
 
     expect(contexts.length).toBe(2);
@@ -57,7 +59,7 @@ test.describe('E2E: PLATFORM-010 Multi-Context Session Manager Runtime Suite', (
     await emitVoicePhrase(page, 'Прими заказ 1001');
     await emitVoicePhrase(page, 'Прими заказ 1002');
 
-    const contextsBefore = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.listContexts());
+    const contextsBefore = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.listContexts((window as any).__VOICE_DEMO_APP__.getIdentity()));
     const idA = contextsBefore.find((c: any) => c.slots.orderId === 1001).contextId;
     const idB = contextsBefore.find((c: any) => c.slots.orderId === 1002).contextId;
 
@@ -91,17 +93,17 @@ test.describe('E2E: PLATFORM-010 Multi-Context Session Manager Runtime Suite', (
     await emitVoicePhrase(page, 'Прими заказ 1001');
     await emitVoicePhrase(page, 'Прими заказ 1002');
 
-    const contexts = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.listContexts());
+    const contexts = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.listContexts((window as any).__VOICE_DEMO_APP__.getIdentity()));
     const idA = contexts.find((c: any) => c.slots.orderId === 1001).contextId;
     const idB = contexts.find((c: any) => c.slots.orderId === 1002).contextId;
 
     await emitVoicePhrase(page, 'Заказ 1001');
-    let activeState = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getActiveState());
+    let activeState = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getActiveState((window as any).__VOICE_DEMO_APP__.getIdentity()));
     expect(activeState.contextId).toBe(idA);
     expect(activeState.slots.orderId).toBe(1001);
 
     await emitVoicePhrase(page, 'Заказ 1002');
-    activeState = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getActiveState());
+    activeState = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getActiveState((window as any).__VOICE_DEMO_APP__.getIdentity()));
     expect(activeState.contextId).toBe(idB);
     expect(activeState.slots.orderId).toBe(1002);
   });
@@ -115,7 +117,7 @@ test.describe('E2E: PLATFORM-010 Multi-Context Session Manager Runtime Suite', (
     await emitVoicePhrase(page, 'Заказ 1001');
     await emitVoicePhrase(page, 'Отмена');
 
-    const contexts = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.listContexts());
+    const contexts = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.listContexts((window as any).__VOICE_DEMO_APP__.getIdentity()));
     const ctxA = contexts.find((c: any) => c.slots.orderId === 1001);
     const ctxB = contexts.find((c: any) => c.slots.orderId === 1002);
 
@@ -131,11 +133,11 @@ test.describe('E2E: PLATFORM-010 Multi-Context Session Manager Runtime Suite', (
 
     await page.evaluate(() => {
       const dm = (window as any).__DIALOGUE_MANAGER__;
-      const ctxA = dm.listContexts().find((c: any) => c.slots.orderId === 1001);
-      if (ctxA) dm.expireContext(ctxA.contextId);
+      const ctxA = dm.listContexts((window as any).__VOICE_DEMO_APP__.getIdentity()).find((c: any) => c.slots.orderId === 1001);
+      if (ctxA) dm.expireContext(ctxA.contextId, (window as any).__VOICE_DEMO_APP__.getIdentity());
     });
 
-    const contexts = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.listContexts());
+    const contexts = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.listContexts((window as any).__VOICE_DEMO_APP__.getIdentity()));
     const ctxA = contexts.find((c: any) => c.slots.orderId === 1001);
     const ctxB = contexts.find((c: any) => c.slots.orderId === 1002);
 
@@ -149,7 +151,7 @@ test.describe('E2E: PLATFORM-010 Multi-Context Session Manager Runtime Suite', (
     await emitVoicePhrase(page, 'Прими заказ 1001');
     await emitVoicePhrase(page, 'Прими заказ 1002');
 
-    const contexts = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.listContexts());
+    const contexts = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.listContexts((window as any).__VOICE_DEMO_APP__.getIdentity()));
     const idA = contexts.find((c: any) => c.slots.orderId === 1001).contextId;
     const idB = contexts.find((c: any) => c.slots.orderId === 1002).contextId;
 

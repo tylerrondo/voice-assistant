@@ -1,7 +1,8 @@
 import { test, expect } from '@playwright/test';
+import { fileURLToPath } from 'node:url';
 import * as path from 'path';
 
-const scenarioFilePath = path.resolve(__dirname, '../../../scenario-sc-006-taxi-driver-multi-slot.json');
+const scenarioFilePath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../scenario-sc-006-taxi-driver-multi-slot.json');
 
 test.describe('E2E: SC-006 Multi-Slot Dialogue & Real Taxi FSM Suite (ТЗ-VOICE-SC-006)', () => {
 
@@ -12,6 +13,7 @@ test.describe('E2E: SC-006 Multi-Slot Dialogue & Real Taxi FSM Suite (ТЗ-VOICE
 
     const fileInput = page.locator('input[type="file"]').first();
     await fileInput.setInputFiles(scenarioFilePath);
+    await page.evaluate(async () => { await (window as any).__SCENARIO_LOAD_PROMISE__; });
   }
 
   async function emitVoicePhrase(page: any, phrase: string) {
@@ -20,7 +22,7 @@ test.describe('E2E: SC-006 Multi-Slot Dialogue & Real Taxi FSM Suite (ТЗ-VOICE
       if (!channel) {
         throw new Error('VoiceChannel production instance is not initialized on window.__VOICE_CHANNEL__');
       }
-      return channel.handleIncomingVoice(text);
+      return channel.handleIncomingVoice(text, (window as any).__VOICE_DEMO_APP__.getIdentity());
     }, phrase);
   }
 
@@ -30,7 +32,7 @@ test.describe('E2E: SC-006 Multi-Slot Dialogue & Real Taxi FSM Suite (ТЗ-VOICE
 
     // 1. Initial incomplete utterance
     await emitVoicePhrase(page, 'Прими заказ');
-    let state = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getActiveState());
+    let state = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getActiveState((window as any).__VOICE_DEMO_APP__.getIdentity()));
     expect(state.status).toBe('WAITING_FOR_SLOT');
     expect(state.intent).toBe('ACCEPT_ORDER');
     expect(state.missingSlots).toContain('orderId');
@@ -39,7 +41,7 @@ test.describe('E2E: SC-006 Multi-Slot Dialogue & Real Taxi FSM Suite (ТЗ-VOICE
 
     // 2. Fill first slot (orderId)
     await emitVoicePhrase(page, '1001');
-    state = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getActiveState());
+    state = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getActiveState((window as any).__VOICE_DEMO_APP__.getIdentity()));
     expect(state.status).toBe('WAITING_FOR_SLOT');
     expect(state.slots.orderId).toBe(1001);
     expect(state.missingSlots).toEqual(['payment']);
@@ -47,7 +49,7 @@ test.describe('E2E: SC-006 Multi-Slot Dialogue & Real Taxi FSM Suite (ТЗ-VOICE
 
     // 3. Fill second slot (payment)
     await emitVoicePhrase(page, 'Наличными');
-    state = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getActiveState());
+    state = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getActiveState((window as any).__VOICE_DEMO_APP__.getIdentity()));
     expect(state.status).toBe('COMPLETED');
     expect(state.slots).toEqual({ orderId: 1001, payment: 'cash' });
 
@@ -66,7 +68,7 @@ test.describe('E2E: SC-006 Multi-Slot Dialogue & Real Taxi FSM Suite (ТЗ-VOICE
     const fsmLocator = page.locator('[data-testid="fsm-driver-state"], .driver-status, [data-testid="driver-status"]').first();
 
     await emitVoicePhrase(page, 'Прими заказ 1001 с оплатой наличными');
-    const state = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getActiveState());
+    const state = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getActiveState((window as any).__VOICE_DEMO_APP__.getIdentity()));
     expect(state.status).toBe('COMPLETED');
     expect(state.slots).toEqual({ orderId: 1001, payment: 'cash' });
 
@@ -88,13 +90,13 @@ test.describe('E2E: SC-006 Multi-Slot Dialogue & Real Taxi FSM Suite (ТЗ-VOICE
     await emitVoicePhrase(page, 'Прими заказ');
     await emitVoicePhrase(page, 'Наличными');
 
-    let state = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getActiveState());
+    let state = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getActiveState((window as any).__VOICE_DEMO_APP__.getIdentity()));
     expect(state.status).toBe('WAITING_FOR_SLOT');
     expect(state.slots.payment).toBe('cash');
     expect(state.missingSlots).toEqual(['orderId']);
 
     await emitVoicePhrase(page, '1001');
-    state = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getActiveState());
+    state = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getActiveState((window as any).__VOICE_DEMO_APP__.getIdentity()));
     expect(state.status).toBe('COMPLETED');
     expect(state.slots).toEqual({ orderId: 1001, payment: 'cash' });
 
@@ -115,7 +117,7 @@ test.describe('E2E: SC-006 Multi-Slot Dialogue & Real Taxi FSM Suite (ТЗ-VOICE
     await emitVoicePhrase(page, 'Прими заказ');
     await emitVoicePhrase(page, 'Не знаю');
 
-    const state = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getActiveState());
+    const state = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getActiveState((window as any).__VOICE_DEMO_APP__.getIdentity()));
     expect(state.status).toBe('WAITING_FOR_SLOT');
     expect(state.missingSlots).toContain('orderId');
     expect(state.missingSlots).toContain('payment');
@@ -134,13 +136,13 @@ test.describe('E2E: SC-006 Multi-Slot Dialogue & Real Taxi FSM Suite (ТЗ-VOICE
     await emitVoicePhrase(page, '1001');
     await emitVoicePhrase(page, 'Сам');
 
-    let state = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getActiveState());
+    let state = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getActiveState((window as any).__VOICE_DEMO_APP__.getIdentity()));
     expect(state.status).toBe('WAITING_FOR_SLOT');
     expect(state.slots.orderId).toBe(1001);
     expect(state.missingSlots).toEqual(['payment']);
 
     await emitVoicePhrase(page, 'Наличными');
-    state = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getActiveState());
+    state = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getActiveState((window as any).__VOICE_DEMO_APP__.getIdentity()));
     expect(state.status).toBe('COMPLETED');
     expect(state.slots).toEqual({ orderId: 1001, payment: 'cash' });
   });
@@ -152,7 +154,7 @@ test.describe('E2E: SC-006 Multi-Slot Dialogue & Real Taxi FSM Suite (ТЗ-VOICE
     await emitVoicePhrase(page, '1001');
     await emitVoicePhrase(page, 'Отмена');
 
-    const state = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getActiveState());
+    const state = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getActiveState((window as any).__VOICE_DEMO_APP__.getIdentity()));
     expect(state.status).toBe('CANCELLED');
 
     const executed = await page.evaluate(() => {
@@ -169,7 +171,7 @@ test.describe('E2E: SC-006 Multi-Slot Dialogue & Real Taxi FSM Suite (ТЗ-VOICE
     await emitVoicePhrase(page, '1001');
     await emitVoicePhrase(page, 'Я приехал');
 
-    const state = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getActiveState());
+    const state = await page.evaluate(() => (window as any).__DIALOGUE_MANAGER__.getActiveState((window as any).__VOICE_DEMO_APP__.getIdentity()));
     expect(state.intent).toBe('DRIVER_ARRIVED');
 
     // HIGH FIX: Prove that sending "Наличными" does NOT complete or execute old ACCEPT_ORDER

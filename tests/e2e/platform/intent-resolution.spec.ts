@@ -1,7 +1,8 @@
 import { test, expect } from '@playwright/test';
+import { fileURLToPath } from 'node:url';
 import * as path from 'path';
 
-const scenarioFilePath = path.resolve(__dirname, '../../../scenario-platform-014-intent-slot-resolution.json');
+const scenarioFilePath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../scenario-platform-014-intent-slot-resolution.json');
 
 test.describe('E2E: PLATFORM-014 Intent Resolution & Slot Ambiguity Suite', () => {
 
@@ -15,6 +16,7 @@ test.describe('E2E: PLATFORM-014 Intent Resolution & Slot Ambiguity Suite', () =
 
     const fileInput = page.locator('input[type="file"]').first();
     await fileInput.setInputFiles(scenarioFilePath);
+    await page.evaluate(async () => { await (window as any).__SCENARIO_LOAD_PROMISE__; });
 
     const activeSetId = await page.evaluate(() => {
       return (window as any).__SCENARIO_ENGINE__.getActiveScenarioSetId();

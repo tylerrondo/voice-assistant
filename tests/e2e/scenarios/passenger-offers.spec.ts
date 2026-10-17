@@ -1,7 +1,8 @@
 import { test, expect } from '@playwright/test';
+import { fileURLToPath } from 'node:url';
 import * as path from 'path';
 
-const scenarioFilePath = path.resolve(__dirname, '../../../scenario-passenger-offers.json');
+const scenarioFilePath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../scenario-passenger-offers.json');
 
 test.describe('E2E: SC-PASS-002 Canonical Multi-Offer Dialogue Suite', () => {
 
@@ -16,6 +17,7 @@ test.describe('E2E: SC-PASS-002 Canonical Multi-Offer Dialogue Suite', () => {
 
     const fileInput = page.locator('input[type="file"]').first();
     await fileInput.setInputFiles(scenarioFilePath);
+    await page.evaluate(async () => { await (window as any).__SCENARIO_LOAD_PROMISE__; });
 
     const result = await page.evaluate(async () => {
       const vc = (window as any).__VOICE_CHANNEL__;

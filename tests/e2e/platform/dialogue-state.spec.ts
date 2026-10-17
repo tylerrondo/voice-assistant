@@ -1,7 +1,8 @@
 import { test, expect } from '@playwright/test';
+import { fileURLToPath } from 'node:url';
 import * as path from 'path';
 
-const scenarioFilePath = path.resolve(__dirname, '../../../scenario-platform-dialogue-slot-filling.json');
+const scenarioFilePath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../scenario-platform-dialogue-slot-filling.json');
 
 test.describe('E2E: Strict Platform Dialogue State & Multi-Turn Slot-Filling Suite (ТЗ-VOICE-PLATFORM-005)', () => {
 
@@ -12,6 +13,7 @@ test.describe('E2E: Strict Platform Dialogue State & Multi-Turn Slot-Filling Sui
 
     const fileInput = page.locator('input[type="file"]').first();
     await fileInput.setInputFiles(scenarioFilePath);
+    await page.evaluate(async () => { await (window as any).__SCENARIO_LOAD_PROMISE__; });
     await expect(page.locator('body')).toContainText('Platform Dialogue State');
   }
 
@@ -21,7 +23,7 @@ test.describe('E2E: Strict Platform Dialogue State & Multi-Turn Slot-Filling Sui
       if (!channel) {
         throw new Error('VoiceChannel production instance is not initialized on window.__VOICE_CHANNEL__');
       }
-      return channel.handleIncomingVoice(text);
+      return channel.handleIncomingVoice(text, (window as any).__VOICE_DEMO_APP__.getIdentity());
     }, phrase);
   }
 
@@ -31,7 +33,7 @@ test.describe('E2E: Strict Platform Dialogue State & Multi-Turn Slot-Filling Sui
 
     const state = await page.evaluate(() => {
       const dm = (window as any).__DIALOGUE_MANAGER__;
-      return dm ? dm.getActiveState() : null;
+      return dm ? dm.getActiveState((window as any).__VOICE_DEMO_APP__.getIdentity()) : null;
     });
 
     expect(state).not.toBeNull();
@@ -49,7 +51,7 @@ test.describe('E2E: Strict Platform Dialogue State & Multi-Turn Slot-Filling Sui
 
     const state = await page.evaluate(() => {
       const dm = (window as any).__DIALOGUE_MANAGER__;
-      return dm ? dm.getActiveState() : null;
+      return dm ? dm.getActiveState((window as any).__VOICE_DEMO_APP__.getIdentity()) : null;
     });
 
     expect(state.status).toBe('COMPLETED');
@@ -75,7 +77,7 @@ test.describe('E2E: Strict Platform Dialogue State & Multi-Turn Slot-Filling Sui
 
     const state = await page.evaluate(() => {
       const dm = (window as any).__DIALOGUE_MANAGER__;
-      return dm ? dm.getActiveState() : null;
+      return dm ? dm.getActiveState((window as any).__VOICE_DEMO_APP__.getIdentity()) : null;
     });
 
     expect(state.status).toBe('WAITING_FOR_SLOT');
@@ -86,7 +88,7 @@ test.describe('E2E: Strict Platform Dialogue State & Multi-Turn Slot-Filling Sui
     
     const completedState = await page.evaluate(() => {
       const dm = (window as any).__DIALOGUE_MANAGER__;
-      return dm ? dm.getActiveState() : null;
+      return dm ? dm.getActiveState((window as any).__VOICE_DEMO_APP__.getIdentity()) : null;
     });
     expect(completedState.status).toBe('COMPLETED');
   });
@@ -98,7 +100,7 @@ test.describe('E2E: Strict Platform Dialogue State & Multi-Turn Slot-Filling Sui
 
     const state = await page.evaluate(() => {
       const dm = (window as any).__DIALOGUE_MANAGER__;
-      return dm ? dm.getActiveState() : null;
+      return dm ? dm.getActiveState((window as any).__VOICE_DEMO_APP__.getIdentity()) : null;
     });
 
     expect(state.status).toBe('CANCELLED');
@@ -120,7 +122,7 @@ test.describe('E2E: Strict Platform Dialogue State & Multi-Turn Slot-Filling Sui
 
     const state = await page.evaluate(() => {
       const dm = (window as any).__DIALOGUE_MANAGER__;
-      return dm ? dm.getActiveState() : null;
+      return dm ? dm.getActiveState((window as any).__VOICE_DEMO_APP__.getIdentity()) : null;
     });
 
     expect(state.intent).toBe('PROCESS_SALE');
@@ -134,12 +136,12 @@ test.describe('E2E: Strict Platform Dialogue State & Multi-Turn Slot-Filling Sui
 
     await page.evaluate(() => {
       const dm = (window as any).__DIALOGUE_MANAGER__;
-      if (dm) dm.triggerTimeout();
+      if (dm) dm.expireContext(dm.getActiveContextId()!, (window as any).__VOICE_DEMO_APP__.getIdentity());
     });
 
     const state = await page.evaluate(() => {
       const dm = (window as any).__DIALOGUE_MANAGER__;
-      return dm ? dm.getActiveState() : null;
+      return dm ? dm.getActiveState((window as any).__VOICE_DEMO_APP__.getIdentity()) : null;
     });
 
     expect(state.status).toBe('EXPIRED');
