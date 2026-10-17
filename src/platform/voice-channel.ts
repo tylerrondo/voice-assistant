@@ -587,7 +587,8 @@ export class VoiceChannel {
       const sc = intentRes.scenario;
       const activationTriggers = [
         sc.activation?.value,
-        ...(Array.isArray(sc.aliases) ? sc.aliases : [])
+        ...(Array.isArray(sc.aliases) ? sc.aliases : []),
+        ...(Array.isArray(sc.triggerPhrases) ? sc.triggerPhrases : [])
       ].filter((trigger): trigger is string => Boolean(trigger));
       return activationTriggers.some(trigger => {
         const clean = trigger.replace(/^voice\./, '').replace(/[-_]/g, ' ').toLowerCase().trim();
