@@ -768,6 +768,26 @@ export class VoiceChannel {
         }
       }
     } else if (!isNewScenarioActivation && activeWaiting.length > 1) {
+      // Resolve explicit references to already-filled entity slots before treating the
+      // utterance as an ambiguous slot value across all waiting contexts.
+      const explicitRoute = this.dialogueManager.resolveRouting(text, [], identity);
+      if (explicitRoute.status === 'RESOLVED') {
+        const routedContext = this.dialogueManager.getContext(explicitRoute.contextId, identity);
+        if (routedContext) {
+          const routedScenario = (routedContext.scenarioId
+            ? this.scenarioRegistry.find(s => s.id === routedContext.scenarioId)
+            : undefined) || this.getDeterministicScenarioForIntent(routedContext.intent);
+          const routedSlots = routedScenario?.slotExtractors
+            ? this.extractSlotsDeterministically(text, routedScenario.slotExtractors, routedScenario.id, routedScenario.ambiguityPrompt?.template)
+            : { status: 'NO_MATCH' as const };
+          const suppliesMissingSlot = routedSlots.status === 'RESOLVED'
+            && Object.keys(routedSlots.slots).some(slotName => routedContext.missingSlots.includes(slotName));
+          if (!suppliesMissingSlot) {
+            return routedContext;
+          }
+        }
+      }
+
       const slotCandidates: Array<{ slotName: string; value: any; scenarioId: string }> = [];
       for (const context of activeWaiting) {
         const scenario = (context.scenarioId ? this.scenarioRegistry.find(s => s.id === context.scenarioId) : undefined)
