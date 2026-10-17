@@ -117,6 +117,7 @@ export class VoiceChannel {
   private dialogueManager: DialogueStateManager;
   private scenarioRegistry: ScenarioDefinition[] = [];
   private activeScenarioSetId: string = '';
+  private explicitRoutedContextBySession = new Map<string, string>();
 
   constructor(dialogueManager: DialogueStateManager) {
     this.dialogueManager = dialogueManager;
@@ -768,6 +769,74 @@ export class VoiceChannel {
         }
       }
     } else if (!isNewScenarioActivation && activeWaiting.length > 1) {
+      const routeKey = `${identity.ownerId}\u0000${identity.sessionId}`;
+      const pendingContextId = this.explicitRoutedContextBySession.get(routeKey);
+      if (pendingContextId) {
+        const pendingContext = this.dialogueManager.getContext(pendingContextId, identity);
+        if (!pendingContext || pendingContext.status !== 'WAITING_FOR_SLOT') {
+          this.explicitRoutedContextBySession.delete(routeKey);
+        } else {
+          const pendingScenario = (pendingContext.scenarioId
+            ? this.scenarioRegistry.find(s => s.id === pendingContext.scenarioId)
+            : undefined) || this.getDeterministicScenarioForIntent(pendingContext.intent);
+          if (pendingScenario?.slotExtractors) {
+            const pendingSlotResult = this.extractSlotsDeterministically(
+              text,
+              pendingScenario.slotExtractors,
+              pendingScenario.id,
+              pendingScenario.ambiguityPrompt?.template
+            );
+            if (pendingSlotResult.status === 'AMBIGUOUS_SLOT') {
+              return pendingSlotResult;
+            }
+            if (pendingSlotResult.status === 'RESOLVED') {
+              const pendingEntries = Object.entries(pendingSlotResult.slots)
+                .filter(([slotName]) => pendingContext.missingSlots.includes(slotName));
+              if (pendingEntries.length > 0) {
+                let updatedContext = pendingContext;
+                for (const [slotName, slotValue] of pendingEntries) {
+                  const fillResult = await this.dialogueManager.fillSlot(
+                    slotName,
+                    slotValue,
+                    pendingContext.contextId,
+                    identity
+                  );
+                  if (fillResult.success) updatedContext = fillResult.data;
+                }
+                const currentContext = this.dialogueManager.getContext(pendingContext.contextId, identity) || updatedContext;
+                this.explicitRoutedContextBySession.delete(routeKey);
+                if (
+                  currentContext.missingSlots.length === 0 &&
+                  !pendingScenario.confirmation &&
+                  !pendingScenario.requiredSlots?.includes('confirmation')
+                ) {
+                  const existingExecution = this.dialogueManager.getExecutionLogs(identity)
+                    .find(execution => execution.contextId === currentContext.contextId);
+                  if (!existingExecution) {
+                    const execution = this.dialogueManager.createExecution(currentContext, identity);
+                    const dispatchResult = await this.dialogueManager.dispatchAction(
+                      execution.executionId,
+                      execution.payload,
+                      identity
+                    );
+                    return {
+                      status: 'COMPLETED',
+                      executionStatus: dispatchResult.status,
+                      contextId: currentContext.contextId,
+                      executionId: execution.executionId,
+                      attempt: dispatchResult.attempt,
+                      context: this.dialogueManager.getContext(currentContext.contextId, identity)
+                    };
+                  }
+                }
+                return currentContext;
+              }
+            }
+          }
+          this.explicitRoutedContextBySession.delete(routeKey);
+        }
+      }
+
       // Resolve explicit references to already-filled entity slots before treating the
       // utterance as an ambiguous slot value across all waiting contexts.
       const explicitRoute = this.dialogueManager.resolveRouting(text, [], identity);
@@ -783,6 +852,8 @@ export class VoiceChannel {
           const suppliesMissingSlot = routedSlots.status === 'RESOLVED'
             && Object.keys(routedSlots.slots).some(slotName => routedContext.missingSlots.includes(slotName));
           if (!suppliesMissingSlot) {
+            const routeKey = `${identity.ownerId}\u0000${identity.sessionId}`;
+            this.explicitRoutedContextBySession.set(routeKey, routedContext.contextId);
             return routedContext;
           }
         }
