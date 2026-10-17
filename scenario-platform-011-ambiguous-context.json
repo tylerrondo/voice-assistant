@@ -60,10 +60,9 @@
           "kind": "end"
         }
       ],
-      "triggerPhrases": [
+      "aliases": [
         "прими заказ",
-        "принять заказ",
-        "accept order"
+        "принять заказ"
       ]
     }
   ]
