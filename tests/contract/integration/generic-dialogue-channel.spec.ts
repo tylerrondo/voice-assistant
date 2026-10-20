@@ -286,11 +286,12 @@ test.describe('CONTRACT: SC-INTEGRATION-004 Generic Dialogue Channel Contract Su
     const tgUser = { id: 12345 };
     const tgChat = { id: 67890 };
     const tgIdentity = { ownerId: '12345', sessionId: '67890' };
+    engine.startScenario('order-nanny', tgIdentity);
 
     // Send Telegram Update
     await botAdapter.handleUpdate({
       message: { from: tgUser, chat: tgChat, text: 'завтра' }
-    }, sc);
+    });
 
     expect(dm.getActiveState(tgIdentity)?.slots.date).toBe('завтра');
 
