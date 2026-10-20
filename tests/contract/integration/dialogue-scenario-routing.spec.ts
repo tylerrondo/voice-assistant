@@ -296,7 +296,7 @@ test.describe('CONTRACT: SC-INTEGRATION-005 Generic Dialogue Scenario Routing & 
     expect(dm.getActiveState(invalidUser)?.slots.date).toBeUndefined();
   });
 
-  // Architectural Static Checks (AT-09 .. AT-13)
+  // Architectural Static Checks (AT-09 .. AT-15)
   test('AT-09: telegram-bot-adapter.ts does NOT contain resolveIntent, resolveScenario, registerScenarioSet', () => {
     const filePath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../src/platform/telegram-bot-adapter.ts');
     const content = fs.readFileSync(filePath, 'utf8');
@@ -330,7 +330,7 @@ test.describe('CONTRACT: SC-INTEGRATION-005 Generic Dialogue Scenario Routing & 
     expect(content).not.toContain('aliases');
   });
 
-  test('AT-13: Adapters handleUpdate does NOT require ScenarioDefinition parameter', () => {
+  test('AT-13: Adapters handleUpdate does NOT accept ScenarioDefinition parameter', () => {
     const filePath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../src/platform/telegram-bot-adapter.ts');
     const content = fs.readFileSync(filePath, 'utf8');
 
