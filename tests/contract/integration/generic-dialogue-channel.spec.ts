@@ -20,7 +20,7 @@ class MockGenericChannelAdapter {
     if (!this.engine.getVoiceChannel().getScenarioById(scenario.id)) {
       this.engine.getVoiceChannel().registerScenarioSet({ version: 1, id: `test-${scenario.id}`, scenarios: [scenario] });
     }
-    if (input.modality === 'button' && !this.engine.getDialogueManager().getActiveState(identity)) {
+    if (!this.engine.getDialogueManager().getActiveState(identity)) {
       this.engine.startScenario(scenario.id, identity);
     }
     return this.engine.processInput(input, identity);
@@ -34,7 +34,7 @@ class MockWebChannelAdapter {
     if (!this.engine.getVoiceChannel().getScenarioById(scenario.id)) {
       this.engine.getVoiceChannel().registerScenarioSet({ version: 1, id: `test-${scenario.id}`, scenarios: [scenario] });
     }
-    if (input.modality === 'button' && !this.engine.getDialogueManager().getActiveState(identity)) {
+    if (!this.engine.getDialogueManager().getActiveState(identity)) {
       this.engine.startScenario(scenario.id, identity);
     }
     return this.engine.processInput(input, identity);
