@@ -17,7 +17,13 @@ class MockGenericChannelAdapter {
   constructor(private engine: DialogueEngine) {}
 
   async send(input: DialogueInput, identity: { ownerId: string; sessionId: string }, scenario: ScenarioDefinition) {
-    return this.engine.processInput(input, identity, scenario);
+    if (!this.engine.getVoiceChannel().getScenarioById(scenario.id)) {
+      this.engine.getVoiceChannel().registerScenarioSet({ version: 1, id: `test-${scenario.id}`, scenarios: [scenario] });
+    }
+    if (input.modality === 'button' && !this.engine.getDialogueManager().getActiveState(identity)) {
+      this.engine.startScenario(scenario.id, identity);
+    }
+    return this.engine.processInput(input, identity);
   }
 }
 
@@ -25,7 +31,13 @@ class MockWebChannelAdapter {
   constructor(private engine: DialogueEngine) {}
 
   async submit(input: DialogueInput, identity: { ownerId: string; sessionId: string }, scenario: ScenarioDefinition) {
-    return this.engine.processInput(input, identity, scenario);
+    if (!this.engine.getVoiceChannel().getScenarioById(scenario.id)) {
+      this.engine.getVoiceChannel().registerScenarioSet({ version: 1, id: `test-${scenario.id}`, scenarios: [scenario] });
+    }
+    if (input.modality === 'button' && !this.engine.getDialogueManager().getActiveState(identity)) {
+      this.engine.startScenario(scenario.id, identity);
+    }
+    return this.engine.processInput(input, identity);
   }
 }
 
