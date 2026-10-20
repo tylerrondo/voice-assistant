@@ -183,6 +183,7 @@ test.describe('CONTRACT: SC-INTEGRATION-001 Mixed Button / Text / Voice Dialogue
 
     // Case 1: Voice by Index («вторая») -> resolves to xyz-42
     const userA = { ownerId: 'user-cand-a', sessionId: 'sess-a' };
+    adapter.getDialogueEngine().startScenario('order-nanny', userA);
     await adapter.handleMessage({ channel: 'text', raw_input: 'завтра' }, userA);
     attachCandidates(userA, arbitraryCandidates);
 
@@ -192,6 +193,7 @@ test.describe('CONTRACT: SC-INTEGRATION-001 Mixed Button / Text / Voice Dialogue
 
     // Case 2: Voice by Name («Ольга») -> resolves to xyz-42
     const userB = { ownerId: 'user-cand-b', sessionId: 'sess-b' };
+    adapter.getDialogueEngine().startScenario('order-nanny', userB);
     await adapter.handleMessage({ channel: 'text', raw_input: 'завтра' }, userB);
     attachCandidates(userB, arbitraryCandidates);
 
@@ -200,6 +202,7 @@ test.describe('CONTRACT: SC-INTEGRATION-001 Mixed Button / Text / Voice Dialogue
 
     // Case 3: Text by Index («вариант 1») -> resolves to xyz-17
     const userC = { ownerId: 'user-cand-c', sessionId: 'sess-c' };
+    adapter.getDialogueEngine().startScenario('order-nanny', userC);
     await adapter.handleMessage({ channel: 'text', raw_input: 'завтра' }, userC);
     attachCandidates(userC, arbitraryCandidates);
 
@@ -208,6 +211,7 @@ test.describe('CONTRACT: SC-INTEGRATION-001 Mixed Button / Text / Voice Dialogue
 
     // Case 4: Button by exact ID
     const userD = { ownerId: 'user-cand-d', sessionId: 'sess-d' };
+    adapter.getDialogueEngine().startScenario('order-nanny', userD);
     await adapter.handleMessage({ channel: 'text', raw_input: 'завтра' }, userD);
     attachCandidates(userD, arbitraryCandidates);
 
@@ -219,6 +223,7 @@ test.describe('CONTRACT: SC-INTEGRATION-001 Mixed Button / Text / Voice Dialogue
     const sc = getScenario();
 
     const fillSlots = async (user: { ownerId: string; sessionId: string }) => {
+      adapter.getDialogueEngine().startScenario('order-nanny', user);
       await adapter.handleMessage({ channel: 'button', button_payload: { slotName: 'date', slotValue: 'завтра' } }, user);
       await adapter.handleMessage({ channel: 'button', button_payload: { slotName: 'start_time', slotValue: '15:00' } }, user);
       await adapter.handleMessage({ channel: 'button', button_payload: { slotName: 'end_time', slotValue: '20:00' } }, user);
@@ -255,6 +260,7 @@ test.describe('CONTRACT: SC-INTEGRATION-001 Mixed Button / Text / Voice Dialogue
 
     // 1. Button cancel
     const userBtn = { ownerId: 'u-can-btn', sessionId: 's-can-btn' };
+    adapter.getDialogueEngine().startScenario('order-nanny', userBtn);
     await adapter.handleMessage({ channel: 'button', button_payload: { slotName: 'date', slotValue: 'завтра' } }, userBtn);
     const resBtn = await adapter.handleMessage({ channel: 'button', button_payload: { slotName: 'confirmation', slotValue: 'REJECTED' } }, userBtn);
     expect(resBtn.status).toBe('CANCELLED');
@@ -262,6 +268,7 @@ test.describe('CONTRACT: SC-INTEGRATION-001 Mixed Button / Text / Voice Dialogue
 
     // 2. Text cancel
     const userTxt = { ownerId: 'u-can-txt', sessionId: 's-can-txt' };
+    adapter.getDialogueEngine().startScenario('order-nanny', userTxt);
     await adapter.handleMessage({ channel: 'text', raw_input: 'нужна няня' }, userTxt);
     const resTxt = await adapter.handleMessage({ channel: 'text', raw_input: 'отмена' }, userTxt);
     expect(resTxt.status).toBe('CANCELLED');
@@ -269,6 +276,7 @@ test.describe('CONTRACT: SC-INTEGRATION-001 Mixed Button / Text / Voice Dialogue
 
     // 3. Voice cancel
     const userVoice = { ownerId: 'u-can-voice', sessionId: 's-can-voice' };
+    adapter.getDialogueEngine().startScenario('order-nanny', userVoice);
     await adapter.handleMessage({ channel: 'voice', transcript: 'нужна няня' }, userVoice);
     const resVoice = await adapter.handleMessage({ channel: 'voice', transcript: 'отменяю' }, userVoice);
     expect(resVoice.status).toBe('CANCELLED');
