@@ -52,6 +52,7 @@ test.describe('CONTRACT: SC-INTEGRATION-003 Production Telegram Bot Voice Adapte
     telegramClient = new MockTelegramClient();
 
     botAdapter = new TelegramBotAdapter(dialogueAdapter, voiceTransport, telegramClient);
+    dialogueAdapter.getDialogueEngine().startScenario('order-nanny', sessionUser);
   });
 
   const getScenario = () => nannyScenarioSet.scenarios[0];
