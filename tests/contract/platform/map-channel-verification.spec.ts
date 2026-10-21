@@ -171,4 +171,31 @@ test.describe("Map Channel → Scenario Engine → Verification Harness", () => 
         expect(typeof (entries[1].payload as { payload: { orderId: unknown } }).payload.orderId).toBe("number")
     })
 
+    test("invalid map selection produces no Action or Event in the execution log", async () => {
+        const interaction = new RecordingInteraction()
+        const channel = new MapChannel({
+            interaction,
+            now: () => "2026-10-21T12:00:00.000Z",
+            createCorrelationId: () => "map-verification-invalid-1"
+        })
+        const log = new ExecutionLog()
+
+        await channel.selectOrder("   ")
+        await channel.selectOrder(null)
+        await channel.selectOrder(undefined)
+        await channel.selectOrder(Number.NaN)
+        await channel.selectOrder(Number.POSITIVE_INFINITY)
+
+        // Invalid selections must be rejected before dispatch; therefore the
+        // Scenario Engine has no Action to process and the Execution Log stays empty.
+        expect(interaction.actions).toHaveLength(0)
+        expect(log.getEntries()).toHaveLength(0)
+
+        const result = new VerificationRunner(log).runOne({
+            id: "map-order-selection-invalid",
+            name: "Invalid map selection emits no interaction",
+            expectations: []
+        })
+        expect(result.passed, result.errors.map(error => error.message).join("; ")).toBe(true)
+    })
 })
