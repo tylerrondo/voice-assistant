@@ -179,6 +179,8 @@ test.describe("Map Channel → Scenario Engine → Verification Harness", () => 
             createCorrelationId: () => "map-verification-invalid-1"
         })
         const log = new ExecutionLog()
+        const registry = new ScenarioRegistry()
+        const engine = new ScenarioEngine(registry, { wait: async () => undefined })
 
         await channel.selectOrder("   ")
         await channel.selectOrder(null)
@@ -186,8 +188,15 @@ test.describe("Map Channel → Scenario Engine → Verification Harness", () => 
         await channel.selectOrder(Number.NaN)
         await channel.selectOrder(Number.POSITIVE_INFINITY)
 
-        // Invalid selections must be rejected before dispatch; therefore the
-        // Scenario Engine has no Action to process and the Execution Log stays empty.
+        // If an invalid input ever dispatches, run it through the engine and log
+        // both the Action and any fallback Event so the assertions detect leakage.
+        for (const action of interaction.actions) {
+            log.append("Action", { type: action.type, payload: action.payload })
+            for await (const event of engine.run(action)) {
+                log.append("Event", { type: event.type, payload: event.payload })
+            }
+        }
+
         expect(interaction.actions).toHaveLength(0)
         expect(log.getEntries()).toHaveLength(0)
 
