@@ -143,3 +143,7 @@ export const productionActionDispatcher: ActionDispatcher = async (event, ctx, e
 
 // Application startup is owned by the root src/main.ts entrypoint.
 // Keep this module side-effect-free because its exports are imported by src/main.ts.
+
+if (typeof window !== 'undefined') {
+  (window as any).__PRODUCTION_ACTION_DISPATCHER__ = productionActionDispatcher;
+}
