@@ -15,7 +15,7 @@ The host auth/location layer must set `window.__NANNY_BACKEND_CONFIG__` before a
 
 - `baseUrl`: dev2 API base, not the production API.
 - `session`: an already authenticated `{ token, u_hash }` session. Do not place admin login/password credentials in frontend code or bundle environment variables.
-- `customerIdentity`: exactly one customer identity field accepted by the API, such as `{ u_a_tg }` or `{ chatId }`.
+- `resolveCustomerIdentity(payload, context)`: return exactly one customer identity field accepted by the API, such as `{ u_a_tg }` or `{ chatId }`, derived from the authenticated session. Do not use a single global customer ID for all sessions.
 - `resolveBookingLocation(payload, context)`: resolve the free-text location and local date/time to coordinates, an IANA timezone, and the booking start instant.
 - `resolveSelectedNanny(payload, context)`: map the chosen scenario candidate to the real backend nanny/user ID. A display-only candidate ID must not be sent to the API.
 
