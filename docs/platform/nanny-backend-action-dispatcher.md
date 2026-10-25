@@ -9,18 +9,21 @@ The production dispatcher routes `nanny.order.confirmed` to the existing MultiBo
 - `s_t_data` uses the established MultiBot contract: `action: "create"`, `request_key`, `time_zone`, and the `order` object. The order is restricted to the resolved selected nanny (`b_only_offer=1`), followed by `POST /drive/get/{orderId}` with `action=set_offer` and the resolved backend nanny ID.
 - `request_key` is a deterministic 16-hex-character hash of the platform `idempotencyKey`, prefixed with `va_` to satisfy MultiBot's 8–64 character `[A-Za-z0-9_-]` validation. A transport failure returns `UNKNOWN`, not a false failure, because the backend may already have committed the order.
 
-## Host configuration
+## Server-side proxy boundary
 
-The host auth/location layer must provide the dispatcher configuration before a confirmed nanny order is dispatched. The current voice-demo hook reads `window.__NANNY_BACKEND_CONFIG__`; this is a wiring seam, not a live integration by itself. It must provide:
+The browser now posts confirmed bookings to `POST /api/nanny/dispatch` (override with `window.__NANNY_BACKEND_PROXY_URL__` only when the host uses another same-origin route). It does not receive MultiBot credentials. `src/platform/nanny-backend-proxy.ts` exports `createNannyBackendProxyHandler`, a server-runtime handler that checks the host-authenticated session against the execution identity and calls the adapter with server-held credentials. Mount this handler in the host's server/router layer; the repository's current Vite demo is static and does not itself provide a deployable API route.
 
-- `baseUrl`: dev2 API base, not the production API.
-- `session`: an already authenticated `{ token, u_hash }` session. These values are credentials too: do not expose an administrator/service-account token or hash to browser code. For privileged MultiBot credentials, the dispatcher must be hosted behind a server-side proxy; only a scoped customer session may be used directly in the browser.
-- `resolveCustomerIdentity(payload, context)`: return exactly one customer identity field accepted by the API, such as `{ u_a_tg }` or `{ chatId }`, derived from the authenticated session. Do not use a single global customer ID for all sessions.
-- `resolveBookingLocation(payload, context)`: resolve the free-text location and local date/time to coordinates, an IANA timezone, and the booking start instant. This must use the real geocoding/location provider; a typed address alone is not enough.
-- `resolveSelectedNanny(payload, context)`: map the chosen scenario candidate to the real backend nanny/user ID. A display-only candidate ID must not be sent to the API.
+The server handler deliberately requires the deployment to supply these trusted dependencies:
+
+- `backend.baseUrl`: dev2 API base, not the production API.
+- `backend.session`: server-only MultiBot credentials. Do not serialize them into browser configuration.
+- `authenticate(request)`: verify the actual host session (cookie/Bearer token); request-body IDs are never accepted as authentication.
+- `resolveCustomerIdentity(session)`: return exactly one accepted customer identity field derived from the authenticated session. Do not use a global customer ID.
+- `resolveBookingLocation(payload, context)`: use the deployment's real geocoder and date/time resolver to return coordinates, IANA timezone, and booking start instant.
+- `resolveSelectedNanny(payload, context)`: map the selected display candidate against a trusted backend nanny catalog to the real backend user ID.
 - `payload.additional_options` (when present): IDs from the live backend booking-options catalog. Free-text requirements are stored separately in `b_options.requirements` and are not sent as price option IDs.
 
-If the host configuration is missing, the dispatcher returns `NANNY_BACKEND_NOT_CONFIGURED`; it does not silently report a successful local FSM transition for a nanny booking. If location or selected-nanny resolution is unavailable, it fails before creating an order. If creation succeeds but assignment of the selected nanny cannot be confirmed, it returns `UNKNOWN` to prevent a retry from creating a second booking.
+If the server route is not mounted, the browser returns `NANNY_PROXY_UNREACHABLE`; the static demo does not silently report a successful local FSM transition for a nanny booking. If location or selected-nanny resolution is unavailable, it fails before creating an order. If creation succeeds but assignment of the selected nanny cannot be confirmed, it returns `UNKNOWN` to prevent a retry from creating a second booking.
 
 ## Verification boundary
 
