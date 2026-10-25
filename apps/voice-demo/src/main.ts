@@ -1,10 +1,6 @@
 import { bootstrap } from "./Bootstrap";
 import { mountApp } from "./App";
 import type { ActionDispatcher, SessionIdentity, DispatchResult } from "../../../src/platform/dialogue-manager";
-import {
-  createNannyBackendActionDispatcher,
-  type NannyBackendDispatcherConfig,
-} from "../../../src/platform/nanny-backend-action-dispatcher";
 
 // Strict Authenticated Session Provider (Zero fallback)
 export function getAuthenticatedSessionIdentity(): SessionIdentity {
@@ -122,20 +118,34 @@ export const platformExecutionBoundary = new PlatformFsmExecutionBoundary();
 
 export const productionActionDispatcher: ActionDispatcher = async (event, ctx, exec) => {
   if (event.type === 'nanny.order.confirmed') {
-    const config = typeof window !== 'undefined'
-      ? (window as any).__NANNY_BACKEND_CONFIG__ as NannyBackendDispatcherConfig | undefined
-      : undefined;
-
-    if (!config) {
+    // Browser sends only the confirmed action to the same-origin server proxy.
+    // MultiBot service credentials and customer identity resolution remain server-side.
+    const proxyUrl = typeof window !== 'undefined'
+      ? String((window as any).__NANNY_BACKEND_PROXY_URL__ || '/api/nanny/dispatch')
+      : '/api/nanny/dispatch';
+    try {
+      const response = await fetch(proxyUrl, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ event, context: ctx, execution: exec }),
+      });
+      const result = await response.json() as DispatchResult;
+      if (result && ['SUCCEEDED', 'FAILED', 'UNKNOWN'].includes(result.status)) return result;
       return {
-        status: 'FAILED',
+        status: 'UNKNOWN',
         executionId: exec.executionId,
         attempt: exec.attempt,
-        errorCode: 'NANNY_BACKEND_NOT_CONFIGURED',
-      } satisfies DispatchResult;
+        errorCode: 'NANNY_PROXY_INVALID_RESPONSE',
+      };
+    } catch {
+      return {
+        status: 'UNKNOWN',
+        executionId: exec.executionId,
+        attempt: exec.attempt,
+        errorCode: 'NANNY_PROXY_UNREACHABLE',
+      };
     }
-
-    return createNannyBackendActionDispatcher(config)(event, ctx, exec);
   }
 
   return platformExecutionBoundary.execute(event, exec);
