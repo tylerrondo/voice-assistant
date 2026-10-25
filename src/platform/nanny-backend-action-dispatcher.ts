@@ -135,7 +135,6 @@ export function createNannyBackendActionDispatcher(
         b_end_datetime: formatUtc(end),
         childrenAges: String(payload.children_ages ?? ''),
         requirements: String(payload.requirements ?? ''),
-        preferredDriversList: [selectedNannyId],
       },
     };
 
@@ -195,6 +194,47 @@ export function createNannyBackendActionDispatcher(
         executionId: execution.executionId,
         attempt: execution.attempt,
         errorCode: 'ORDER_ID_MISSING_FROM_RESPONSE',
+      };
+    }
+
+    // MultiBot creates the booking first, then assigns the selected nanny via drive/get/{id}.
+    // Always repeat this idempotent assignment after create, including duplicate-create responses,
+    // so a retry can recover if the first assignment response was lost.
+    const offerForm = new URLSearchParams({
+      token: config.session.token,
+      u_hash: config.session.u_hash,
+      action: 'set_offer',
+      u_id: selectedNannyId,
+      u_a_role: '1',
+      ...config.customerIdentity,
+    });
+    try {
+      const offerResponse = await fetchImpl(`${baseUrl}/drive/get/${encodeURIComponent(String(orderId))}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+        body: offerForm,
+        signal: AbortSignal.timeout(10000),
+      });
+      let offerBody: { status?: string } | undefined;
+      try {
+        offerBody = await offerResponse.json() as { status?: string };
+      } catch {
+        offerBody = undefined;
+      }
+      if (!offerResponse.ok || offerBody?.status !== 'success') {
+        return {
+          status: 'UNKNOWN',
+          executionId: execution.executionId,
+          attempt: execution.attempt,
+          errorCode: 'ORDER_CREATED_OFFER_UNKNOWN',
+        };
+      }
+    } catch {
+      return {
+        status: 'UNKNOWN',
+        executionId: execution.executionId,
+        attempt: execution.attempt,
+        errorCode: 'ORDER_CREATED_OFFER_UNKNOWN',
       };
     }
 
