@@ -21,7 +21,10 @@ const execution = {
 } as ActionExecution;
 const body = { event: { type: 'nanny.order.confirmed', payload: execution.payload }, context, execution };
 
-const dependencies = (fetchImpl: typeof fetch, authenticate = async () => session) => ({
+const dependencies = (
+  fetchImpl: typeof fetch,
+  authenticate: (request: Request) => Promise<{ ownerId: string; sessionId: string } | null> = async () => session,
+) => ({
   authenticate,
   resolveCustomerIdentity: async () => ({ chatId: 'real-customer-1' }),
   resolveBookingLocation: async () => ({
