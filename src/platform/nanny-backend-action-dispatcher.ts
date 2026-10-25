@@ -11,7 +11,7 @@ export interface NannyBookingLocation {
   /** IANA timezone for the booking location, e.g. Europe/Madrid. */
   timeZone: string;
   /** Start instant resolved from the scenario's date and start_time slots. */
-  when: Date | null;
+  when: Date;
 }
 
 export interface NannyBackendDispatcherConfig {
@@ -26,6 +26,11 @@ export interface NannyBackendDispatcherConfig {
     payload: Record<string, any>,
     context: DialogueContext,
   ) => Promise<NannyBookingLocation>;
+  /** Resolve the selected scenario candidate to a real backend driver/user ID. */
+  resolveSelectedNanny: (
+    payload: Record<string, any>,
+    context: DialogueContext,
+  ) => Promise<string | null>;
   fetchImpl?: typeof fetch;
 }
 
@@ -91,8 +96,18 @@ export function createNannyBackendActionDispatcher(
       return failed(execution, 'LOCATION_RESOLUTION_FAILED');
     }
     if (!Number.isFinite(location.latitude) || !Number.isFinite(location.longitude) ||
-        !location.timeZone || (location.when !== null && Number.isNaN(location.when.getTime()))) {
+        !location.timeZone || Number.isNaN(location.when.getTime())) {
       return failed(execution, 'INVALID_RESOLVED_BOOKING_LOCATION');
+    }
+
+    let selectedNannyId: string | null;
+    try {
+      selectedNannyId = await config.resolveSelectedNanny(payload, context);
+    } catch {
+      return failed(execution, 'SELECTED_NANNY_RESOLUTION_FAILED');
+    }
+    if (!selectedNannyId?.trim()) {
+      return failed(execution, 'SELECTED_NANNY_NOT_RESOLVED');
     }
 
     const formatUtc = (date: Date) => {
@@ -101,17 +116,18 @@ export function createNannyBackendActionDispatcher(
         `${pad(date.getUTCHours())}:${pad(date.getUTCMinutes())}:${pad(date.getUTCSeconds())}+00:00`;
     };
 
-    const start = location.when ?? new Date();
+    const start = location.when;
     const end = new Date(start.getTime() + durationHours * 60 * 60 * 1000);
     const order: Record<string, any> = {
       b_start_latitude: String(location.latitude),
       b_start_longitude: String(location.longitude),
-      b_start_datetime: location.when ? formatUtc(start) : 'now',
+      b_start_datetime: formatUtc(start),
       b_passengers_count: childrenCount,
       b_max_waiting: 3600,
       b_payment_way: 1,
       b_services: [],
       b_comments: [],
+      b_only_offer: 1,
       b_options: {
         submitPrice: 0,
         createdBy: 'voice-assistant',
@@ -119,6 +135,7 @@ export function createNannyBackendActionDispatcher(
         b_end_datetime: formatUtc(end),
         childrenAges: String(payload.children_ages ?? ''),
         requirements: String(payload.requirements ?? ''),
+        preferredDriversList: [selectedNannyId],
       },
     };
 
