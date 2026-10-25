@@ -63,7 +63,7 @@ function failed(execution: ActionExecution, errorCode: string): DispatchResult {
 export function createNannyBackendActionDispatcher(
   config: NannyBackendDispatcherConfig,
 ): ActionDispatcher {
-  const baseUrl = config.baseUrl.replace(/\\/+$/, '');
+  const baseUrl = config.baseUrl.replace(/\/+$/, '');
   const fetchImpl = config.fetchImpl ?? fetch;
 
   return async (event, context, execution) => {
@@ -256,7 +256,7 @@ export function createNannyBackendActionDispatcher(
 
 function durationHoursBetween(start: string, end: string): number | null {
   const matchTime = (value: string) => {
-    const match = /^(\\d{1,2}):(\\d{2})$/.exec(value);
+    const match = /^(\d{1,2}):(\d{2})$/.exec(value);
     if (!match) return null;
     const hours = Number(match[1]);
     const minutes = Number(match[2]);
