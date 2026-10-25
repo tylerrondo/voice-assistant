@@ -55,17 +55,20 @@ const config = (fetchImpl: typeof fetch) => ({
     timeZone: 'Africa/Casablanca',
     when: new Date('2026-10-26T14:00:00.000Z'),
   }),
+  resolveSelectedNanny: async () => 'backend-user-93',
   fetchImpl,
 });
 
 test.describe('Nanny backend ActionDispatcher adapter', () => {
   test('sends confirmed booking to the existing nanny_pricing create contract with stable idempotency key', async () => {
-    let requestUrl = '';
-    let requestBody = '';
+    const requests: Array<{ url: string; body: string }> = [];
     const fetchImpl: typeof fetch = async (input, init) => {
-      requestUrl = String(input);
-      requestBody = String(init?.body);
-      return new Response(JSON.stringify({ status: 'success', data: { b_id: 731, duplicate: false } }), {
+      const url = String(input);
+      requests.push({ url, body: String(init?.body) });
+      const data = url.endsWith('/script/template/nanny_pricing')
+        ? { status: 'success', data: { b_id: 731, duplicate: false } }
+        : { status: 'success' };
+      return new Response(JSON.stringify(data), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       });
@@ -80,8 +83,10 @@ test.describe('Nanny backend ActionDispatcher adapter', () => {
     );
 
     expect(result).toEqual({ status: 'SUCCEEDED', executionId: exec.executionId, attempt: 1 });
-    expect(requestUrl).toBe('https://example.test/taxi_dev2/c/children/api/v1/script/template/nanny_pricing');
-    const form = new URLSearchParams(requestBody);
+    expect(requests).toHaveLength(2);
+    expect(requests[0].url).toBe('https://example.test/taxi_dev2/c/children/api/v1/script/template/nanny_pricing');
+    expect(requests[1].url).toBe('https://example.test/taxi_dev2/c/children/api/v1/drive/get/731');
+    const form = new URLSearchParams(requests[0].body);
     expect(form.get('token')).toBe('test-token');
     expect(form.get('u_hash')).toBe('test-hash');
     expect(form.get('chatId')).toBe('customer-chat-1');
@@ -94,9 +99,15 @@ test.describe('Nanny backend ActionDispatcher adapter', () => {
     expect(templateData.order.b_start_latitude).toBe('30.4');
     expect(templateData.order.b_start_longitude).toBe('-9.6');
     expect(templateData.order.b_passengers_count).toBe(2);
+    expect(templateData.order.b_only_offer).toBe(1);
     expect(templateData.order.b_options.childrenProfiles).toBe('2');
     expect(templateData.order.b_options.childrenAges).toBe('3 и 5 лет');
     expect(templateData.order.b_options.requirements).toBe('без особых требований');
+
+    const offerForm = new URLSearchParams(requests[1].body);
+    expect(offerForm.get('action')).toBe('set_offer');
+    expect(offerForm.get('u_id')).toBe('backend-user-93');
+    expect(offerForm.get('chatId')).toBe('customer-chat-1');
   });
 
   test('returns UNKNOWN on transport failure because the server may have committed the order', async () => {
