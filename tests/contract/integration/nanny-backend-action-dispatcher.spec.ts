@@ -33,6 +33,7 @@ const execution = (overrides: Partial<ActionExecution> = {}): ActionExecution =>
     end_time: '20:00',
     children_count: 2,
     children_ages: '3 и 5 лет',
+    additional_options: [1, 4],
     location: 'Центр',
     requirements: 'без особых требований',
     selected_nanny: 'nanny-93',
@@ -94,11 +95,14 @@ test.describe('Nanny backend ActionDispatcher adapter', () => {
 
     const templateData = JSON.parse(form.get('s_t_data') || '{}');
     expect(templateData.action).toBe('create');
-    expect(templateData.request_key).toBe(exec.idempotencyKey);
+    expect(templateData.request_key).toMatch(/^va_[a-f0-9]{16}$/);
+    expect(templateData.request_key.length).toBeLessThanOrEqual(64);
     expect(templateData.time_zone).toBe('Africa/Casablanca');
     expect(templateData.order.b_start_latitude).toBe('30.4');
     expect(templateData.order.b_start_longitude).toBe('-9.6');
     expect(templateData.order.b_passengers_count).toBe(2);
+    expect(templateData.order.b_comments).toEqual([1, 4]);
+    expect(templateData.order.b_options.b_end_datetime).toBe('2026-10-26 19:00:00+00:00');
     expect(templateData.order.b_only_offer).toBe(1);
     expect(templateData.order.b_options.childrenProfiles).toBe('2');
     expect(templateData.order.b_options.childrenAges).toBe('3 и 5 лет');
