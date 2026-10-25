@@ -202,14 +202,63 @@ export function mountApp(root: HTMLElement, runtime: any, authenticatedIdentity:
         }
         if (step.kind !== 'emit' || !step.event || step.event.type === 'VOICE_INPUT_RECEIVED') continue;
 
+        let dispatchResult: any;
+        const executionId = `scenario-${Date.now()}-${outputIndex}`;
         if (step.event.type.startsWith('driver.')) {
           const boundary = (window as any).__PLATFORM_EXECUTION_BOUNDARY__;
           if (boundary) {
-            await boundary.execute(step.event, {
-              executionId: `scenario-${Date.now()}-${outputIndex}`,
+            dispatchResult = await boundary.execute(step.event, {
+              executionId,
               attempt: 1,
               payload: step.event.payload
             });
+          }
+        } else if (step.event.type === 'nanny.order.confirmed') {
+          const dispatcher = (window as any).__PRODUCTION_ACTION_DISPATCHER__;
+          if (typeof dispatcher !== 'function') {
+            dispatchResult = { status: 'FAILED', executionId, attempt: 1, errorCode: 'PRODUCTION_DISPATCHER_NOT_REGISTERED' };
+          } else {
+            const now = Date.now();
+            const identity = app.getIdentity();
+            const payload = step.event.payload;
+            const context = {
+              contextId: `scenario-context-${scenario.id}`,
+              version: 1,
+              ownerId: identity.ownerId,
+              sessionId: identity.sessionId,
+              intent: 'ORDER_NANNY',
+              slots: payload,
+              missingSlots: [],
+              status: 'DISPATCHING',
+              createdAt: now,
+              updatedAt: now,
+              expiresAt: now + 300000,
+              actionType: step.event.type,
+              scenarioId: scenario.id
+            };
+            const execution = {
+              executionId,
+              idempotencyKey: `scenario-${scenario.id}-${executionId}-${step.event.type}`,
+              ownerId: identity.ownerId,
+              sessionId: identity.sessionId,
+              contextId: context.contextId,
+              scenarioId: scenario.id,
+              intent: context.intent,
+              actionType: step.event.type,
+              payload,
+              status: 'DISPATCHING',
+              attempt: 1,
+              createdAt: now,
+              updatedAt: now,
+              event: step.event
+            };
+            dispatchResult = await dispatcher(step.event, context, execution);
+          }
+          appendTrace(step.event, dispatchResult);
+          if (dispatchResult?.status !== 'SUCCEEDED') {
+            terminal.textContent = `kind: "end" — NANNY_ORDER_DISPATCH_${dispatchResult?.status || 'FAILED'}`;
+            progress.textContent = `${outputIndex}/${outputEvents.length} · ${outputEvents.length ? Math.round(outputIndex / outputEvents.length * 100) : 0}%`;
+            return { status: dispatchResult?.status || 'FAILED', scenarioId: scenario.id, emittedEvents: outputIndex, errorCode: dispatchResult?.errorCode };
           }
         }
 
