@@ -19,8 +19,11 @@ export interface NannyBackendDispatcherConfig {
   baseUrl: string;
   /** Existing authenticated backend session. Never put administrator credentials here. */
   session: { token: string; u_hash: string };
-  /** Customer identity expected by the existing API, e.g. { u_a_tg } or { chatId }. */
-  customerIdentity: Record<string, string>;
+  /** Resolve the current customer's API identity per session; never share a global customer ID. */
+  resolveCustomerIdentity: (
+    payload: Record<string, any>,
+    context: DialogueContext,
+  ) => Promise<Record<string, string>>;
   /** Resolve the scenario's free-text address and local date/time using the app's location service. */
   resolveBookingLocation: (
     payload: Record<string, any>,
@@ -71,12 +74,17 @@ export function createNannyBackendActionDispatcher(
     if (!config.session.token || !config.session.u_hash) {
       return failed(execution, 'BACKEND_SESSION_REQUIRED');
     }
-    if (!config.customerIdentity || Object.keys(config.customerIdentity).length !== 1 ||
-        !Object.values(config.customerIdentity)[0]) {
+    const payload = execution.payload;
+    let customerIdentity: Record<string, string>;
+    try {
+      customerIdentity = await config.resolveCustomerIdentity(payload, context);
+    } catch {
+      return failed(execution, 'CUSTOMER_IDENTITY_RESOLUTION_FAILED');
+    }
+    if (!customerIdentity || Object.keys(customerIdentity).length !== 1 ||
+        !Object.values(customerIdentity)[0]) {
       return failed(execution, 'CUSTOMER_IDENTITY_REQUIRED');
     }
-
-    const payload = execution.payload;
     const childrenCount = Number(payload.children_count);
     if (!Number.isInteger(childrenCount) || childrenCount < 1) {
       return failed(execution, 'INVALID_CHILDREN_COUNT');
@@ -148,7 +156,7 @@ export function createNannyBackendActionDispatcher(
         time_zone: location.timeZone,
         order,
       }),
-      ...config.customerIdentity,
+      ...customerIdentity,
       u_a_role: '1',
     });
 
@@ -206,7 +214,7 @@ export function createNannyBackendActionDispatcher(
       action: 'set_offer',
       u_id: selectedNannyId,
       u_a_role: '1',
-      ...config.customerIdentity,
+      ...customerIdentity,
     });
     try {
       const offerResponse = await fetchImpl(`${baseUrl}/drive/get/${encodeURIComponent(String(orderId))}`, {
