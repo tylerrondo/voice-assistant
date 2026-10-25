@@ -16,8 +16,9 @@ The host auth/location layer must set `window.__NANNY_BACKEND_CONFIG__` before a
 - `baseUrl`: dev2 API base, not the production API.
 - `session`: an already authenticated `{ token, u_hash }` session. Do not place admin login/password credentials in frontend code or bundle environment variables.
 - `resolveCustomerIdentity(payload, context)`: return exactly one customer identity field accepted by the API, such as `{ u_a_tg }` or `{ chatId }`, derived from the authenticated session. Do not use a single global customer ID for all sessions.
-- `resolveBookingLocation(payload, context)`: resolve the free-text location and local date/time to coordinates, an IANA timezone, and the booking start instant.
+- `resolveBookingLocation(payload, context)`: resolve the free-text location and local date/time to coordinates, an IANA timezone, and the booking start instant. This must use the real geocoding/location provider; a typed address alone is not enough.
 - `resolveSelectedNanny(payload, context)`: map the chosen scenario candidate to the real backend nanny/user ID. A display-only candidate ID must not be sent to the API.
+- `payload.additional_options` (when present): IDs from the live backend booking-options catalog. Free-text requirements are stored separately in `b_options.requirements` and are not sent as price option IDs.
 
 If the host configuration is missing, the dispatcher returns `NANNY_BACKEND_NOT_CONFIGURED`; it does not silently report a successful local FSM transition for a nanny booking. If location or selected-nanny resolution is unavailable, it fails before creating an order. If creation succeeds but assignment of the selected nanny cannot be confirmed, it returns `UNKNOWN` to prevent a retry from creating a second booking.
 
