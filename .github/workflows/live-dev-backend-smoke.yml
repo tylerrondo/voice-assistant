@@ -1,0 +1,41 @@
+name: Live dev backend smoke test
+
+on:
+  pull_request:
+    paths:
+      - 'tests/live-dev-backend-smoke.mjs'
+      - '.github/workflows/live-dev-backend-smoke.yml'
+      - 'docs/testing/live-dev-backend-smoke.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  syntax:
+    name: Check smoke-test script syntax
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: node --check tests/live-dev-backend-smoke.mjs
+
+  live-backend:
+    if: github.event_name == 'workflow_dispatch'
+    name: Read-only dev backend integration check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Verify authentication, token and database-backed read against the real backend
+        env:
+          DEV_BACKEND_URL: ${{ secrets.DEV_BACKEND_URL }}
+          DEV_BACKEND_LOGIN: ${{ secrets.DEV_BACKEND_LOGIN }}
+          DEV_BACKEND_PASSWORD: ${{ secrets.DEV_BACKEND_PASSWORD }}
+        run: node tests/live-dev-backend-smoke.mjs
