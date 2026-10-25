@@ -7,14 +7,14 @@ The production dispatcher routes `nanny.order.confirmed` to the existing MultiBo
 - Base URL is the full API base, including `/api/v1` (for example, the isolated dev2 `/taxi_dev2/c/children/api/v1` path).
 - Order creation uses `POST /script/template/nanny_pricing` with form fields `token`, `u_hash`, `is_var=1`, `s_t_data`, the customer identity field and `u_a_role=1`.
 - `s_t_data` uses the established MultiBot contract: `action: "create"`, `request_key`, `time_zone`, and the `order` object. The order is restricted to the resolved selected nanny (`b_only_offer=1`), followed by `POST /drive/get/{orderId}` with `action=set_offer` and the resolved backend nanny ID.
-- `request_key` is the stable platform `idempotencyKey`. A transport failure returns `UNKNOWN`, not a false failure, because the backend may already have committed the order.
+- `request_key` is a deterministic 16-hex-character hash of the platform `idempotencyKey`, prefixed with `va_` to satisfy MultiBot's 8–64 character `[A-Za-z0-9_-]` validation. A transport failure returns `UNKNOWN`, not a false failure, because the backend may already have committed the order.
 
 ## Host configuration
 
-The host auth/location layer must set `window.__NANNY_BACKEND_CONFIG__` before a confirmed nanny order is dispatched. It must provide:
+The host auth/location layer must provide the dispatcher configuration before a confirmed nanny order is dispatched. The current voice-demo hook reads `window.__NANNY_BACKEND_CONFIG__`; this is a wiring seam, not a live integration by itself. It must provide:
 
 - `baseUrl`: dev2 API base, not the production API.
-- `session`: an already authenticated `{ token, u_hash }` session. Do not place admin login/password credentials in frontend code or bundle environment variables.
+- `session`: an already authenticated `{ token, u_hash }` session. These values are credentials too: do not expose an administrator/service-account token or hash to browser code. For privileged MultiBot credentials, the dispatcher must be hosted behind a server-side proxy; only a scoped customer session may be used directly in the browser.
 - `resolveCustomerIdentity(payload, context)`: return exactly one customer identity field accepted by the API, such as `{ u_a_tg }` or `{ chatId }`, derived from the authenticated session. Do not use a single global customer ID for all sessions.
 - `resolveBookingLocation(payload, context)`: resolve the free-text location and local date/time to coordinates, an IANA timezone, and the booking start instant. This must use the real geocoding/location provider; a typed address alone is not enough.
 - `resolveSelectedNanny(payload, context)`: map the chosen scenario candidate to the real backend nanny/user ID. A display-only candidate ID must not be sent to the API.
@@ -24,4 +24,4 @@ If the host configuration is missing, the dispatcher returns `NANNY_BACKEND_NOT_
 
 ## Verification boundary
 
-The contract tests verify request mapping and failure semantics without creating a live order. The MultiBot read-only smoke run from 2026-10-24 remains the evidence for backend authentication, data reads and nanny pricing; it did not exercise order creation. No live order has been created by this integration change.
+The contract tests verify request mapping and failure semantics without creating a live order. The MultiBot read-only smoke run from 2026-10-24 remains the evidence for backend authentication, data reads and nanny pricing; it did not exercise order creation. No live order has been created by this integration change. The adapter is not production-ready until the host supplies real customer identity, location/geocoding and selected-nanny resolvers, and the credential boundary is confirmed.
