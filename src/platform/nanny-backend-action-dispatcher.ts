@@ -118,6 +118,15 @@ export function createNannyBackendActionDispatcher(
       return failed(execution, 'SELECTED_NANNY_NOT_RESOLVED');
     }
 
+    const requestKey = backendRequestKey(execution.idempotencyKey);
+    if (!requestKey) {
+      return failed(execution, 'INVALID_IDEMPOTENCY_KEY');
+    }
+    const additionalOptions = normalizeOptionIds(payload.additional_options);
+    if (additionalOptions === null) {
+      return failed(execution, 'INVALID_ADDITIONAL_OPTIONS');
+    }
+
     const formatUtc = (date: Date) => {
       const pad = (value: number) => String(value).padStart(2, '0');
       return `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())} ` +
@@ -134,7 +143,7 @@ export function createNannyBackendActionDispatcher(
       b_max_waiting: 3600,
       b_payment_way: 1,
       b_services: [],
-      b_comments: [],
+      b_comments: additionalOptions,
       b_only_offer: 1,
       b_options: {
         submitPrice: 0,
@@ -152,7 +161,7 @@ export function createNannyBackendActionDispatcher(
       is_var: '1',
       s_t_data: JSON.stringify({
         action: 'create',
-        request_key: execution.idempotencyKey,
+        request_key: requestKey,
         time_zone: location.timeZone,
         order,
       }),
@@ -252,6 +261,30 @@ export function createNannyBackendActionDispatcher(
       attempt: execution.attempt,
     };
   };
+}
+
+/**
+ * MultiBot request_key is restricted to 8–64 ASCII letters/digits/underscores/hyphens.
+ * Hash the platform's stable key so every retry maps to the same valid backend key.
+ */
+function backendRequestKey(value: string): string | null {
+  if (!value) return null;
+  let hash1 = 0x811c9dc5;
+  let hash2 = 0x9e3779b9;
+  for (let i = 0; i < value.length; i++) {
+    const code = value.charCodeAt(i);
+    hash1 = Math.imul(hash1 ^ code, 0x01000193) >>> 0;
+    hash2 = Math.imul(hash2 ^ (code + i), 0x85ebca6b) >>> 0;
+  }
+  return `va_${hash1.toString(16).padStart(8, '0')}${hash2.toString(16).padStart(8, '0')}`;
+}
+
+function normalizeOptionIds(value: unknown): number[] | null {
+  if (value === undefined || value === null) return [];
+  if (!Array.isArray(value)) return null;
+  const ids = value.map(Number);
+  if (ids.some(id => !Number.isSafeInteger(id) || id <= 0)) return null;
+  return [...new Set(ids)];
 }
 
 function durationHoursBetween(start: string, end: string): number | null {
