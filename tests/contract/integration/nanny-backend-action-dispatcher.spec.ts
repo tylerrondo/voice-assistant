@@ -48,7 +48,7 @@ const execution = (overrides: Partial<ActionExecution> = {}): ActionExecution =>
 const config = (fetchImpl: typeof fetch) => ({
   baseUrl: 'https://example.test/taxi_dev2/c/children/api/v1/',
   session: { token: 'test-token', u_hash: 'test-hash' },
-  customerIdentity: { chatId: 'customer-chat-1' },
+  resolveCustomerIdentity: async () => ({ chatId: 'customer-chat-1' }),
   resolveBookingLocation: async () => ({
     latitude: 30.4,
     longitude: -9.6,
