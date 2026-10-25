@@ -1,10 +1,14 @@
 import { bootstrap } from "../apps/voice-demo/src/Bootstrap";
 import { mountApp } from "../apps/voice-demo/src/App";
 import type { ActionDispatcher } from "./platform/dialogue-manager";
-import { platformExecutionBoundary, getAuthenticatedSessionIdentity } from "../apps/voice-demo/src/main";
+import {
+  platformExecutionBoundary,
+  getAuthenticatedSessionIdentity,
+  productionActionDispatcher,
+} from "../apps/voice-demo/src/main";
 
 export const rootProductionDispatcher: ActionDispatcher = async (event, ctx, exec) => {
-  return platformExecutionBoundary.execute(event, exec);
+  return productionActionDispatcher(event, ctx, exec);
 };
 
 if (import.meta.env.DEV && typeof window !== 'undefined' &&
