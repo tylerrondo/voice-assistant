@@ -1,6 +1,10 @@
 import { bootstrap } from "./Bootstrap";
 import { mountApp } from "./App";
-import type { ActionDispatcher, SessionIdentity } from "../../../src/platform/dialogue-manager";
+import type { ActionDispatcher, SessionIdentity, DispatchResult } from "../../../src/platform/dialogue-manager";
+import {
+  createNannyBackendActionDispatcher,
+  type NannyBackendDispatcherConfig,
+} from "../../../src/platform/nanny-backend-action-dispatcher";
 
 // Strict Authenticated Session Provider (Zero fallback)
 export function getAuthenticatedSessionIdentity(): SessionIdentity {
@@ -117,6 +121,23 @@ export class PlatformFsmExecutionBoundary {
 export const platformExecutionBoundary = new PlatformFsmExecutionBoundary();
 
 export const productionActionDispatcher: ActionDispatcher = async (event, ctx, exec) => {
+  if (event.type === 'nanny.order.confirmed') {
+    const config = typeof window !== 'undefined'
+      ? (window as any).__NANNY_BACKEND_CONFIG__ as NannyBackendDispatcherConfig | undefined
+      : undefined;
+
+    if (!config) {
+      return {
+        status: 'FAILED',
+        executionId: exec.executionId,
+        attempt: exec.attempt,
+        errorCode: 'NANNY_BACKEND_NOT_CONFIGURED',
+      } satisfies DispatchResult;
+    }
+
+    return createNannyBackendActionDispatcher(config)(event, ctx, exec);
+  }
+
   return platformExecutionBoundary.execute(event, exec);
 };
 
