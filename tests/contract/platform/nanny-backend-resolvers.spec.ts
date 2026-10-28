@@ -46,7 +46,8 @@ test.describe('nanny backend resolvers', () => {
       timeZone: 'Africa/Casablanca',
     });
     expect(location.when.toISOString()).toContain('2099-05-10');
-    await expect(resolvers.resolveSelectedNanny(payload, {} as any)).resolves.toBe('backend-user-93');
+    // Dispatcher payloads may be cloned from dialogue slots; selection must resolve by booking context, not object identity.
+    await expect(resolvers.resolveSelectedNanny({ ...payload }, {} as any)).resolves.toBe('backend-user-93');
     expect(requests.map(request => new URL(request.url).pathname)).toEqual([
       '/search',
       '/api/timezone/coordinate',
@@ -57,6 +58,7 @@ test.describe('nanny backend resolvers', () => {
       expect(request.body).toContain('customer-token');
       expect(request.body).toContain('customer-hash');
       expect(request.body).not.toContain('admin');
+      expect(request.body).not.toContain('u_a_role');
     }
   });
 
