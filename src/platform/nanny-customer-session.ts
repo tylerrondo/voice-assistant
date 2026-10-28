@@ -31,7 +31,7 @@ export class NannyCustomerSessionClient {
       throw new Error('CUSTOMER_API_HTTPS_REQUIRED');
     }
     this.baseUrl = baseUrl.replace(/\/+$/, '');
-    this.fetchImpl = fetchImpl;
+    this.fetchImpl = fetchImpl.bind(globalThis);
   }
 
   isAuthenticated(): boolean {
