@@ -11,7 +11,7 @@ test.describe('nanny customer session', () => {
       }
       return new Response(JSON.stringify({ data: { token: 'customer-token', u_hash: 'customer-u-hash' } }), { status: 200 });
     };
-    const client = new NannyCustomerSessionClient('https://dev2.example.test/api/v1', fetchImpl);
+    const client = new NannyCustomerSessionClient('https://dev2.example.test/api/v1/', fetchImpl);
     const session = await client.login('customer@example.test', 'customer-password');
 
     expect(requests).toHaveLength(2);
