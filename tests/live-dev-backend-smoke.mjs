@@ -8,8 +8,8 @@
  *   DEV_BACKEND_URL      HTTPS origin, e.g. https://ibronevik.ru/taxi_dev2/c/children
  *   DEV_BACKEND_LOGIN
  *   DEV_BACKEND_PASSWORD
- *   DEV_BACKEND_TEST_LATITUDE   Known dev2 test point latitude (read-only lookup)
- *   DEV_BACKEND_TEST_LONGITUDE  Known dev2 test point longitude (read-only lookup)
+ *   DEV_BACKEND_TEST_LATITUDE   Optional override; defaults to Malaga city centre
+ *   DEV_BACKEND_TEST_LONGITUDE  Optional override; defaults to Malaga city centre
  */
 const required = (name) => {
   const value = (process.env[name] || '').trim();
@@ -88,13 +88,17 @@ async function main() {
   console.log('PASS customer session: token, u_hash, and authenticated customer ID received; values withheld');
 
   // Read-only integration check of the same location/candidate templates used by MultiBot.
-  // Coordinates are supplied as repository secrets so the check uses a known dev2 test point.
-  const latitude = Number(required('DEV_BACKEND_TEST_LATITUDE'));
-  const longitude = Number(required('DEV_BACKEND_TEST_LONGITUDE'));
+  // Nannies are available in Malaga, so use Malaga as the default lookup point.
+  // Optional env overrides remain available for a dedicated dev2 test location.
+  const latitudeValue = (process.env.DEV_BACKEND_TEST_LATITUDE || '').trim();
+  const longitudeValue = (process.env.DEV_BACKEND_TEST_LONGITUDE || '').trim();
+  const latitude = latitudeValue ? Number(latitudeValue) : 36.7213;
+  const longitude = longitudeValue ? Number(longitudeValue) : -4.4214;
   if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90 ||
       !Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
     throw new Error('dev2 test coordinates are invalid');
   }
+  console.log(`Read-only lookup point: ${latitudeValue && longitudeValue ? 'configured test coordinates' : 'Malaga, Spain'}`);
   const customerSession = { token, u_hash: uHash };
   const citiesResponse = await postForm('read-only city lookup', '/api/v1/query/template/1', {
     ...customerSession,
