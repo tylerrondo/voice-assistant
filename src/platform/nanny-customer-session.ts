@@ -51,7 +51,7 @@ export class NannyCustomerSessionClient {
     if (!login.trim() || !password) throw new Error('LOGIN_AND_PASSWORD_REQUIRED');
 
     const authForm = new URLSearchParams({ login: login.trim(), password, type: 'e-mail' });
-    const authResponse = await this.fetchImpl(`${this.baseUrl}/auth`, {
+    const authResponse = await this.fetchImpl(`${this.baseUrl}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
       body: authForm,
