@@ -150,11 +150,17 @@ export const productionActionDispatcher: ActionDispatcher = async (event, ctx, e
     }
 
     // Never fall back to a preconfigured service/admin session in the browser.
-    const resolvers = createNannyBackendResolvers(
+    const defaultResolvers = createNannyBackendResolvers(
       config.baseUrl,
       () => (typeof window !== 'undefined' ? (window as any).__NANNY_CUSTOMER_SESSION__ : null),
       config.fetchImpl,
     );
+    // Host-provided resolvers remain injectable for controlled deployments and tests;
+    // the standard demo path uses the customer-session implementation by default.
+    const resolvers = {
+      resolveBookingLocation: config.resolveBookingLocation ?? defaultResolvers.resolveBookingLocation,
+      resolveSelectedNanny: config.resolveSelectedNanny ?? defaultResolvers.resolveSelectedNanny,
+    };
     return createNannyBackendActionDispatcher({
       ...config,
       ...resolvers,
