@@ -65,6 +65,105 @@ test.describe('Nanny customer session UI', () => {
     await expect.poll(() => page.evaluate(() => (window as any).__NANNY_CUSTOMER_SESSION__)).toBeUndefined();
   });
 
+  test('uses the authenticated customer ID from /token in the nanny API request', async ({ page }) => {
+    const createBodies: string[] = [];
+    const assignmentBodies: string[] = [];
+    await page.route('https://dev2.example.test/api/v1/auth/login', route => route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ status: 'success', auth_hash: 'auth-hash' }),
+    }));
+    await page.route('https://dev2.example.test/api/v1/token', route => route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        status: 'success',
+        data: { token: 'customer-token', u_hash: 'customer-hash' },
+        auth_user: { u_id: 'customer-42' },
+      }),
+    }));
+    await page.route('https://dev2.example.test/api/v1/script/template/nanny_pricing', async route => {
+      createBodies.push(route.request().postData() || '');
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ status: 'success', data: { b_id: 731 } }),
+      });
+    });
+    await page.route('https://dev2.example.test/api/v1/drive/get/731', async route => {
+      assignmentBodies.push(route.request().postData() || '');
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ status: 'success' }),
+      });
+    });
+
+    await page.goto('/');
+    await page.getByLabel('E-mail').fill('customer@example.test');
+    await page.getByLabel('Пароль').fill('test-password');
+    await page.getByRole('button', { name: 'Войти' }).click();
+    await expect(page.locator('#nanny-customer-auth-status')).toContainText('Вход выполнен');
+
+    const result = await page.evaluate(async () => {
+      const dispatcher = (window as any).__PRODUCTION_ACTION_DISPATCHER__;
+      const now = Date.now();
+      const payload = {
+        date: '2026-10-26',
+        start_time: '15:00',
+        end_time: '20:00',
+        children_count: 2,
+        children_ages: '3 и 5 лет',
+        additional_options: [],
+        location: 'Agadir',
+        requirements: '',
+        selected_nanny: 'nanny-93',
+        confirmation: 'CONFIRMED',
+      };
+      return dispatcher(
+        { type: 'nanny.order.confirmed', payload },
+        {
+          contextId: 'ctx-e2e-nanny',
+          version: 1,
+          ownerId: 'e2e-owner',
+          sessionId: 'e2e-session',
+          intent: 'ORDER_NANNY',
+          slots: payload,
+          missingSlots: [],
+          status: 'DISPATCHING',
+          createdAt: now,
+          updatedAt: now,
+          expiresAt: now + 300000,
+          actionType: 'nanny.order.confirmed',
+          scenarioId: 'order-nanny',
+        },
+        {
+          executionId: 'e2e-nanny-dispatch',
+          idempotencyKey: 'e2e-nanny-dispatch-key',
+          ownerId: 'e2e-owner',
+          sessionId: 'e2e-session',
+          contextId: 'ctx-e2e-nanny',
+          scenarioId: 'order-nanny',
+          intent: 'ORDER_NANNY',
+          actionType: 'nanny.order.confirmed',
+          payload,
+          status: 'DISPATCHING',
+          attempt: 1,
+          createdAt: now,
+          updatedAt: now,
+          event: { type: 'nanny.order.confirmed', payload },
+        },
+      );
+    });
+
+    expect(result).toMatchObject({ status: 'SUCCEEDED' });
+    expect(createBodies).toHaveLength(1);
+    expect(assignmentBodies).toHaveLength(1);
+    expect(new URLSearchParams(createBodies[0]).get('u_id')).toBe('customer-42');
+    expect(new URLSearchParams(assignmentBodies[0]).get('u_id')).toBe('customer-42');
+    expect(new URLSearchParams(createBodies[0]).get('token')).toBe('customer-token');
+  });
+
   test('blocks nanny dispatch without a customer-owned session and makes no API call', async ({ page }) => {
     let apiCalls = 0;
     await page.route('https://dev2.example.test/api/v1/**', async route => {
