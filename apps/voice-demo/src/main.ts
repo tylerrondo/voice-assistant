@@ -136,9 +136,9 @@ export const productionActionDispatcher: ActionDispatcher = async (event, ctx, e
     }
 
     const customerSession = typeof window !== 'undefined'
-      ? (window as any).__NANNY_CUSTOMER_SESSION__ as { token: string; u_hash: string } | undefined
+      ? (window as any).__NANNY_CUSTOMER_SESSION__ as { token: string; u_hash: string; u_id: string } | undefined
       : undefined;
-    if (!customerSession?.token || !customerSession?.u_hash) {
+    if (!customerSession?.token || !customerSession?.u_hash || !customerSession?.u_id) {
       return {
         status: 'FAILED',
         executionId: exec.executionId,
@@ -151,6 +151,8 @@ export const productionActionDispatcher: ActionDispatcher = async (event, ctx, e
     return createNannyBackendActionDispatcher({
       ...config,
       session: customerSession,
+      // Identity comes from the backend-issued token response, not scenario slots or a global ID.
+      resolveCustomerIdentity: async () => ({ u_id: customerSession.u_id }),
     })(event, ctx, exec);
   }
 
