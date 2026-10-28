@@ -7,9 +7,9 @@ test.describe('nanny customer session', () => {
     const fetchImpl: typeof fetch = async (input, init) => {
       requests.push({ url: String(input), body: String(init?.body) });
       if (String(input).endsWith('/auth')) {
-        return new Response(JSON.stringify({ auth_hash: 'customer-auth-hash' }), { status: 200 });
+        return new Response(JSON.stringify({ status: 'success', auth_hash: 'customer-auth-hash' }), { status: 200 });
       }
-      return new Response(JSON.stringify({ data: { token: 'customer-token', u_hash: 'customer-u-hash' } }), { status: 200 });
+      return new Response(JSON.stringify({ status: 'success', data: { token: 'customer-token', u_hash: 'customer-u-hash' } }), { status: 200 });
     };
     const client = new NannyCustomerSessionClient('https://dev2.example.test/api/v1/', fetchImpl);
     const session = await client.login('customer@example.test', 'customer-password');
@@ -33,8 +33,8 @@ test.describe('nanny customer session', () => {
     let loginCalls = 0;
     const fetchImpl: typeof fetch = async () => {
       loginCalls += 1;
-      if (loginCalls === 1) return new Response(JSON.stringify({ auth_hash: 'auth-1' }), { status: 200 });
-      if (loginCalls === 2) return new Response(JSON.stringify({ data: { token: 'token-1', u_hash: 'hash-1' } }), { status: 200 });
+      if (loginCalls === 1) return new Response(JSON.stringify({ status: 'success', auth_hash: 'auth-1' }), { status: 200 });
+      if (loginCalls === 2) return new Response(JSON.stringify({ status: 'success', data: { token: 'token-1', u_hash: 'hash-1' } }), { status: 200 });
       return new Response('{}', { status: 401 });
     };
     const client = new NannyCustomerSessionClient('https://dev2.example.test/api/v1', fetchImpl);
