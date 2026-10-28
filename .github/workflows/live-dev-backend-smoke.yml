@@ -38,4 +38,6 @@ jobs:
           DEV_BACKEND_URL: ${{ secrets.DEV_BACKEND_URL }}
           DEV_BACKEND_LOGIN: ${{ secrets.DEV_BACKEND_LOGIN }}
           DEV_BACKEND_PASSWORD: ${{ secrets.DEV_BACKEND_PASSWORD }}
+          DEV_BACKEND_TEST_LATITUDE: ${{ secrets.DEV_BACKEND_TEST_LATITUDE }}
+          DEV_BACKEND_TEST_LONGITUDE: ${{ secrets.DEV_BACKEND_TEST_LONGITUDE }}
         run: node tests/live-dev-backend-smoke.mjs
