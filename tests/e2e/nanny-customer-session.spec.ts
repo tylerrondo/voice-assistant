@@ -64,6 +64,11 @@ test.describe('Nanny customer session UI', () => {
       await route.abort();
     });
     await page.goto('/');
+    // The production entrypoint is loaded through a dynamic import; wait until
+    // mountPlatformRuntime has registered the dispatcher before exercising it.
+    await expect.poll(() => page.evaluate(
+      () => typeof (window as any).__PRODUCTION_ACTION_DISPATCHER__,
+    )).toBe('function');
     const result = await page.evaluate(async () => {
       const dispatcher = (window as any).__PRODUCTION_ACTION_DISPATCHER__;
       return dispatcher(
