@@ -114,6 +114,35 @@ test.describe('Nanny backend ActionDispatcher adapter', () => {
     expect(offerForm.get('chatId')).toBe('customer-chat-1');
   });
 
+  test('fails closed without trusted booking resolvers and makes no backend call', async () => {
+    let calls = 0;
+    const fetchImpl: typeof fetch = async () => {
+      calls += 1;
+      return new Response(JSON.stringify({ status: 'success' }), { status: 200 });
+    };
+    const incompleteConfig = {
+      baseUrl: 'https://example.test/taxi_dev2/c/children/api/v1',
+      session: { token: 'test-token', u_hash: 'test-hash' },
+      fetchImpl,
+    };
+    const dispatcher = createNannyBackendActionDispatcher(incompleteConfig as any);
+    const exec = execution();
+
+    const result = await dispatcher(
+      { type: 'nanny.order.confirmed', payload: exec.payload },
+      context,
+      exec,
+    );
+
+    expect(result).toEqual({
+      status: 'FAILED',
+      executionId: exec.executionId,
+      attempt: 1,
+      errorCode: 'NANNY_BACKEND_RESOLVERS_NOT_CONFIGURED',
+    });
+    expect(calls).toBe(0);
+  });
+
   test('returns UNKNOWN on transport failure because the server may have committed the order', async () => {
     const fetchImpl: typeof fetch = async () => { throw new Error('network down'); };
     const dispatcher = createNannyBackendActionDispatcher(config(fetchImpl));
