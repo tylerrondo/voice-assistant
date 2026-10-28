@@ -6,7 +6,13 @@ on:
       - 'tests/live-dev-backend-smoke.mjs'
       - '.github/workflows/live-dev-backend-smoke.yml'
       - 'docs/testing/live-dev-backend-smoke.md'
-  workflow_dispatch:
+  push:
+    branches:
+      - integration/nanny-action-dispatcher
+    paths:
+      - 'tests/live-dev-backend-smoke.mjs'
+      - '.github/workflows/live-dev-backend-smoke.yml'
+      - 'docs/testing/live-dev-backend-smoke.md'
 
 permissions:
   contents: read
@@ -24,7 +30,7 @@ jobs:
       - run: node --check tests/live-dev-backend-smoke.mjs
 
   live-backend:
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/integration/nanny-action-dispatcher'
     name: Read-only dev backend integration check
     runs-on: ubuntu-latest
     timeout-minutes: 5
