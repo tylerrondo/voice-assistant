@@ -231,7 +231,6 @@ export function createNannyBackendActionDispatcher(
       action: 'set_offer',
       u_id: selectedNannyId,
       u_a_role: '1',
-      ...customerIdentity,
     });
     try {
       const offerResponse = await fetchImpl(`${baseUrl}/drive/get/${encodeURIComponent(String(orderId))}`, {
