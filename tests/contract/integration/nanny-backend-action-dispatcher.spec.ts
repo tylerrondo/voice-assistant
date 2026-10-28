@@ -111,7 +111,7 @@ test.describe('Nanny backend ActionDispatcher adapter', () => {
     const offerForm = new URLSearchParams(requests[1].body);
     expect(offerForm.get('action')).toBe('set_offer');
     expect(offerForm.get('u_id')).toBe('backend-user-93');
-    expect(offerForm.get('u_id')).toBe('customer-42');
+    expect(offerForm.get('u_id')).toBe('backend-user-93');
   });
 
   test('fails closed without trusted booking resolvers and makes no backend call', async () => {
