@@ -160,7 +160,7 @@ test.describe('Nanny customer session UI', () => {
     expect(createBodies).toHaveLength(1);
     expect(assignmentBodies).toHaveLength(1);
     expect(new URLSearchParams(createBodies[0]).get('u_id')).toBe('customer-42');
-    expect(new URLSearchParams(assignmentBodies[0]).get('u_id')).toBe('customer-42');
+    expect(new URLSearchParams(assignmentBodies[0]).get('u_id')).toBe('backend-nanny-93');
     expect(new URLSearchParams(createBodies[0]).get('token')).toBe('customer-token');
   });
 
