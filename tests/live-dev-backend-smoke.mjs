@@ -8,6 +8,8 @@
  *   DEV_BACKEND_URL      HTTPS origin, e.g. https://ibronevik.ru/taxi_dev2/c/children
  *   DEV_BACKEND_LOGIN
  *   DEV_BACKEND_PASSWORD
+ *   DEV_BACKEND_TEST_LATITUDE   Known dev2 test point latitude (read-only lookup)
+ *   DEV_BACKEND_TEST_LONGITUDE  Known dev2 test point longitude (read-only lookup)
  */
 const required = (name) => {
   const value = (process.env[name] || '').trim();
@@ -83,10 +85,46 @@ async function main() {
     throw new Error('customer token acquisition: successful status, token, u_hash, or auth_user.u_id missing');
   }
 
-  // Deliberately stop here: quote/order template semantics are not yet validated,
-  // and this smoke test must never create a real booking.
   console.log('PASS customer session: token, u_hash, and authenticated customer ID received; values withheld');
-  console.log('LIVE NANNY CUSTOMER SESSION SMOKE TEST PASSED (read-only; no order created)');
+
+  // Read-only integration check of the same location/candidate templates used by MultiBot.
+  // Coordinates are supplied as repository secrets so the check uses a known dev2 test point.
+  const latitude = Number(required('DEV_BACKEND_TEST_LATITUDE'));
+  const longitude = Number(required('DEV_BACKEND_TEST_LONGITUDE'));
+  if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90 ||
+      !Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
+    throw new Error('dev2 test coordinates are invalid');
+  }
+  const customerSession = { token, u_hash: uHash };
+  const citiesResponse = await postForm('read-only city lookup', '/api/v1/query/template/1', {
+    ...customerSession,
+    data: JSON.stringify({
+      ':drive_latitude': String(latitude),
+      ':drive_longitude': String(longitude),
+      ':max_distance': '100'
+    })
+  });
+  if (citiesResponse.status !== 'success' || !Array.isArray(citiesResponse.data)) {
+    throw new Error('read-only city lookup: expected successful response with data array');
+  }
+  const cityIds = citiesResponse.data.map(city => String(city?.id_city ?? '')).filter(Boolean);
+  console.log(`PASS read-only city lookup: ${cityIds.length} matching city record(s); response values withheld`);
+  if (cityIds.length > 0) {
+    const candidatesResponse = await postForm('read-only nanny candidate lookup', '/api/v1/query/template/2', {
+      ...customerSession,
+      data: JSON.stringify({ ':city_id_list': cityIds.join(',') })
+    });
+    if (candidatesResponse.status !== 'success' || !Array.isArray(candidatesResponse.data)) {
+      throw new Error('read-only nanny candidate lookup: expected successful response with data array');
+    }
+    const candidatesWithIds = candidatesResponse.data.filter(candidate =>
+      candidate && candidate.id_user !== undefined && candidate.id_user !== null && String(candidate.id_user).trim()
+    ).length;
+    console.log(`PASS read-only nanny candidate lookup: ${candidatesWithIds} candidate ID(s) received; values withheld`);
+  } else {
+    console.log('SKIP candidate lookup: no city IDs returned for configured test point');
+  }
+  console.log('LIVE NANNY CUSTOMER SESSION + READ-ONLY LOOKUP SMOKE TEST PASSED (no order created)');
 }
 
 main().catch((error) => {
