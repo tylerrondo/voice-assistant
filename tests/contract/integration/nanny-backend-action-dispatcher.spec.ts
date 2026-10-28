@@ -49,7 +49,7 @@ const execution = (overrides: Partial<ActionExecution> = {}): ActionExecution =>
 const config = (fetchImpl: typeof fetch) => ({
   baseUrl: 'https://example.test/taxi_dev2/c/children/api/v1/',
   session: { token: 'test-token', u_hash: 'test-hash' },
-  resolveCustomerIdentity: async () => ({ chatId: 'customer-chat-1' }),
+  resolveCustomerIdentity: async () => ({ u_id: 'customer-42' }),
   resolveBookingLocation: async () => ({
     latitude: 30.4,
     longitude: -9.6,
@@ -90,7 +90,7 @@ test.describe('Nanny backend ActionDispatcher adapter', () => {
     const form = new URLSearchParams(requests[0].body);
     expect(form.get('token')).toBe('test-token');
     expect(form.get('u_hash')).toBe('test-hash');
-    expect(form.get('chatId')).toBe('customer-chat-1');
+    expect(form.get('u_id')).toBe('customer-42');
     expect(form.get('u_a_role')).toBe('1');
 
     const templateData = JSON.parse(form.get('s_t_data') || '{}');
@@ -111,7 +111,7 @@ test.describe('Nanny backend ActionDispatcher adapter', () => {
     const offerForm = new URLSearchParams(requests[1].body);
     expect(offerForm.get('action')).toBe('set_offer');
     expect(offerForm.get('u_id')).toBe('backend-user-93');
-    expect(offerForm.get('chatId')).toBe('customer-chat-1');
+    expect(offerForm.get('u_id')).toBe('customer-42');
   });
 
   test('fails closed without trusted booking resolvers and makes no backend call', async () => {
