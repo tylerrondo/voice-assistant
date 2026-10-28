@@ -8,6 +8,13 @@ test.describe('Nanny customer session UI', () => {
       w.__AUTH_SESSION_ID__ = 'e2e-session';
       w.__NANNY_BACKEND_CONFIG__ = {
         baseUrl: 'https://dev2.example.test/api/v1',
+        resolveBookingLocation: async () => ({
+          latitude: 30.4,
+          longitude: -9.6,
+          timeZone: 'Africa/Casablanca',
+          when: new Date('2026-10-26T14:00:00.000Z'),
+        }),
+        resolveSelectedNanny: async () => 'backend-nanny-93',
       };
     });
   });
