@@ -1,5 +1,6 @@
 import type { SessionIdentity } from '../../../src/platform/dialogue-manager';
 import { NannyCustomerSessionClient } from '../../../src/platform/nanny-customer-session';
+import { createNannyBackendResolvers } from '../../../src/platform/nanny-backend-resolvers';
 import { MapChannel, MAP_ORDER_SELECT_ACTION } from '../../../packages/map/src/index';
 import { mountReportPanel } from './ReportPanel';
 import type { InteractionAction, InteractionContract, InteractionEvent, InteractionSnapshot } from '../../../packages/interaction-contract/dist/index';
@@ -12,6 +13,7 @@ type ScenarioSet = { id: string; name?: string; version?: number; scenarios: Sce
 export class VoiceDemoApp {
   public runtime: any;
   private currentIdentity: SessionIdentity;
+  private nannyCandidateLoader?: (slots: Record<string, any>, context: any) => Promise<Array<{ id: string; name: string; index: number; status: string }>>;
 
   constructor(runtime: any, authenticatedIdentity: SessionIdentity) {
     if (!authenticatedIdentity || !authenticatedIdentity.ownerId || !authenticatedIdentity.sessionId) {
@@ -21,12 +23,47 @@ export class VoiceDemoApp {
     this.currentIdentity = authenticatedIdentity;
   }
 
+  public setNannyCandidateLoader(
+    loader: (slots: Record<string, any>, context: any) => Promise<Array<{ id: string; name: string; index: number; status: string }>>,
+  ) {
+    this.nannyCandidateLoader = loader;
+  }
+
   public async handleVoice(phrase: string, identityOverride?: SessionIdentity) {
     const identity = identityOverride || this.currentIdentity;
     if (!identity || !identity.ownerId || !identity.sessionId) {
       throw new Error('CONTRACT_VIOLATION: Valid SessionIdentity required to process voice');
     }
-    return this.runtime.voiceChannel.handleIncomingVoice(phrase, identity);
+    const result: any = await this.runtime.voiceChannel.handleIncomingVoice(phrase, identity);
+    const contextId = result?.contextId ?? result?.context?.contextId;
+    const manager = this.runtime.dialogueManager;
+    const context = contextId && manager?.getContext(contextId, identity);
+    if (context && this.nannyCandidateLoader &&
+        context.scenarioId === 'order-nanny' &&
+        context.missingSlots?.includes('selected_nanny') &&
+        context.slots?.location && context.slots?.date && context.slots?.start_time &&
+        (!context.offers || context.offers.length === 0)) {
+      try {
+        const offers = await this.nannyCandidateLoader(context.slots, context);
+        if (offers.length) {
+          manager.setOffersForContext(context.contextId, offers, identity);
+          const updated = manager.getContext(context.contextId, identity);
+          const list = offers.map(offer => `${offer.index}. ${offer.name}`).join('; ');
+          const prompt = `Доступные няни: ${list}. Назовите номер или имя.`;
+          return {
+            ...result,
+            context: updated,
+            offers,
+            nextQuestion: prompt,
+            message: prompt,
+            presentation: { ...(result?.presentation || {}), text: prompt },
+          };
+        }
+      } catch {
+        // Keep the dialogue active; the dispatcher still fails closed if a real nanny cannot be resolved.
+      }
+    }
+    return result;
   }
 
   public setIdentity(identity: SessionIdentity) {
@@ -112,6 +149,11 @@ export function mountApp(root: HTMLElement, runtime: any, authenticatedIdentity:
     ? nannyConfigAtStartup.baseUrl
     : 'https://ibronevik.ru/taxi_dev2/c/children/api/v1';
   const customerSessionClient = new NannyCustomerSessionClient(nannyApiBaseUrl);
+  const nannyResolvers = createNannyBackendResolvers(
+    nannyApiBaseUrl,
+    () => customerSessionClient.getSession(),
+  );
+  app.setNannyCandidateLoader((slots, context) => nannyResolvers.loadCandidateOffers(slots, context));
 
   let activeSet: ScenarioSet | null = null;
 
