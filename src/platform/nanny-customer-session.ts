@@ -1,12 +1,14 @@
 /**
  * Customer-owned session for the nanny voice UI.
  *
- * The returned token is held only in this instance's memory. Never persist it in
- * localStorage/sessionStorage or expose bot/service credentials to browser code.
+ * The token and authenticated backend user ID are held only in memory. Never persist
+ * credentials in browser storage or expose bot/service credentials to browser code.
  */
 export interface NannyCustomerSession {
   token: string;
   u_hash: string;
+  /** Authenticated customer ID returned by the backend token endpoint. */
+  u_id: string;
 }
 
 type AuthLoginResponse = {
@@ -18,6 +20,7 @@ type AuthLoginResponse = {
 type TokenResponse = {
   status?: string;
   data?: { token?: string; u_hash?: string };
+  auth_user?: { u_id?: string };
 };
 
 export class NannyCustomerSessionClient {
@@ -35,7 +38,7 @@ export class NannyCustomerSessionClient {
   }
 
   isAuthenticated(): boolean {
-    return Boolean(this.session?.token && this.session?.u_hash);
+    return Boolean(this.session?.token && this.session?.u_hash && this.session?.u_id);
   }
 
   getSession(): NannyCustomerSession | null {
@@ -74,11 +77,13 @@ export class NannyCustomerSessionClient {
     const tokenData = await tokenResponse.json() as TokenResponse;
     const token = tokenData.data?.token;
     const uHash = tokenData.data?.u_hash;
-    if (tokenData.status !== 'success' || typeof token !== 'string' || !token || typeof uHash !== 'string' || !uHash) {
+    const userId = tokenData.auth_user?.u_id;
+    if (tokenData.status !== 'success' || typeof token !== 'string' || !token ||
+        typeof uHash !== 'string' || !uHash || typeof userId !== 'string' || !userId.trim()) {
       throw new Error('CUSTOMER_TOKEN_INVALID_RESPONSE');
     }
 
-    this.session = { token, u_hash: uHash };
+    this.session = { token, u_hash: uHash, u_id: userId };
     return { ...this.session };
   }
 }
