@@ -135,7 +135,23 @@ export const productionActionDispatcher: ActionDispatcher = async (event, ctx, e
       } satisfies DispatchResult;
     }
 
-    return createNannyBackendActionDispatcher(config)(event, ctx, exec);
+    const customerSession = typeof window !== 'undefined'
+      ? (window as any).__NANNY_CUSTOMER_SESSION__ as { token: string; u_hash: string } | undefined
+      : undefined;
+    if (!customerSession?.token || !customerSession?.u_hash) {
+      return {
+        status: 'FAILED',
+        executionId: exec.executionId,
+        attempt: exec.attempt,
+        errorCode: 'NANNY_CUSTOMER_SESSION_REQUIRED',
+      } satisfies DispatchResult;
+    }
+
+    // Never fall back to a preconfigured service/admin session in the browser.
+    return createNannyBackendActionDispatcher({
+      ...config,
+      session: customerSession,
+    })(event, ctx, exec);
   }
 
   return platformExecutionBoundary.execute(event, exec);
