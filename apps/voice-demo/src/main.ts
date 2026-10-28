@@ -5,6 +5,7 @@ import {
   createNannyBackendActionDispatcher,
   type NannyBackendDispatcherConfig,
 } from "../../../src/platform/nanny-backend-action-dispatcher";
+import { createNannyBackendResolvers } from "../../../src/platform/nanny-backend-resolvers";
 
 // Strict Authenticated Session Provider (Zero fallback)
 export function getAuthenticatedSessionIdentity(): SessionIdentity {
@@ -122,11 +123,12 @@ export const platformExecutionBoundary = new PlatformFsmExecutionBoundary();
 
 export const productionActionDispatcher: ActionDispatcher = async (event, ctx, exec) => {
   if (event.type === 'nanny.order.confirmed') {
-    const config = typeof window !== 'undefined'
+    const configured = typeof window !== 'undefined'
       ? (window as any).__NANNY_BACKEND_CONFIG__ as NannyBackendDispatcherConfig | undefined
       : undefined;
+    const config = configured ?? { baseUrl: 'https://ibronevik.ru/taxi_dev2/c/children/api/v1' } as NannyBackendDispatcherConfig;
 
-    if (!config) {
+    if (!config.baseUrl) {
       return {
         status: 'FAILED',
         executionId: exec.executionId,
@@ -148,8 +150,14 @@ export const productionActionDispatcher: ActionDispatcher = async (event, ctx, e
     }
 
     // Never fall back to a preconfigured service/admin session in the browser.
+    const resolvers = createNannyBackendResolvers(
+      config.baseUrl,
+      () => (typeof window !== 'undefined' ? (window as any).__NANNY_CUSTOMER_SESSION__ : null),
+      config.fetchImpl,
+    );
     return createNannyBackendActionDispatcher({
       ...config,
+      ...resolvers,
       session: customerSession,
       // Identity comes from the backend-issued token response, not scenario slots or a global ID.
       resolveCustomerIdentity: async () => ({ u_id: customerSession.u_id }),
