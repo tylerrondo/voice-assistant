@@ -167,14 +167,16 @@ export function createNannyBackendResolvers(
     if (!current || current.payload !== payload) return null;
     const selected = String(payload.selected_nanny ?? '').trim().toLowerCase();
     if (!selected) return null;
+    const byId = current.candidates.find(item => String(item.id_user ?? item.id ?? '') === selected);
     const index = Number(payload.candidate_index ?? selected);
-    const candidate = Number.isInteger(index) && index >= 1
-      ? current.candidates[index - 1]
-      : current.candidates.find(item => {
-          const id = String(item.id_user ?? item.id ?? '');
-          const name = `${item.name ?? ''} ${item.family ?? ''}`.trim().toLowerCase();
-          return id === selected || name === selected;
-        });
+    const candidate = byId ?? (
+      Number.isInteger(index) && index >= 1
+        ? current.candidates[index - 1]
+        : current.candidates.find(item => {
+            const name = `${item.name ?? ''} ${item.family ?? ''}`.trim().toLowerCase();
+            return name === selected;
+          })
+    );
     const id = candidate?.id_user ?? candidate?.id;
     return id == null || String(id).trim() === '' ? null : String(id);
   };
