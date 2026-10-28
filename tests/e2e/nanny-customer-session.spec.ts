@@ -34,6 +34,7 @@ test.describe('Nanny customer session UI', () => {
         body: JSON.stringify({
           status: 'success',
           data: { token: 'e2e-customer-token', u_hash: 'e2e-customer-u-hash' },
+          auth_user: { u_id: 'e2e-customer-id' },
         }),
       });
     });
@@ -50,7 +51,7 @@ test.describe('Nanny customer session UI', () => {
       'https://dev2.example.test/api/v1/auth/login',
       'https://dev2.example.test/api/v1/token',
     ]);
-    await expect.poll(() => page.evaluate(() => Boolean((window as any).__NANNY_CUSTOMER_SESSION__?.token))).toBe(true);
+    await expect.poll(() => page.evaluate(() => Boolean((window as any).__NANNY_CUSTOMER_SESSION__?.token && (window as any).__NANNY_CUSTOMER_SESSION__?.u_id === 'e2e-customer-id'))).toBe(true);
 
     await page.getByRole('button', { name: 'Выйти' }).click();
     await expect(page.locator('#nanny-customer-auth-status')).toHaveText('Выполнен выход');
