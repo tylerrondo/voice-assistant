@@ -1,11 +1,11 @@
 /**
- * Read-only live smoke test for the Validation Bench Backend API.
+ * Read-only live smoke test for the nanny customer-session API.
  *
- * Verifies the same auth/token/data-read contract used by BackendClient.
- * Never sends mail, creates orders, prints credentials, tokens, or response bodies.
+ * Verifies the exact customer login/token endpoints used by NannyCustomerSessionClient.
+ * Never sends email, creates orders, prints credentials, tokens, or response bodies.
  *
  * Required environment:
- *   DEV_BACKEND_URL      HTTPS origin, e.g. https://backend.example.com
+ *   DEV_BACKEND_URL      HTTPS origin, e.g. https://ibronevik.ru/taxi_dev2/c/children
  *   DEV_BACKEND_LOGIN
  *   DEV_BACKEND_PASSWORD
  */
@@ -23,8 +23,8 @@ const parsedBase = new URL(baseUrl);
 if (parsedBase.protocol !== 'https:') {
   throw new Error('DEV_BACKEND_URL must use HTTPS');
 }
-if (parsedBase.pathname !== '/' && parsedBase.pathname !== '') {
-  throw new Error('DEV_BACKEND_URL must be the backend origin, without an API path');
+if (!parsedBase.pathname || parsedBase.pathname === '/') {
+  throw new Error('DEV_BACKEND_URL must include the backend application path (e.g. /taxi_dev2/c/children)');
 }
 
 async function requestJson(stage, url, init) {
@@ -64,35 +64,31 @@ async function postForm(stage, path, values) {
 }
 
 async function main() {
-  const auth = await postForm('backend authentication', '/api/v1/auth', {
+  const auth = await postForm('nanny customer authentication', '/api/v1/auth/login', {
     login,
     password,
     type: 'e-mail'
   });
-  if (!auth.auth_hash) throw new Error('backend authentication: auth_hash missing');
+  if (auth.status !== 'success' || !auth.auth_hash) {
+    throw new Error('nanny customer authentication: successful status or auth_hash missing');
+  }
 
-  const tokenResponse = await postForm('token acquisition', '/api/v1/token', {
+  const tokenResponse = await postForm('customer token acquisition', '/api/v1/token', {
     auth_hash: auth.auth_hash
   });
   const token = tokenResponse?.data?.token;
   const uHash = tokenResponse?.data?.u_hash;
-  if (!token || !uHash) throw new Error('token acquisition: token or u_hash missing');
-
-  const query = encodeURIComponent(JSON.stringify({ site_emails: true }));
-  const data = await requestJson(
-    'database-backed data read',
-    `${baseUrl}/api/v1/data/?json_like=${query}`,
-    { method: 'GET' }
-  );
-  const siteEmails = data?.data?.data?.site_emails;
-  if (!siteEmails || typeof siteEmails !== 'object' || Array.isArray(siteEmails) || Object.keys(siteEmails).length === 0) {
-    throw new Error('database-backed data read: site_emails missing or empty');
+  if (tokenResponse.status !== 'success' || !token || !uHash) {
+    throw new Error('customer token acquisition: successful status, token, or u_hash missing');
   }
-  console.log('PASS database-backed data read: site_emails available');
-  console.log('LIVE DEV BACKEND SMOKE TEST PASSED (read-only)');
+
+  // Deliberately stop here: quote/order template semantics are not yet validated,
+  // and this smoke test must never create a real booking.
+  console.log('PASS customer session: token and u_hash received; values withheld');
+  console.log('LIVE NANNY CUSTOMER SESSION SMOKE TEST PASSED (read-only; no order created)');
 }
 
 main().catch((error) => {
-  console.error(`LIVE DEV BACKEND SMOKE TEST FAILED: ${error instanceof Error ? error.message : 'unknown error'}`);
+  console.error(`LIVE NANNY CUSTOMER SESSION SMOKE TEST FAILED: ${error instanceof Error ? error.message : 'unknown error'}`);
   process.exitCode = 1;
 });
