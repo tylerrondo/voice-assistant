@@ -12,6 +12,8 @@ Add these repository Actions secrets:
   `https://ibronevik.ru/taxi_dev2/c/children` (without `/api/v1`)
 - `DEV_BACKEND_LOGIN`: dedicated test-customer login
 - `DEV_BACKEND_PASSWORD`: dedicated test-customer password
+- `DEV_BACKEND_TEST_LATITUDE`: latitude of a known dev2 test point
+- `DEV_BACKEND_TEST_LONGITUDE`: longitude of that same point
 
 Run **Actions → Live dev backend smoke test → Run workflow**. The live job is
 manual-only; credentials are never required or exposed to pull-request code.
@@ -20,10 +22,11 @@ manual-only; credentials are never required or exposed to pull-request code.
 
 1. `POST /api/v1/auth/login` with `type=e-mail`.
 2. `POST /api/v1/token` using the returned `auth_hash`.
-3. Confirms the response contains a token and `u_hash`, without logging either value.
+3. Confirms the response contains a token, `u_hash`, and authenticated customer ID, without logging values.
+4. Calls `POST /api/v1/query/template/1` with the customer token and configured test coordinates.
+5. If city IDs are returned, calls `POST /api/v1/query/template/2` with the same customer token and checks that returned candidates include backend IDs.
 
-A passing result confirms only customer authentication/token issuance. It does **not**
-confirm that the `nanny_pricing` quote or booking contract works. The smoke test
-intentionally stops before any endpoint that could create a booking. The live run must
-use a dedicated test-customer account and must not be treated as evidence of the full
-nanny-order integration.
+The lookup endpoints are read-only. No admin role or service credentials are sent, and the
+smoke test never calls `nanny_pricing` or `drive/get`, so it cannot create or assign an order.
+A passing result confirms customer-session access to location/candidate lookup, but does **not**
+confirm the `nanny_pricing` quote or booking contract. Use a dedicated test-customer account.
