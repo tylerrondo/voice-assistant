@@ -78,13 +78,14 @@ async function main() {
   });
   const token = tokenResponse?.data?.token;
   const uHash = tokenResponse?.data?.u_hash;
-  if (tokenResponse.status !== 'success' || !token || !uHash) {
-    throw new Error('customer token acquisition: successful status, token, or u_hash missing');
+  const customerId = tokenResponse?.auth_user?.u_id;
+  if (tokenResponse.status !== 'success' || !token || !uHash || typeof customerId !== 'string' || !customerId.trim()) {
+    throw new Error('customer token acquisition: successful status, token, u_hash, or auth_user.u_id missing');
   }
 
   // Deliberately stop here: quote/order template semantics are not yet validated,
   // and this smoke test must never create a real booking.
-  console.log('PASS customer session: token and u_hash received; values withheld');
+  console.log('PASS customer session: token, u_hash, and authenticated customer ID received; values withheld');
   console.log('LIVE NANNY CUSTOMER SESSION SMOKE TEST PASSED (read-only; no order created)');
 }
 
