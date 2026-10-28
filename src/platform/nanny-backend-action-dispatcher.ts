@@ -74,6 +74,14 @@ export function createNannyBackendActionDispatcher(
     if (!config.session.token || !config.session.u_hash) {
       return failed(execution, 'BACKEND_SESSION_REQUIRED');
     }
+    // Fail closed when the hosting app has only supplied the API URL/session.
+    // These resolvers must be wired to trusted app state; silently guessing identity,
+    // address/timezone, or nanny ID could create a booking for the wrong customer.
+    if (typeof config.resolveCustomerIdentity !== 'function' ||
+        typeof config.resolveBookingLocation !== 'function' ||
+        typeof config.resolveSelectedNanny !== 'function') {
+      return failed(execution, 'NANNY_BACKEND_RESOLVERS_NOT_CONFIGURED');
+    }
     const payload = execution.payload;
     let customerIdentity: Record<string, string>;
     try {
