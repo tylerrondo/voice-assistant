@@ -145,7 +145,7 @@ export function createNannyBackendResolvers(
     const when = zonedDateTime(date, hour, minute, timeZone);
     if (when.getTime() < Date.now() - 60_000) throw new Error('BOOKING_TIME_IN_PAST');
     const location = { ...point, timeZone, when };
-    const candidates = await getCandidates(baseUrl.replace(/\\/+$/, ''), session, location, fetchImpl);
+    const candidates = await getCandidates(baseUrl.replace(/\/+$/, ''), session, location, fetchImpl);
     resolved = { payload, location, candidates };
     return { location, candidates };
   };
