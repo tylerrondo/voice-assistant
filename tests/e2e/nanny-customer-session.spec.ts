@@ -44,7 +44,7 @@ test.describe('Nanny customer session UI', () => {
     await page.getByLabel('Пароль').fill('not-a-real-password');
     await page.getByRole('button', { name: 'Войти' }).click();
 
-    await expect(page.getByRole('status')).toHaveText('Вход выполнен. Сессия хранится только в памяти этой вкладки.');
+    await expect(page.locator('#nanny-customer-auth-status')).toHaveText('Вход выполнен. Сессия хранится только в памяти этой вкладки.');
     await expect(page.getByLabel('Пароль')).toHaveValue('');
     expect(requests).toEqual([
       'https://dev2.example.test/api/v1/auth/login',
@@ -53,7 +53,7 @@ test.describe('Nanny customer session UI', () => {
     await expect.poll(() => page.evaluate(() => Boolean((window as any).__NANNY_CUSTOMER_SESSION__?.token))).toBe(true);
 
     await page.getByRole('button', { name: 'Выйти' }).click();
-    await expect(page.getByRole('status')).toHaveText('Выполнен выход');
+    await expect(page.locator('#nanny-customer-auth-status')).toHaveText('Выполнен выход');
     await expect.poll(() => page.evaluate(() => (window as any).__NANNY_CUSTOMER_SESSION__)).toBeUndefined();
   });
 
