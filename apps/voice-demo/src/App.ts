@@ -1,4 +1,5 @@
 import type { SessionIdentity } from '../../../src/platform/dialogue-manager';
+import { NannyCustomerSessionClient } from '../../../src/platform/nanny-customer-session';
 import { MapChannel, MAP_ORDER_SELECT_ACTION } from '../../../packages/map/src/index';
 import { mountReportPanel } from './ReportPanel';
 import type { InteractionAction, InteractionContract, InteractionEvent, InteractionSnapshot } from '../../../packages/interaction-contract/dist/index';
@@ -50,6 +51,18 @@ export function mountApp(root: HTMLElement, runtime: any, authenticatedIdentity:
   host.innerHTML = `
     <main id="voice-app-ready" style="padding:16px;font-family:sans-serif">
       <h2>Voice Platform Production Runtime Ready</h2>
+      <section aria-label="Nanny customer login" style="margin-top:16px">
+        <h3>Вход клиента для заказа няни</h3>
+        <form id="nanny-customer-login-form">
+          <label for="nanny-customer-login">E-mail</label>
+          <input id="nanny-customer-login" name="login" type="email" autocomplete="username" required />
+          <label for="nanny-customer-password">Пароль</label>
+          <input id="nanny-customer-password" name="password" type="password" autocomplete="current-password" required />
+          <button id="nanny-customer-login-submit" type="submit">Войти</button>
+          <button id="nanny-customer-logout" type="button">Выйти</button>
+        </form>
+        <p id="nanny-customer-auth-status" role="status" aria-live="polite">Не выполнен вход</p>
+      </section>
       <div id="runtime-identity">AUTHENTICATED: ${authenticatedIdentity.ownerId}:${authenticatedIdentity.sessionId}</div>
       <section aria-label="Scenario loader" style="margin-top:16px">
         <div id="scenario-source-wrapper" style="min-height:28px;display:block">
@@ -88,6 +101,17 @@ export function mountApp(root: HTMLElement, runtime: any, authenticatedIdentity:
   const terminal = host.querySelector<HTMLElement>('#execution-terminal')!;
   const progress = host.querySelector<HTMLElement>('#scenario-progress')!;
   const voiceInput = host.querySelector<HTMLInputElement>('#voice-command-input')!;
+  const customerLoginForm = host.querySelector<HTMLFormElement>('#nanny-customer-login-form')!;
+  const customerLoginInput = host.querySelector<HTMLInputElement>('#nanny-customer-login')!;
+  const customerPasswordInput = host.querySelector<HTMLInputElement>('#nanny-customer-password')!;
+  const customerLoginSubmit = host.querySelector<HTMLButtonElement>('#nanny-customer-login-submit')!;
+  const customerLogoutButton = host.querySelector<HTMLButtonElement>('#nanny-customer-logout')!;
+  const customerAuthStatus = host.querySelector<HTMLElement>('#nanny-customer-auth-status')!;
+  const nannyConfigAtStartup = typeof window !== 'undefined' ? (window as any).__NANNY_BACKEND_CONFIG__ : undefined;
+  const nannyApiBaseUrl = typeof nannyConfigAtStartup?.baseUrl === 'string'
+    ? nannyConfigAtStartup.baseUrl
+    : 'https://ibronevik.ru/taxi_dev2/c/children/api/v1';
+  const customerSessionClient = new NannyCustomerSessionClient(nannyApiBaseUrl);
 
   let activeSet: ScenarioSet | null = null;
 
@@ -325,6 +349,36 @@ export function mountApp(root: HTMLElement, runtime: any, authenticatedIdentity:
       actions.appendChild(button);
     });
   };
+
+  customerLoginForm.addEventListener('submit', event => {
+    event.preventDefault();
+    customerLoginSubmit.disabled = true;
+    customerAuthStatus.textContent = 'Выполняется вход…';
+    void customerSessionClient.login(customerLoginInput.value, customerPasswordInput.value)
+      .then(session => {
+        customerPasswordInput.value = '';
+        const w = window as any;
+        w.__NANNY_CUSTOMER_SESSION__ = session;
+        const config = w.__NANNY_BACKEND_CONFIG__;
+        if (config && typeof config === 'object') config.session = session;
+        customerAuthStatus.textContent = 'Вход выполнен. Сессия хранится только в памяти этой вкладки.';
+      })
+      .catch(error => {
+        customerPasswordInput.value = '';
+        customerAuthStatus.textContent = error instanceof Error ? error.message : 'Не удалось выполнить вход';
+      })
+      .finally(() => { customerLoginSubmit.disabled = false; });
+  });
+
+  customerLogoutButton.addEventListener('click', () => {
+    customerSessionClient.clear();
+    const w = window as any;
+    delete w.__NANNY_CUSTOMER_SESSION__;
+    const config = w.__NANNY_BACKEND_CONFIG__;
+    if (config && typeof config === 'object') delete config.session;
+    customerPasswordInput.value = '';
+    customerAuthStatus.textContent = 'Выполнен выход';
+  });
 
   fileInput.addEventListener('change', () => {
     const file = fileInput.files?.[0];
