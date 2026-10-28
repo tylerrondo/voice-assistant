@@ -23,22 +23,24 @@ async function readJson(response: Response): Promise<any> {
 function localDate(dateText: unknown, timeZone: string): string {
   const value = String(dateText ?? '').trim().toLowerCase();
   const now = new Date();
-  const localToday = () => {
-    const parts = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(now);
-    const part = (type: string) => parts.find(item => item.type === type)?.value ?? '';
-    return `${part('year')}-${part('month')}-${part('day')}`;
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone, year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(now);
+  const part = (type: string) => Number(parts.find(item => item.type === type)?.value);
+  const local = { year: part('year'), month: part('month'), day: part('day') };
+  const localDay = (offset: number) => {
+    const date = new Date(Date.UTC(local.year, local.month - 1, local.day + offset));
+    return date.toISOString().slice(0, 10);
   };
-  if (/^(сегодня|today)$/i.test(value)) return localToday();
-  if (/^(завтра|tomorrow)$/i.test(value)) {
-    now.setDate(now.getDate() + 1);
-    return new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(now).replace(/(\d{2})\/(\d{2})\/(\d{4})/, '$3-$1-$2');
-  }
-  if (/^послезавтра$/i.test(value)) {
-    now.setDate(now.getDate() + 2);
-    return new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(now).replace(/(\d{2})\/(\d{2})\/(\d{4})/, '$3-$1-$2');
-  }
+  if (/^(сегодня|today)$/i.test(value)) return localDay(0);
+  if (/^(завтра|tomorrow)$/i.test(value)) return localDay(1);
+  if (/^послезавтра$/i.test(value)) return localDay(2);
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
   if (!match) throw new Error('BOOKING_DATE_UNSUPPORTED');
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== value) {
+    throw new Error('BOOKING_DATE_UNSUPPORTED');
+  }
   return value;
 }
 
