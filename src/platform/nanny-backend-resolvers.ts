@@ -134,7 +134,13 @@ export function createNannyBackendResolvers(
   getSession: () => Session | null,
   fetchImpl: typeof fetch = fetch,
 ): NannyBackendResolvers {
-  let resolved: { payload: Record<string, any>; location: NannyBookingLocation; candidates: Candidate[] } | null = null;
+  let resolved: { bookingKey: string; location: NannyBookingLocation; candidates: Candidate[] } | null = null;
+  const bookingKey = (payload: Record<string, any>, customerId: string) => JSON.stringify({
+    customerId,
+    location: String(payload.location ?? '').trim().toLowerCase(),
+    date: String(payload.date ?? '').trim().toLowerCase(),
+    start_time: String(payload.start_time ?? '').trim(),
+  });
   const resolveLocationAndCandidates = async (payload: Record<string, any>): Promise<{ location: NannyBookingLocation; candidates: Candidate[] }> => {
     const session = getSession();
     if (!session) throw new Error('CUSTOMER_SESSION_REQUIRED');
@@ -146,7 +152,7 @@ export function createNannyBackendResolvers(
     if (when.getTime() < Date.now() - 60_000) throw new Error('BOOKING_TIME_IN_PAST');
     const location = { ...point, timeZone, when };
     const candidates = await getCandidates(baseUrl.replace(/\/+$/, ''), session, location, fetchImpl);
-    resolved = { payload, location, candidates };
+    resolved = { bookingKey: bookingKey(payload, session.u_id), location, candidates };
     return { location, candidates };
   };
   const resolveBookingLocation = async (payload: Record<string, any>, _context: DialogueContext): Promise<NannyBookingLocation> => {
@@ -164,7 +170,8 @@ export function createNannyBackendResolvers(
   };
   const resolveSelectedNanny = async (payload: Record<string, any>, _context: DialogueContext): Promise<string | null> => {
     const current = resolved;
-    if (!current || current.payload !== payload) return null;
+    const session = getSession();
+    if (!current || !session || current.bookingKey !== bookingKey(payload, session.u_id)) return null;
     const selected = String(payload.selected_nanny ?? '').trim().toLowerCase();
     if (!selected) return null;
     const byId = current.candidates.find(item => String(item.id_user ?? item.id ?? '') === selected);
