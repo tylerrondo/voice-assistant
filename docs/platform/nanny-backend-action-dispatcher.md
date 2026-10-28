@@ -11,13 +11,13 @@ The production dispatcher routes `nanny.order.confirmed` to the existing MultiBo
 
 ## Customer authentication client
 
-`src/platform/nanny-customer-session.ts` adds an in-memory customer session client. It implements the Universal API `/auth` → `/token` sequence relative to the configured API base and clears any previous session before each login attempt. It does not persist tokens in browser storage. Contract tests cover the expected request sequence, memory-only session lifecycle, and HTTPS enforcement.
+`src/platform/nanny-customer-session.ts` adds an in-memory customer session client. The voice runtime now exposes a customer login form and passes the resulting session to the nanny dispatcher; logout clears the in-memory session. Login uses the Universal API `/auth` → `/token` sequence relative to the configured API base, validates `status: success`, and never falls back to a preconfigured service/admin session. Tokens are not persisted in browser storage. Contract tests cover the request sequence, response status, memory-only session lifecycle, and HTTPS enforcement.
 
 **Contract evidence:** the tracked Universal API dispatcher `public_html/taxi/controllers/c_api.php` exposes `par[1] == 'auth'` and calls `authUser(login, password, type)`; it does not expose an `auth/login` sub-route. The existing Validation Bench `BackendClient.ts` also uses `/api/v1/auth` → `/api/v1/token`. The helper and contract test now use `/auth`. The exact dev2 deployment and live response shape still require a safe read-only check. The helper is not yet wired into the login UI or order dispatcher.
 
 ## Host configuration
 
-The host auth/location layer must provide the dispatcher configuration before a confirmed nanny order is dispatched. The current voice-demo hook reads `window.__NANNY_BACKEND_CONFIG__`; this is a wiring seam, not a live integration by itself. It must provide:
+The host auth/location layer must provide the dispatcher configuration before a confirmed nanny order is dispatched. The voice runtime login uses `window.__NANNY_BACKEND_CONFIG__.baseUrl` when supplied, otherwise the isolated dev2 base URL. The dispatcher requires `window.__NANNY_BACKEND_CONFIG__` and `window.__NANNY_CUSTOMER_SESSION__`; login alone is not sufficient to create an order. The host configuration must provide:
 
 - `baseUrl`: dev2 API base, not the production API.
 - `session`: an already authenticated `{ token, u_hash }` session. These values are credentials too: do not expose an administrator/service-account token or hash to browser code. For privileged MultiBot credentials, the dispatcher must be hosted behind a server-side proxy; only a scoped customer session may be used directly in the browser.
