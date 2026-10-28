@@ -9,6 +9,12 @@ The production dispatcher routes `nanny.order.confirmed` to the existing MultiBo
 - `s_t_data` uses the established MultiBot contract: `action: "create"`, `request_key`, `time_zone`, and the `order` object. The order is restricted to the resolved selected nanny (`b_only_offer=1`), followed by `POST /drive/get/{orderId}` with `action=set_offer` and the resolved backend nanny ID.
 - `request_key` is a deterministic 16-hex-character hash of the platform `idempotencyKey`, prefixed with `va_` to satisfy MultiBot's 8–64 character `[A-Za-z0-9_-]` validation. A transport failure returns `UNKNOWN`, not a false failure, because the backend may already have committed the order.
 
+## Customer authentication client
+
+`src/platform/nanny-customer-session.ts` adds an in-memory customer session client. It implements the requested `/auth/login` → `/token` sequence relative to the configured API base and clears any previous session before each login attempt. It does not persist tokens in browser storage. Contract tests cover the expected request sequence, memory-only session lifecycle, and HTTPS enforcement.
+
+**Important:** the route and response shape still need confirmation against the actual dev2 `APIManager.ts`/live auth contract. The existing Validation Bench `BackendClient.ts` uses `/api/v1/auth` → `/api/v1/token`, so passing the unit tests is not evidence that `/api/v1/auth/login` is valid. The helper is not yet wired into the login UI or order dispatcher.
+
 ## Host configuration
 
 The host auth/location layer must provide the dispatcher configuration before a confirmed nanny order is dispatched. The current voice-demo hook reads `window.__NANNY_BACKEND_CONFIG__`; this is a wiring seam, not a live integration by itself. It must provide:
