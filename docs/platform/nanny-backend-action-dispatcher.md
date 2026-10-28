@@ -11,9 +11,9 @@ The production dispatcher routes `nanny.order.confirmed` to the existing MultiBo
 
 ## Customer authentication client
 
-`src/platform/nanny-customer-session.ts` adds an in-memory customer session client. It implements the requested `/auth/login` → `/token` sequence relative to the configured API base and clears any previous session before each login attempt. It does not persist tokens in browser storage. Contract tests cover the expected request sequence, memory-only session lifecycle, and HTTPS enforcement.
+`src/platform/nanny-customer-session.ts` adds an in-memory customer session client. It implements the Universal API `/auth` → `/token` sequence relative to the configured API base and clears any previous session before each login attempt. It does not persist tokens in browser storage. Contract tests cover the expected request sequence, memory-only session lifecycle, and HTTPS enforcement.
 
-**Important:** the route and response shape still need confirmation against the actual dev2 `APIManager.ts`/live auth contract. The existing Validation Bench `BackendClient.ts` uses `/api/v1/auth` → `/api/v1/token`, so passing the unit tests is not evidence that `/api/v1/auth/login` is valid. The helper is not yet wired into the login UI or order dispatcher.
+**Contract evidence:** the tracked Universal API dispatcher `public_html/taxi/controllers/c_api.php` exposes `par[1] == 'auth'` and calls `authUser(login, password, type)`; it does not expose an `auth/login` sub-route. The existing Validation Bench `BackendClient.ts` also uses `/api/v1/auth` → `/api/v1/token`. The helper and contract test now use `/auth`. The exact dev2 deployment and live response shape still require a safe read-only check. The helper is not yet wired into the login UI or order dispatcher.
 
 ## Host configuration
 
