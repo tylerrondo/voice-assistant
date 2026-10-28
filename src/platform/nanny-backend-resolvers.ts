@@ -125,13 +125,17 @@ async function getCandidates(baseUrl: string, session: Session, location: NannyB
   return Array.isArray(result.data) ? result.data : [];
 }
 
+export interface NannyBackendResolvers extends Pick<NannyBackendDispatcherConfig, 'resolveBookingLocation' | 'resolveSelectedNanny'> {
+  loadCandidateOffers(payload: Record<string, any>, context: DialogueContext): Promise<Array<{ id: string; name: string; index: number; status: string }>>;
+}
+
 export function createNannyBackendResolvers(
   baseUrl: string,
   getSession: () => Session | null,
   fetchImpl: typeof fetch = fetch,
-): Pick<NannyBackendDispatcherConfig, 'resolveBookingLocation' | 'resolveSelectedNanny'> {
+): NannyBackendResolvers {
   let resolved: { payload: Record<string, any>; location: NannyBookingLocation; candidates: Candidate[] } | null = null;
-  const resolveBookingLocation = async (payload: Record<string, any>, _context: DialogueContext): Promise<NannyBookingLocation> => {
+  const resolveLocationAndCandidates = async (payload: Record<string, any>): Promise<{ location: NannyBookingLocation; candidates: Candidate[] }> => {
     const session = getSession();
     if (!session) throw new Error('CUSTOMER_SESSION_REQUIRED');
     const point = await geocode(String(payload.location ?? ''), fetchImpl);
@@ -141,9 +145,22 @@ export function createNannyBackendResolvers(
     const when = zonedDateTime(date, hour, minute, timeZone);
     if (when.getTime() < Date.now() - 60_000) throw new Error('BOOKING_TIME_IN_PAST');
     const location = { ...point, timeZone, when };
-    const candidates = await getCandidates(baseUrl.replace(/\/+$/, ''), session, location, fetchImpl);
+    const candidates = await getCandidates(baseUrl.replace(/\\/+$/, ''), session, location, fetchImpl);
     resolved = { payload, location, candidates };
-    return location;
+    return { location, candidates };
+  };
+  const resolveBookingLocation = async (payload: Record<string, any>, _context: DialogueContext): Promise<NannyBookingLocation> => {
+    const result = await resolveLocationAndCandidates(payload);
+    return result.location;
+  };
+  const loadCandidateOffers = async (payload: Record<string, any>, _context: DialogueContext) => {
+    const { candidates } = await resolveLocationAndCandidates(payload);
+    return candidates.flatMap((candidate, index) => {
+      const id = candidate.id_user ?? candidate.id;
+      if (id == null || String(id).trim() === '') return [];
+      const name = `${candidate.name ?? ''} ${candidate.family ?? ''}`.trim() || `Няня ${index + 1}`;
+      return [{ id: String(id), name, index: index + 1, status: 'AVAILABLE' }];
+    });
   };
   const resolveSelectedNanny = async (payload: Record<string, any>, _context: DialogueContext): Promise<string | null> => {
     const current = resolved;
@@ -161,5 +178,5 @@ export function createNannyBackendResolvers(
     const id = candidate?.id_user ?? candidate?.id;
     return id == null || String(id).trim() === '' ? null : String(id);
   };
-  return { resolveBookingLocation, resolveSelectedNanny };
+  return { resolveBookingLocation, resolveSelectedNanny, loadCandidateOffers };
 }
