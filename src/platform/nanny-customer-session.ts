@@ -9,8 +9,16 @@ export interface NannyCustomerSession {
   u_hash: string;
 }
 
-type AuthLoginResponse = { auth_hash?: string; data?: { auth_hash?: string } };
-type TokenResponse = { data?: { token?: string; u_hash?: string } };
+type AuthLoginResponse = {
+  status?: string;
+  auth_hash?: string;
+  auth_user?: { u_id?: string };
+  data?: { auth_hash?: string };
+};
+type TokenResponse = {
+  status?: string;
+  data?: { token?: string; u_hash?: string };
+};
 
 export class NannyCustomerSessionClient {
   private session: NannyCustomerSession | null = null;
@@ -51,6 +59,7 @@ export class NannyCustomerSessionClient {
     if (!authResponse.ok) throw new Error('CUSTOMER_AUTH_FAILED');
 
     const authData = await authResponse.json() as AuthLoginResponse;
+    if (authData.status !== 'success') throw new Error('CUSTOMER_AUTH_FAILED');
     const authHash = authData.auth_hash ?? authData.data?.auth_hash;
     if (typeof authHash !== 'string' || !authHash) throw new Error('CUSTOMER_AUTH_INVALID_RESPONSE');
 
@@ -65,7 +74,7 @@ export class NannyCustomerSessionClient {
     const tokenData = await tokenResponse.json() as TokenResponse;
     const token = tokenData.data?.token;
     const uHash = tokenData.data?.u_hash;
-    if (typeof token !== 'string' || !token || typeof uHash !== 'string' || !uHash) {
+    if (tokenData.status !== 'success' || typeof token !== 'string' || !token || typeof uHash !== 'string' || !uHash) {
       throw new Error('CUSTOMER_TOKEN_INVALID_RESPONSE');
     }
 
