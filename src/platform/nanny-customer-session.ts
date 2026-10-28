@@ -22,7 +22,7 @@ export class NannyCustomerSessionClient {
     if (parsed.protocol !== 'https:' && parsed.hostname !== 'localhost' && parsed.hostname !== '127.0.0.1') {
       throw new Error('CUSTOMER_API_HTTPS_REQUIRED');
     }
-    this.baseUrl = baseUrl.replace(/\\/+$/, '');
+    this.baseUrl = baseUrl.replace(/\/+$/, '');
     this.fetchImpl = fetchImpl;
   }
 
