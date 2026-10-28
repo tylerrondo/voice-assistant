@@ -9,7 +9,7 @@ test.describe('nanny customer session', () => {
       if (String(input).endsWith('/auth/login')) {
         return new Response(JSON.stringify({ status: 'success', auth_hash: 'customer-auth-hash' }), { status: 200 });
       }
-      return new Response(JSON.stringify({ status: 'success', data: { token: 'customer-token', u_hash: 'customer-u-hash' } }), { status: 200 });
+      return new Response(JSON.stringify({ status: 'success', data: { token: 'customer-token', u_hash: 'customer-u-hash' }, auth_user: { u_id: 'customer-42' } }), { status: 200 });
     };
     const client = new NannyCustomerSessionClient('https://dev2.example.test/api/v1/', fetchImpl);
     const session = await client.login('customer@example.test', 'customer-password');
@@ -20,7 +20,7 @@ test.describe('nanny customer session', () => {
     expect(new URLSearchParams(requests[0].body).get('password')).toBe('customer-password');
     expect(requests[1].url).toBe('https://dev2.example.test/api/v1/token');
     expect(new URLSearchParams(requests[1].body).get('auth_hash')).toBe('customer-auth-hash');
-    expect(session).toEqual({ token: 'customer-token', u_hash: 'customer-u-hash' });
+    expect(session).toEqual({ token: 'customer-token', u_hash: 'customer-u-hash', u_id: 'customer-42' });
     expect(client.isAuthenticated()).toBe(true);
     expect(client.getSession()).toEqual(session);
 
@@ -34,7 +34,7 @@ test.describe('nanny customer session', () => {
     const fetchImpl: typeof fetch = async () => {
       loginCalls += 1;
       if (loginCalls === 1) return new Response(JSON.stringify({ status: 'success', auth_hash: 'auth-1' }), { status: 200 });
-      if (loginCalls === 2) return new Response(JSON.stringify({ status: 'success', data: { token: 'token-1', u_hash: 'hash-1' } }), { status: 200 });
+      if (loginCalls === 2) return new Response(JSON.stringify({ status: 'success', data: { token: 'token-1', u_hash: 'hash-1' }, auth_user: { u_id: 'customer-42' } }), { status: 200 });
       return new Response('{}', { status: 401 });
     };
     const client = new NannyCustomerSessionClient('https://dev2.example.test/api/v1', fetchImpl);
