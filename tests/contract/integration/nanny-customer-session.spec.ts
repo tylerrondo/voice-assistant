@@ -6,7 +6,7 @@ test.describe('nanny customer session', () => {
     const requests: Array<{ url: string; body: string }> = [];
     const fetchImpl: typeof fetch = async (input, init) => {
       requests.push({ url: String(input), body: String(init?.body) });
-      if (String(input).endsWith('/auth/login')) {
+      if (String(input).endsWith('/auth')) {
         return new Response(JSON.stringify({ auth_hash: 'customer-auth-hash' }), { status: 200 });
       }
       return new Response(JSON.stringify({ data: { token: 'customer-token', u_hash: 'customer-u-hash' } }), { status: 200 });
@@ -15,7 +15,7 @@ test.describe('nanny customer session', () => {
     const session = await client.login('customer@example.test', 'customer-password');
 
     expect(requests).toHaveLength(2);
-    expect(requests[0].url).toBe('https://dev2.example.test/api/v1/auth/login');
+    expect(requests[0].url).toBe('https://dev2.example.test/api/v1/auth');
     expect(new URLSearchParams(requests[0].body).get('login')).toBe('customer@example.test');
     expect(new URLSearchParams(requests[0].body).get('password')).toBe('customer-password');
     expect(requests[1].url).toBe('https://dev2.example.test/api/v1/token');
