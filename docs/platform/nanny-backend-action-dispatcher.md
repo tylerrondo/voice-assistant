@@ -15,7 +15,7 @@ The production dispatcher routes `nanny.order.confirmed` to the existing MultiBo
 
 `src/platform/nanny-customer-session.ts` adds an in-memory customer session client. The voice runtime exposes a customer login form and passes the resulting session to the nanny dispatcher; logout clears the in-memory session. Login uses the Universal API `/auth/login` → `/token` sequence relative to the configured API base, validates `status: success`, and never falls back to a preconfigured service/admin session. Tokens are not persisted in browser storage. Contract tests cover the request sequence, response status, memory-only session lifecycle, and HTTPS enforcement.
 
-**Contract evidence:** the backend source for `selectToken()` indicates that token issuance returns `data.token`, `data.u_hash`, and `auth_user.u_id`. The current browser session client stores only token/hash. The exact dev2 response shape and whether the returned user ID is sufficient for the nanny template's customer identity contract still require a safe read-only check.
+**Contract evidence:** the backend source for `selectToken()` indicates that token issuance returns `data.token`, `data.u_hash`, and `auth_user.u_id`. The browser session client now retains `auth_user.u_id` from the token response and the dispatcher sends it as `u_id` for both the pricing-template request and nanny assignment. This wires identity to the authenticated backend account instead of an unrelated scenario/global ID. The live dev2 template contract still needs a read-only quote check before merge.
 
 ## Host configuration
 
@@ -23,7 +23,7 @@ The host auth/location layer must provide dispatcher configuration before a conf
 
 - `baseUrl`: dev2 API base, not the production API.
 - `session`: an authenticated `{ token, u_hash }` session. These values are credentials too: do not expose an administrator/service-account token or hash to browser code. For privileged MultiBot credentials, the dispatcher must be hosted behind a server-side proxy; only a scoped customer session may be used directly in the browser.
-- `resolveCustomerIdentity(payload, context)`: return exactly one field proven to be accepted by the live API and derived from the authenticated customer session. The accepted field is currently unverified; do not guess it from test fixtures or use a global customer ID.
+- `resolveCustomerIdentity(payload, context)`: the voice demo supplies `u_id` from the backend-issued customer session. The backend's token endpoint explicitly returns `auth_user.u_id`; no global customer ID or scenario-provided identity is used.
 - `resolveBookingLocation(payload, context)`: resolve the free-text location and local date/time to coordinates, an IANA timezone, and the booking start instant. This must use the real geocoding/location provider; a typed address alone is not enough.
 - `resolveSelectedNanny(payload, context)`: map the chosen scenario candidate to the real backend nanny/user ID. A display-only candidate ID must not be sent to the API.
 - `payload.additional_options` (when present): IDs from the live backend booking-options catalog. Free-text requirements are stored separately in `b_options.requirements` and are not sent as price option IDs.
@@ -32,4 +32,4 @@ If the host configuration is missing, the dispatcher returns `NANNY_BACKEND_NOT_
 
 ## Verification boundary
 
-The contract tests verify request mapping and failure semantics without creating a live order. A separate read-only smoke test now targets the same customer `/auth/login` → `/token` sequence as the voice UI; it has not yet been run against dev2 in this PR. Earlier backend smoke evidence covered a different authentication/read path and did not exercise the nanny quote or order contract. No live order has been created by this integration change. The adapter is not ready to merge until the live quote contract is checked and the host supplies verified customer-identity, location/geocoding and selected-nanny resolvers.
+The contract tests verify request mapping and failure semantics without creating a live order. A separate read-only smoke test now targets the same customer `/auth/login` → `/token` sequence as the voice UI; it has not yet been run against dev2 in this PR. Earlier backend smoke evidence covered a different authentication/read path and did not exercise the nanny quote or order contract. No live order has been created by this integration change. Customer identity is now wired from the token response into the adapter. The adapter is not ready to merge until the live quote contract is checked and real location/geocoding and selected-nanny resolvers are connected.
