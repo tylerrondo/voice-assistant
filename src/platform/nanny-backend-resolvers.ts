@@ -20,17 +20,22 @@ async function readJson(response: Response): Promise<any> {
   return body;
 }
 
-function localDate(dateText: unknown): string {
+function localDate(dateText: unknown, timeZone: string): string {
   const value = String(dateText ?? '').trim().toLowerCase();
   const now = new Date();
-  if (/^(сегодня|today)$/i.test(value)) return now.toISOString().slice(0, 10);
+  const localToday = () => {
+    const parts = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(now);
+    const part = (type: string) => parts.find(item => item.type === type)?.value ?? '';
+    return `${part('year')}-${part('month')}-${part('day')}`;
+  };
+  if (/^(сегодня|today)$/i.test(value)) return localToday();
   if (/^(завтра|tomorrow)$/i.test(value)) {
     now.setDate(now.getDate() + 1);
-    return now.toISOString().slice(0, 10);
+    return new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(now).replace(/(\d{2})\/(\d{2})\/(\d{4})/, '$3-$1-$2');
   }
   if (/^послезавтра$/i.test(value)) {
     now.setDate(now.getDate() + 2);
-    return now.toISOString().slice(0, 10);
+    return new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(now).replace(/(\d{2})\/(\d{2})\/(\d{4})/, '$3-$1-$2');
   }
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
   if (!match) throw new Error('BOOKING_DATE_UNSUPPORTED');
@@ -130,7 +135,7 @@ export function createNannyBackendResolvers(
     const point = await geocode(String(payload.location ?? ''), fetchImpl);
     const timeZone = await resolveTimeZone(point.latitude, point.longitude, fetchImpl);
     const [hour, minute] = timeParts(payload.start_time);
-    const date = localDate(payload.date);
+    const date = localDate(payload.date, timeZone);
     const when = zonedDateTime(date, hour, minute, timeZone);
     if (when.getTime() < Date.now() - 60_000) throw new Error('BOOKING_TIME_IN_PAST');
     const location = { ...point, timeZone, when };
