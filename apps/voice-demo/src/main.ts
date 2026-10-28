@@ -1,6 +1,11 @@
 import { bootstrap } from "./Bootstrap";
 import { mountApp } from "./App";
-import type { ActionDispatcher, SessionIdentity } from "../../../src/platform/dialogue-manager";
+import type { ActionDispatcher, SessionIdentity, DispatchResult } from "../../../src/platform/dialogue-manager";
+import {
+  createNannyBackendActionDispatcher,
+  type NannyBackendDispatcherConfig,
+} from "../../../src/platform/nanny-backend-action-dispatcher";
+import { createNannyBackendResolvers } from "../../../src/platform/nanny-backend-resolvers";
 
 // Strict Authenticated Session Provider (Zero fallback)
 export function getAuthenticatedSessionIdentity(): SessionIdentity {
@@ -117,8 +122,60 @@ export class PlatformFsmExecutionBoundary {
 export const platformExecutionBoundary = new PlatformFsmExecutionBoundary();
 
 export const productionActionDispatcher: ActionDispatcher = async (event, ctx, exec) => {
+  if (event.type === 'nanny.order.confirmed') {
+    const configured = typeof window !== 'undefined'
+      ? (window as any).__NANNY_BACKEND_CONFIG__ as NannyBackendDispatcherConfig | undefined
+      : undefined;
+    const config = configured ?? { baseUrl: 'https://ibronevik.ru/taxi_dev2/c/children/api/v1' } as NannyBackendDispatcherConfig;
+
+    if (!config.baseUrl) {
+      return {
+        status: 'FAILED',
+        executionId: exec.executionId,
+        attempt: exec.attempt,
+        errorCode: 'NANNY_BACKEND_NOT_CONFIGURED',
+      } satisfies DispatchResult;
+    }
+
+    const customerSession = typeof window !== 'undefined'
+      ? (window as any).__NANNY_CUSTOMER_SESSION__ as { token: string; u_hash: string; u_id: string } | undefined
+      : undefined;
+    if (!customerSession?.token || !customerSession?.u_hash || !customerSession?.u_id) {
+      return {
+        status: 'FAILED',
+        executionId: exec.executionId,
+        attempt: exec.attempt,
+        errorCode: 'NANNY_CUSTOMER_SESSION_REQUIRED',
+      } satisfies DispatchResult;
+    }
+
+    // Never fall back to a preconfigured service/admin session in the browser.
+    const defaultResolvers = createNannyBackendResolvers(
+      config.baseUrl,
+      () => (typeof window !== 'undefined' ? (window as any).__NANNY_CUSTOMER_SESSION__ : null),
+      config.fetchImpl,
+    );
+    // Host-provided resolvers remain injectable for controlled deployments and tests;
+    // the standard demo path uses the customer-session implementation by default.
+    const resolvers = {
+      resolveBookingLocation: config.resolveBookingLocation ?? defaultResolvers.resolveBookingLocation,
+      resolveSelectedNanny: config.resolveSelectedNanny ?? defaultResolvers.resolveSelectedNanny,
+    };
+    return createNannyBackendActionDispatcher({
+      ...config,
+      ...resolvers,
+      session: customerSession,
+      // Identity comes from the backend-issued token response, not scenario slots or a global ID.
+      resolveCustomerIdentity: async () => ({ u_id: customerSession.u_id }),
+    })(event, ctx, exec);
+  }
+
   return platformExecutionBoundary.execute(event, exec);
 };
 
 // Application startup is owned by the root src/main.ts entrypoint.
 // Keep this module side-effect-free because its exports are imported by src/main.ts.
+
+if (typeof window !== 'undefined') {
+  (window as any).__PRODUCTION_ACTION_DISPATCHER__ = productionActionDispatcher;
+}
