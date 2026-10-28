@@ -100,7 +100,7 @@ function zonedDateTime(date: string, hour: number, minute: number, timeZone: str
 }
 
 async function getCandidates(baseUrl: string, session: Session, location: NannyBookingLocation, fetchImpl: typeof fetch): Promise<Candidate[]> {
-  const auth = { token: session.token, u_hash: session.u_hash };
+  const auth = { token: session.token, u_hash: session.u_hash, u_a_role: '1' };
   const cityResponse = await readJson(await formPost(`${baseUrl}/query/template/1`, {
     ...auth,
     data: JSON.stringify({
