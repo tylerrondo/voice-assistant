@@ -8,8 +8,7 @@ the demo and does not send reports, send email, call `nanny_pricing`, or create 
 
 Add these repository Actions secrets:
 
-- `DEV_BACKEND_URL`: HTTPS URL including the application path, for example
-  `https://ibronevik.ru/taxi_dev2/c/children` (without `/api/v1`)
+The workflow targets `https://ibronevik.ru/taxi_dev2/c/children` directly; this non-secret URL is configured in the workflow, not stored as an Actions secret.
 - `DEV_BACKEND_LOGIN`: dedicated test-customer login
 - `DEV_BACKEND_PASSWORD`: dedicated test-customer password
 - `DEV_BACKEND_TEST_LATITUDE` (optional): override latitude for a dedicated dev2 test point
