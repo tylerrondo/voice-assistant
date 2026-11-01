@@ -25,7 +25,7 @@ const parsedBase = new URL(baseUrl);
 if (parsedBase.protocol !== 'https:') {
   throw new Error('DEV_BACKEND_URL must use HTTPS');
 }
-if (parsedBase.pathname.replace(/\\/+$/, '') !== '/taxi_dev2/c/children') {
+if (parsedBase.pathname !== '/taxi_dev2/c/children') {
   throw new Error('DEV_BACKEND_URL must target the configured dev2 tenant path');
 }
 
