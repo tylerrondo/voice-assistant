@@ -844,7 +844,7 @@ export class DialogueStateManager {
             throw err;
           }
           const code = err.message || 'DISPATCH_ERROR';
-          lastResult = { status: 'FAILED', executionId, errorCode: code, attempt: currentAttempt };
+          lastResult = { status: 'FAILED' as const, executionId, errorCode: code, attempt: currentAttempt };
           execution.errorCode = code;
 
           if (!this.retryPolicy.retryableErrors.includes(code)) {
@@ -862,7 +862,9 @@ export class DialogueStateManager {
         ctx.status = 'COMPLETED';
       } else {
         ctx.status = 'WAITING_FOR_SLOT';
-        execution.errorCode = lastResult.errorCode || 'MAX_RETRIES_EXCEEDED';
+        execution.errorCode = lastResult.status === 'FAILED' || lastResult.status === 'UNKNOWN'
+          ? lastResult.errorCode
+          : 'MAX_RETRIES_EXCEEDED';
       }
       ctx.version += 1;
       ctx.updatedAt = Date.now();
