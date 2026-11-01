@@ -1,0 +1,37 @@
+name: Platform SDK Build
+
+on:
+  push:
+    branches: [integration/taxi-voice-sdk]
+    paths:
+      - 'packages/platform-runtime/**'
+      - 'src/platform/dialogue-manager.ts'
+      - 'src/platform/voice-channel.ts'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tests/sdk/**'
+      - '.github/workflows/platform-sdk.yml'
+  pull_request:
+    paths:
+      - 'packages/platform-runtime/**'
+      - 'src/platform/dialogue-manager.ts'
+      - 'src/platform/voice-channel.ts'
+      - 'package.json'
+      - 'tests/sdk/**'
+      - '.github/workflows/platform-sdk.yml'
+
+jobs:
+  build-and-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci || npm install
+      - run: npm run build:platform-runtime
+      - run: node tests/sdk/platform-runtime-smoke.mjs
+      - run: npx playwright install --with-deps chromium
+      - run: npx playwright test tests/contract/scenarios/passenger-order.spec.ts
