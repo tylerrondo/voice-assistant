@@ -6,11 +6,17 @@
   "scripts": {
     "dev": "vite --port 3000 --host 0.0.0.0",
     "start": "vite --port 3000 --host 0.0.0.0",
-    "build": "tsc && vite build",
+    "build:platform-runtime": "tsc -p packages/platform-runtime/tsconfig.json",
+    "build": "npm run build:platform-runtime && tsc && vite build",
     "preview": "vite preview --port 3000 --host 0.0.0.0",
     "test": "playwright test",
     "test:e2e": "playwright test tests/e2e",
     "test:contract": "playwright test tests/contract"
+  },
+  "exports": {
+    "./platform-runtime": "./packages/platform-runtime/dist/packages/platform-runtime/index.js",
+    "./voice/browser": "./packages/voice/dist/browser/index.js",
+    "./voice/channel": "./packages/voice/dist/channel/index.js"
   },
   "dependencies": {
     "react": "^18.3.1",
