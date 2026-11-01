@@ -32,7 +32,11 @@ export declare class BrowserRecognitionProvider implements RecognitionProvider {
      * previous session is still winding down.
      */
     private isActive;
+    private hasResultInSession;
     private pendingEndResolvers;
+    /** Lifecycle hooks for host applications; the provider still owns no dialogue policy. */
+    onEnded: ((hadResult: boolean) => void) | null;
+    onError: ((message: string) => void) | null;
     constructor(language?: string);
     start(): Promise<void>;
     stop(): Promise<void>;

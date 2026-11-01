@@ -711,8 +711,7 @@ export class VoiceChannel {
                     const extracted = slotRes.slots;
                     if (activeCtx.offers && activeCtx.offers.length > 0) {
                         const targetSlot = scenario.candidateBinding?.targetSlot
-                            || activeCtx.missingSlots.find(s => s !== 'confirmation')
-                            || scenario.requiredSlots?.find(s => s !== 'confirmation');
+                            || activeCtx.missingSlots.find((slot) => slot !== 'confirmation');
                         if (targetSlot) {
                             const candidateResolution = this.resolveCandidate(extracted, activeCtx.offers, scenario.candidateBinding, scenario.id, targetSlot, scenario.ambiguityPrompt?.template);
                             if (candidateResolution.status === 'AMBIGUOUS_SLOT') {

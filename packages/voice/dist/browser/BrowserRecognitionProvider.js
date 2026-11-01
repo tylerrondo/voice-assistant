@@ -17,13 +17,18 @@ export class BrowserRecognitionProvider {
      * previous session is still winding down.
      */
     isActive = false;
+    hasResultInSession = false;
     pendingEndResolvers = [];
+    /** Lifecycle hooks for host applications; the provider still owns no dialogue policy. */
+    onEnded = null;
+    onError = null;
     constructor(language = "ru-RU") {
         this.recognition = this.createRecognition();
         this.configureRecognition(language);
         this.bindEvents();
     }
     async start() {
+        this.hasResultInSession = false;
         // Only track as "active" (awaiting a real onend) when actually
         // supported — otherwise stop() would wait forever for an
         // 'onend' event that the no-op stub will never fire.
@@ -93,21 +98,23 @@ export class BrowserRecognitionProvider {
         this.recognition.onresult = (event) => {
             this.handleResult(event);
         };
-        this.recognition.onerror = () => {
-            // Intentionally left empty: this provider does not decide
-            // how errors should be surfaced to the application. A
-            // dedicated error channel can be added to the contract later.
-            // Note: onerror is typically followed by onend, which will
-            // still resolve any pending stop() waiters below.
+        this.recognition.onerror = (event) => {
+            // Surface the transport error without deciding how the host
+            // application should recover or change its dialogue state.
+            this.onError?.(event.error || event.message || "SPEECH_RECOGNITION_FAILED");
         };
         this.recognition.onend = () => {
             this.isActive = false;
+            const hadResult = this.hasResultInSession;
+            this.hasResultInSession = false;
+            this.onEnded?.(hadResult);
             const resolvers = this.pendingEndResolvers;
             this.pendingEndResolvers = [];
             resolvers.forEach((resolve) => resolve());
         };
     }
     handleResult(event) {
+        this.hasResultInSession = true;
         const resultItem = event.results.item(event.resultIndex);
         if (!resultItem || resultItem.length === 0) {
             return;

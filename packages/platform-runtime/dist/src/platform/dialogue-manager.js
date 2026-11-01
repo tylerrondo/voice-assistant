@@ -631,9 +631,12 @@ export class DialogueStateManager {
             }
             else {
                 ctx.status = 'WAITING_FOR_SLOT';
-                execution.errorCode = lastResult.status === 'FAILED' || lastResult.status === 'UNKNOWN'
-                    ? lastResult.errorCode
-                    : 'MAX_RETRIES_EXCEEDED';
+                if (lastResult.status === 'FAILED' || lastResult.status === 'UNKNOWN') {
+                    execution.errorCode = lastResult.errorCode;
+                }
+                else {
+                    execution.errorCode = 'MAX_RETRIES_EXCEEDED';
+                }
             }
             ctx.version += 1;
             ctx.updatedAt = Date.now();
