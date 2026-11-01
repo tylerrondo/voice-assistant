@@ -777,7 +777,7 @@ export class DialogueStateManager {
           ctx.version += 1;
           ctx.updatedAt = Date.now();
           return {
-            status: 'FAILED',
+            status: 'FAILED' as const,
             executionId: execution.executionId,
             errorCode: 'DISPATCHER_NOT_CONFIGURED',
             attempt: currentAttempt
