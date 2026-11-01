@@ -8,6 +8,7 @@ export function mountPlatformRuntime() {
   const runtime = bootstrap(productionActionDispatcher);
   const w = window as any;
   w.__PLATFORM_EXECUTION_BOUNDARY__ = platformExecutionBoundary;
+  w.__PRODUCTION_ACTION_DISPATCHER__ = productionActionDispatcher;
   const identity = {
     ownerId: w.__AUTH_OWNER_ID__ || 'local-platform-demo',
     sessionId: w.__AUTH_SESSION_ID__ || 'local-platform-session'

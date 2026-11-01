@@ -1,10 +1,14 @@
 import { bootstrap } from "../apps/voice-demo/src/Bootstrap";
 import { mountApp } from "../apps/voice-demo/src/App";
 import type { ActionDispatcher } from "./platform/dialogue-manager";
-import { platformExecutionBoundary, getAuthenticatedSessionIdentity } from "../apps/voice-demo/src/main";
+import {
+  platformExecutionBoundary,
+  getAuthenticatedSessionIdentity,
+  productionActionDispatcher,
+} from "../apps/voice-demo/src/main";
 
 export const rootProductionDispatcher: ActionDispatcher = async (event, ctx, exec) => {
-  return platformExecutionBoundary.execute(event, exec);
+  return productionActionDispatcher(event, ctx, exec);
 };
 
 if (import.meta.env.DEV && typeof window !== 'undefined' &&
@@ -21,6 +25,7 @@ const runtime = bootstrap(rootProductionDispatcher);
 if (typeof window !== 'undefined') {
   // The declarative scenario runner and the voice runtime share the same production FSM boundary.
   (window as any).__PLATFORM_EXECUTION_BOUNDARY__ = platformExecutionBoundary;
+  (window as any).__PRODUCTION_ACTION_DISPATCHER__ = rootProductionDispatcher;
 }
 const root = document.querySelector<HTMLElement>("#app") || document.body;
 mountApp(root, runtime, sessionIdentity);

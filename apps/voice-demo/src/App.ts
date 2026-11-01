@@ -1,4 +1,6 @@
 import type { SessionIdentity } from '../../../src/platform/dialogue-manager';
+import { NannyCustomerSessionClient } from '../../../src/platform/nanny-customer-session';
+import { createNannyBackendResolvers } from '../../../src/platform/nanny-backend-resolvers';
 import { MapChannel, MAP_ORDER_SELECT_ACTION } from '../../../packages/map/src/index';
 import { mountReportPanel } from './ReportPanel';
 import type { InteractionAction, InteractionContract, InteractionEvent, InteractionSnapshot } from '../../../packages/interaction-contract/dist/index';
@@ -11,6 +13,7 @@ type ScenarioSet = { id: string; name?: string; version?: number; scenarios: Sce
 export class VoiceDemoApp {
   public runtime: any;
   private currentIdentity: SessionIdentity;
+  private nannyCandidateLoader?: (slots: Record<string, any>, context: any) => Promise<Array<{ id: string; name: string; index: number; status: string }>>;
 
   constructor(runtime: any, authenticatedIdentity: SessionIdentity) {
     if (!authenticatedIdentity || !authenticatedIdentity.ownerId || !authenticatedIdentity.sessionId) {
@@ -20,12 +23,47 @@ export class VoiceDemoApp {
     this.currentIdentity = authenticatedIdentity;
   }
 
+  public setNannyCandidateLoader(
+    loader: (slots: Record<string, any>, context: any) => Promise<Array<{ id: string; name: string; index: number; status: string }>>,
+  ) {
+    this.nannyCandidateLoader = loader;
+  }
+
   public async handleVoice(phrase: string, identityOverride?: SessionIdentity) {
     const identity = identityOverride || this.currentIdentity;
     if (!identity || !identity.ownerId || !identity.sessionId) {
       throw new Error('CONTRACT_VIOLATION: Valid SessionIdentity required to process voice');
     }
-    return this.runtime.voiceChannel.handleIncomingVoice(phrase, identity);
+    const result: any = await this.runtime.voiceChannel.handleIncomingVoice(phrase, identity);
+    const contextId = result?.contextId ?? result?.context?.contextId;
+    const manager = this.runtime.dialogueManager;
+    const context = contextId && manager?.getContext(contextId, identity);
+    if (context && this.nannyCandidateLoader &&
+        context.scenarioId === 'order-nanny' &&
+        context.missingSlots?.includes('selected_nanny') &&
+        context.slots?.location && context.slots?.date && context.slots?.start_time &&
+        (!context.offers || context.offers.length === 0)) {
+      try {
+        const offers = await this.nannyCandidateLoader(context.slots, context);
+        if (offers.length) {
+          manager.setOffersForContext(context.contextId, offers, identity);
+          const updated = manager.getContext(context.contextId, identity);
+          const list = offers.map(offer => `${offer.index}. ${offer.name}`).join('; ');
+          const prompt = `Доступные няни: ${list}. Назовите номер или имя.`;
+          return {
+            ...result,
+            context: updated,
+            offers,
+            nextQuestion: prompt,
+            message: prompt,
+            presentation: { ...(result?.presentation || {}), text: prompt },
+          };
+        }
+      } catch {
+        // Keep the dialogue active; the dispatcher still fails closed if a real nanny cannot be resolved.
+      }
+    }
+    return result;
   }
 
   public setIdentity(identity: SessionIdentity) {
@@ -50,6 +88,18 @@ export function mountApp(root: HTMLElement, runtime: any, authenticatedIdentity:
   host.innerHTML = `
     <main id="voice-app-ready" style="padding:16px;font-family:sans-serif">
       <h2>Voice Platform Production Runtime Ready</h2>
+      <section aria-label="Nanny customer login" style="margin-top:16px">
+        <h3>Вход клиента для заказа няни</h3>
+        <form id="nanny-customer-login-form">
+          <label for="nanny-customer-login">E-mail</label>
+          <input id="nanny-customer-login" name="login" type="email" autocomplete="username" required />
+          <label for="nanny-customer-password">Пароль</label>
+          <input id="nanny-customer-password" name="password" type="password" autocomplete="current-password" required />
+          <button id="nanny-customer-login-submit" type="submit">Войти</button>
+          <button id="nanny-customer-logout" type="button">Выйти</button>
+        </form>
+        <p id="nanny-customer-auth-status" role="status" aria-live="polite">Не выполнен вход</p>
+      </section>
       <div id="runtime-identity">AUTHENTICATED: ${authenticatedIdentity.ownerId}:${authenticatedIdentity.sessionId}</div>
       <section aria-label="Scenario loader" style="margin-top:16px">
         <div id="scenario-source-wrapper" style="min-height:28px;display:block">
@@ -88,6 +138,22 @@ export function mountApp(root: HTMLElement, runtime: any, authenticatedIdentity:
   const terminal = host.querySelector<HTMLElement>('#execution-terminal')!;
   const progress = host.querySelector<HTMLElement>('#scenario-progress')!;
   const voiceInput = host.querySelector<HTMLInputElement>('#voice-command-input')!;
+  const customerLoginForm = host.querySelector<HTMLFormElement>('#nanny-customer-login-form')!;
+  const customerLoginInput = host.querySelector<HTMLInputElement>('#nanny-customer-login')!;
+  const customerPasswordInput = host.querySelector<HTMLInputElement>('#nanny-customer-password')!;
+  const customerLoginSubmit = host.querySelector<HTMLButtonElement>('#nanny-customer-login-submit')!;
+  const customerLogoutButton = host.querySelector<HTMLButtonElement>('#nanny-customer-logout')!;
+  const customerAuthStatus = host.querySelector<HTMLElement>('#nanny-customer-auth-status')!;
+  const nannyConfigAtStartup = typeof window !== 'undefined' ? (window as any).__NANNY_BACKEND_CONFIG__ : undefined;
+  const nannyApiBaseUrl = typeof nannyConfigAtStartup?.baseUrl === 'string'
+    ? nannyConfigAtStartup.baseUrl
+    : 'https://ibronevik.ru/taxi_dev2/c/children/api/v1';
+  const customerSessionClient = new NannyCustomerSessionClient(nannyApiBaseUrl);
+  const nannyResolvers = createNannyBackendResolvers(
+    nannyApiBaseUrl,
+    () => customerSessionClient.getSession(),
+  );
+  app.setNannyCandidateLoader((slots, context) => nannyResolvers.loadCandidateOffers(slots, context));
 
   let activeSet: ScenarioSet | null = null;
 
@@ -202,14 +268,63 @@ export function mountApp(root: HTMLElement, runtime: any, authenticatedIdentity:
         }
         if (step.kind !== 'emit' || !step.event || step.event.type === 'VOICE_INPUT_RECEIVED') continue;
 
+        let dispatchResult: any;
+        const executionId = `scenario-${Date.now()}-${outputIndex}`;
         if (step.event.type.startsWith('driver.')) {
           const boundary = (window as any).__PLATFORM_EXECUTION_BOUNDARY__;
           if (boundary) {
-            await boundary.execute(step.event, {
-              executionId: `scenario-${Date.now()}-${outputIndex}`,
+            dispatchResult = await boundary.execute(step.event, {
+              executionId,
               attempt: 1,
               payload: step.event.payload
             });
+          }
+        } else if (step.event.type === 'nanny.order.confirmed') {
+          const dispatcher = (window as any).__PRODUCTION_ACTION_DISPATCHER__;
+          if (typeof dispatcher !== 'function') {
+            dispatchResult = { status: 'FAILED', executionId, attempt: 1, errorCode: 'PRODUCTION_DISPATCHER_NOT_REGISTERED' };
+          } else {
+            const now = Date.now();
+            const identity = app.getIdentity();
+            const payload = step.event.payload;
+            const context = {
+              contextId: `scenario-context-${scenario.id}`,
+              version: 1,
+              ownerId: identity.ownerId,
+              sessionId: identity.sessionId,
+              intent: 'ORDER_NANNY',
+              slots: payload,
+              missingSlots: [],
+              status: 'DISPATCHING',
+              createdAt: now,
+              updatedAt: now,
+              expiresAt: now + 300000,
+              actionType: step.event.type,
+              scenarioId: scenario.id
+            };
+            const execution = {
+              executionId,
+              idempotencyKey: `scenario-${scenario.id}-${executionId}-${step.event.type}`,
+              ownerId: identity.ownerId,
+              sessionId: identity.sessionId,
+              contextId: context.contextId,
+              scenarioId: scenario.id,
+              intent: context.intent,
+              actionType: step.event.type,
+              payload,
+              status: 'DISPATCHING',
+              attempt: 1,
+              createdAt: now,
+              updatedAt: now,
+              event: step.event
+            };
+            dispatchResult = await dispatcher(step.event, context, execution);
+          }
+          appendTrace(step.event, dispatchResult);
+          if (dispatchResult?.status !== 'SUCCEEDED') {
+            terminal.textContent = `kind: "end" — NANNY_ORDER_DISPATCH_${dispatchResult?.status || 'FAILED'}`;
+            progress.textContent = `${outputIndex}/${outputEvents.length} · ${outputEvents.length ? Math.round(outputIndex / outputEvents.length * 100) : 0}%`;
+            return { status: dispatchResult?.status || 'FAILED', scenarioId: scenario.id, emittedEvents: outputIndex, errorCode: dispatchResult?.errorCode };
           }
         }
 
@@ -276,6 +391,36 @@ export function mountApp(root: HTMLElement, runtime: any, authenticatedIdentity:
       actions.appendChild(button);
     });
   };
+
+  customerLoginForm.addEventListener('submit', event => {
+    event.preventDefault();
+    customerLoginSubmit.disabled = true;
+    customerAuthStatus.textContent = 'Выполняется вход…';
+    void customerSessionClient.login(customerLoginInput.value, customerPasswordInput.value)
+      .then(session => {
+        customerPasswordInput.value = '';
+        const w = window as any;
+        w.__NANNY_CUSTOMER_SESSION__ = session;
+        const config = w.__NANNY_BACKEND_CONFIG__;
+        if (config && typeof config === 'object') config.session = session;
+        customerAuthStatus.textContent = 'Вход выполнен. Сессия хранится только в памяти этой вкладки.';
+      })
+      .catch(error => {
+        customerPasswordInput.value = '';
+        customerAuthStatus.textContent = error instanceof Error ? error.message : 'Не удалось выполнить вход';
+      })
+      .finally(() => { customerLoginSubmit.disabled = false; });
+  });
+
+  customerLogoutButton.addEventListener('click', () => {
+    customerSessionClient.clear();
+    const w = window as any;
+    delete w.__NANNY_CUSTOMER_SESSION__;
+    const config = w.__NANNY_BACKEND_CONFIG__;
+    if (config && typeof config === 'object') delete config.session;
+    customerPasswordInput.value = '';
+    customerAuthStatus.textContent = 'Выполнен выход';
+  });
 
   fileInput.addEventListener('change', () => {
     const file = fileInput.files?.[0];
