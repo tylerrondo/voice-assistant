@@ -1,11 +1,11 @@
-import { DialogueStateManager } from './dialogue-manager';
+import { DialogueStateManager } from './dialogue-manager.js';
 import type {
   ActionDispatcher,
   SessionIdentity,
   OfferDefinition,
   DialogueContext,
   RoutingResult
-} from './dialogue-manager';
+} from './dialogue-manager.js';
 
 export interface SlotRule {
   pattern: string;
