@@ -1,3 +1,5 @@
+import { lookup } from 'node:dns/promises';
+
 /**
  * Read-only live smoke test for the nanny customer-session API.
  *
@@ -18,9 +20,6 @@ const required = (name) => {
 };
 
 const baseUrl = required('DEV_BACKEND_URL').replace(/\/+$/, '');
-const login = required('DEV_BACKEND_LOGIN');
-const password = required('DEV_BACKEND_PASSWORD');
-
 const parsedBase = new URL(baseUrl);
 if (parsedBase.protocol !== 'https:') {
   throw new Error('DEV_BACKEND_URL must use HTTPS');
@@ -28,6 +27,27 @@ if (parsedBase.protocol !== 'https:') {
 if (parsedBase.pathname !== '/taxi_dev2/c/children') {
   throw new Error('DEV_BACKEND_URL must target the configured dev2 tenant path');
 }
+
+try {
+  const addresses = await lookup(parsedBase.hostname, { all: true });
+  if (!addresses.length) throw new Error('no DNS records returned');
+  console.log(`PASS backend DNS: ${parsedBase.hostname} resolved (${addresses.length} address record(s))`);
+} catch (error) {
+  const code = error && typeof error === 'object' && 'code' in error ? error.code : 'DNS_ERROR';
+  throw new Error(`backend DNS lookup failed (${String(code)})`);
+}
+
+try {
+  const response = await fetch(`${baseUrl}/api/v1/data/`, { method: 'GET', signal: AbortSignal.timeout(10000) });
+  console.log(`PASS backend HTTPS reachability: HTTP ${response.status} (unauthenticated probe)`);
+  if (response.body) await response.body.cancel();
+} catch (error) {
+  const code = error && typeof error === 'object' && 'cause' in error ? error.cause?.code : undefined;
+  throw new Error(`backend HTTPS reachability failed${code ? ` (${code})` : ''}`);
+}
+
+const login = required('DEV_BACKEND_LOGIN');
+const password = required('DEV_BACKEND_PASSWORD');
 
 async function requestJson(stage, url, init) {
   let response;
