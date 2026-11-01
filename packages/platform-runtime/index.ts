@@ -1,4 +1,4 @@
-export { DialogueStateManager } from "../../src/platform/dialogue-manager";
+export { DialogueStateManager } from "../../src/platform/dialogue-manager.js";
 export type {
   SessionIdentity,
   OfferDefinition,
@@ -12,9 +12,9 @@ export type {
   RoutingResult,
   MutationResult,
   SystemEventDescriptor,
-} from "../../src/platform/dialogue-manager";
+} from "../../src/platform/dialogue-manager.js";
 
-export { VoiceChannel } from "../../src/platform/voice-channel";
+export { VoiceChannel } from "../../src/platform/voice-channel.js";
 export type {
   SlotRule,
   SlotExtractorDefinition,
@@ -28,4 +28,4 @@ export type {
   CandidateResolutionResult,
   IntentResolutionResult,
   SlotExtractionResult,
-} from "../../src/platform/voice-channel";
+} from "../../src/platform/voice-channel.js";
