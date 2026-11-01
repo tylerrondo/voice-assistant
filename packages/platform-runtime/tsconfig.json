@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "declaration": true,
+    "declarationMap": false,
+    "sourceMap": false,
+    "rootDir": "../..",
+    "outDir": "./dist",
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmitOnError": true
+  },
+  "files": [
+    "index.ts",
+    "../../src/platform/dialogue-manager.ts",
+    "../../src/platform/voice-channel.ts"
+  ]
+}
