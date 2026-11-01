@@ -5,7 +5,7 @@
  * Never sends email, creates orders, prints credentials, tokens, or response bodies.
  *
  * Required environment:
- *   DEV_BACKEND_URL      HTTPS origin, e.g. https://ibronevik.ru/taxi_dev2/c/children
+ *   DEV_BACKEND_URL      configured dev2 tenant base URL
  *   DEV_BACKEND_LOGIN
  *   DEV_BACKEND_PASSWORD
  *   DEV_BACKEND_TEST_LATITUDE   Optional override; defaults to Malaga city centre
@@ -25,8 +25,8 @@ const parsedBase = new URL(baseUrl);
 if (parsedBase.protocol !== 'https:') {
   throw new Error('DEV_BACKEND_URL must use HTTPS');
 }
-if (!parsedBase.pathname || parsedBase.pathname === '/') {
-  throw new Error('DEV_BACKEND_URL must include the backend application path (e.g. /taxi_dev2/c/children)');
+if (parsedBase.pathname.replace(/\\/+$/, '') !== '/taxi_dev2/c/children') {
+  throw new Error('DEV_BACKEND_URL must target the configured dev2 tenant path');
 }
 
 async function requestJson(stage, url, init) {
