@@ -7,11 +7,12 @@
     "dev": "vite --port 3000 --host 0.0.0.0",
     "start": "vite --port 3000 --host 0.0.0.0",
     "build:platform-runtime": "tsc -p packages/platform-runtime/tsconfig.json",
-    "build": "npm run build:platform-runtime && tsc && vite build",
+    "build": "npm run build:platform-runtime && npm run build:voice && tsc && vite build",
     "preview": "vite preview --port 3000 --host 0.0.0.0",
     "test": "playwright test",
     "test:e2e": "playwright test tests/e2e",
-    "test:contract": "playwright test tests/contract"
+    "test:contract": "playwright test tests/contract",
+    "build:voice": "tsc -p packages/voice/tsconfig.json"
   },
   "exports": {
     "./platform-runtime": "./packages/platform-runtime/dist/packages/platform-runtime/index.js",
