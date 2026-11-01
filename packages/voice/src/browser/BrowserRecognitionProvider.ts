@@ -43,7 +43,12 @@ export class BrowserRecognitionProvider implements RecognitionProvider {
      * previous session is still winding down.
      */
     private isActive = false
+    private hasResultInSession = false
     private pendingEndResolvers: Array<() => void> = []
+
+    /** Lifecycle hooks for host applications; the provider still owns no dialogue policy. */
+    public onEnded: ((hadResult: boolean) => void) | null = null
+    public onError: ((message: string) => void) | null = null
 
     constructor(language = "ru-RU") {
         this.recognition = this.createRecognition()
@@ -52,6 +57,7 @@ export class BrowserRecognitionProvider implements RecognitionProvider {
     }
 
     async start(): Promise<void> {
+        this.hasResultInSession = false
         // Only track as "active" (awaiting a real onend) when actually
         // supported — otherwise stop() would wait forever for an
         // 'onend' event that the no-op stub will never fire.
@@ -133,17 +139,18 @@ export class BrowserRecognitionProvider implements RecognitionProvider {
         this.recognition.onresult = (event: SpeechRecognitionEvent) => {
             this.handleResult(event)
         }
-        this.recognition.onerror = () => {
-            // Intentionally left empty: this provider does not decide
-            // how errors should be surfaced to the application. A
-            // dedicated error channel can be added to the contract later.
-            // Note: onerror is typically followed by onend, which will
-            // still resolve any pending stop() waiters below.
+        this.recognition.onerror = (event) => {
+            // Surface the transport error without deciding how the host
+            // application should recover or change its dialogue state.
+            this.onError?.(event.error || event.message || "SPEECH_RECOGNITION_FAILED")
         }
         // PR-9d.2 fix: track the real end of a recognition session so
         // stop() can wait for it instead of resolving instantly.
         ;(this.recognition as unknown as { onend: (() => void) | null }).onend = () => {
             this.isActive = false
+            const hadResult = this.hasResultInSession
+            this.hasResultInSession = false
+            this.onEnded?.(hadResult)
             const resolvers = this.pendingEndResolvers
             this.pendingEndResolvers = []
             resolvers.forEach((resolve) => resolve())
@@ -151,6 +158,7 @@ export class BrowserRecognitionProvider implements RecognitionProvider {
     }
 
     private handleResult(event: SpeechRecognitionEvent): void {
+        this.hasResultInSession = true
         const resultItem = event.results.item(event.resultIndex)
         if (!resultItem || resultItem.length === 0) {
             return
